@@ -38,7 +38,7 @@ export async function PortalShell({ portalKey, user, currentPath, children }: Po
         </div>
         <div className="border-b border-white/10 px-6 py-4">
           <p className="text-small uppercase tracking-wider text-white/60">{portal.role}</p>
-          <p className="text-body-sm font-semibold">{portal.name}</p>
+          <p className="text-body-sm font-semibold">{display.nom}</p>
         </div>
         <nav className="flex-1 space-y-1 px-3 py-4">
           {portal.nav.map((item) => {
@@ -91,19 +91,19 @@ export async function PortalShell({ portalKey, user, currentPath, children }: Po
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-2 border-b border-border bg-surface/80 px-3 backdrop-blur sm:px-4 lg:px-6">
           <div className="flex min-w-0 items-center gap-2">
-            <MobileNavDrawer portalKey={portalKey} currentPath={currentPath} />
+            <MobileNavDrawer portalKey={portalKey} currentPath={currentPath} userName={display.nom} />
             <Link href="/" className="flex items-center lg:hidden">
               <Logo size={28} showWordmark={false} variant="badge" />
             </Link>
             <div className="hidden min-w-0 lg:block">
               <p className="text-small uppercase tracking-wider text-muted-foreground">{portal.role}</p>
-              <p className="truncate text-h2-sm font-semibold">{portal.name}</p>
+              <p className="truncate text-h2-sm font-semibold">{display.nom}</p>
             </div>
             <div className="min-w-0 lg:hidden">
               <p className="truncate text-small font-semibold uppercase tracking-wider text-muted-foreground">
                 {portal.role.replace('Portail ', '').replace('Espace ', '')}
               </p>
-              <p className="truncate text-body-sm font-semibold">{portal.name}</p>
+              <p className="truncate text-body-sm font-semibold">{display.nom}</p>
             </div>
           </div>
 

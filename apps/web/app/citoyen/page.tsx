@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { PortalShell } from '@/components/portal-shell';
 import { StatCard } from '@/components/stat-card';
+import { getCurrentProfile } from '@/lib/get-profile';
 
 const PROCHAINES_COLLECTES = [
   { date: 'Mardi 27 mai', creneau: 'Matin (06:00 - 09:00)', secteur: 'Nsam' },
@@ -24,17 +25,16 @@ const ACTIVITES = [
   { date: '20 mai · 18:55', label: '+50 points', detail: 'Tri valorisé · 3 kg plastique', tag: 'warning' as const },
 ];
 
-export default function CitoyenDashboard() {
+export default async function CitoyenDashboard() {
+  const profile = await getCurrentProfile();
+  const firstName = profile?.nom?.split(' ')[0] ?? '';
+
   return (
-    <PortalShell
-      portalKey="citoyen"
-      user={{ nom: 'Marie Tsanga', email: 'm.tsanga@orange.cm' }}
-      currentPath="/citoyen"
-    >
+    <PortalShell portalKey="citoyen" currentPath="/citoyen">
       <div className="space-y-6">
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1>Bonjour Marie 👋</h1>
+            <h1>{firstName ? `Bonjour ${firstName} 👋` : 'Bonjour 👋'}</h1>
             <p className="text-body text-muted-foreground">
               Voici l'état de votre service de collecte cette semaine.
             </p>

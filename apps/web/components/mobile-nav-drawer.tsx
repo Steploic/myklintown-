@@ -11,6 +11,8 @@ import { signOutAction } from '@/lib/auth-actions';
 interface MobileNavDrawerProps {
   portalKey: PortalKey;
   currentPath: string;
+  /** Nom réel de l'utilisateur connecté (fourni par PortalShell). */
+  userName?: string;
 }
 
 /**
@@ -19,7 +21,7 @@ interface MobileNavDrawerProps {
  * éviter de passer des icônes Lucide à travers la frontière server → client
  * (les composants ne sont pas sérialisables).
  */
-export function MobileNavDrawer({ portalKey, currentPath }: MobileNavDrawerProps) {
+export function MobileNavDrawer({ portalKey, currentPath, userName }: MobileNavDrawerProps) {
   const [open, setOpen] = useState(false);
   const portal = PORTALS[portalKey];
 
@@ -63,7 +65,7 @@ export function MobileNavDrawer({ portalKey, currentPath }: MobileNavDrawerProps
 
           <div className="border-b border-white/10 px-5 py-4">
             <p className="text-small uppercase tracking-wider text-white/60">{portal.role}</p>
-            <p className="text-body-sm font-semibold">{portal.name}</p>
+            <p className="text-body-sm font-semibold">{userName ?? portal.name}</p>
           </div>
 
           <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
