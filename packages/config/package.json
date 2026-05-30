@@ -1,0 +1,23 @@
+{
+  "name": "@myklintown/config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "commonjs",
+  "main": "./index.js",
+  "files": [
+    "tailwind.preset.ts",
+    "tsconfig.base.json",
+    "eslint.base.cjs",
+    "index.js"
+  ],
+  "exports": {
+    "./tailwind": "./tailwind.preset.ts",
+    "./tsconfig": "./tsconfig.base.json",
+    "./eslint": "./eslint.base.cjs"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.17",
+    "tailwindcss-animate": "^1.0.7",
+    "typescript": "^5.7.2"
+  }
+}

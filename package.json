@@ -1,0 +1,24 @@
+{
+  "name": "myklintown",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MyKlinTown — Plateforme de digitalisation de la gestion des déchets pour la Mairie de Yaoundé III",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "type-check": "turbo run type-check",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
+    "clean": "turbo run clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3",
+    "prettier-plugin-tailwindcss": "^0.6.8",
+    "turbo": "^2.3.0",
+    "typescript": "^5.7.2"
+  },
+  "packageManager": "pnpm@11.3.0",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

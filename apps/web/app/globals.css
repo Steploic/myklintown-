@@ -1,0 +1,85 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Variables CSS — utiles pour les composants qui ont besoin de vraies
+       valeurs hex (Leaflet, Recharts) et non de classes Tailwind. */
+    --color-brand-blue: 27 63 99;       /* #1B3F63 */
+    --color-brand-blue-hover: 31 79 122; /* #1F4F7A */
+    --color-brand-green: 79 163 106;    /* #4FA36A */
+    --color-brand-green-light: 123 194 138; /* #7BC28A */
+    --color-brand-teal: 46 127 142;     /* #2E7F8E */
+    --color-danger: 239 68 68;
+    --color-warning: 245 158 11;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply antialiased;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+
+  h1 {
+    @apply text-h1-sm md:text-h1 text-brand-blue;
+  }
+  h2 {
+    @apply text-h2-sm md:text-h2;
+  }
+}
+
+@layer components {
+  .card-soft {
+    @apply rounded-xl border border-border bg-surface shadow-soft;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-md bg-brand-green
+      px-4 py-2 text-body-sm font-semibold text-white whitespace-nowrap shadow-soft
+      transition-colors hover:bg-brand-green/90 focus-visible:outline-none
+      focus-visible:ring-2 focus-visible:ring-brand-blue focus-visible:ring-offset-2
+      disabled:opacity-50;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-md bg-brand-blue
+      px-4 py-2 text-body-sm font-semibold text-white whitespace-nowrap shadow-soft
+      transition-colors hover:bg-brand-blue-hover focus-visible:outline-none
+      focus-visible:ring-2 focus-visible:ring-brand-blue focus-visible:ring-offset-2
+      disabled:opacity-50;
+  }
+  .btn-outline {
+    @apply inline-flex items-center justify-center gap-2 rounded-md border-2 border-border
+      bg-transparent px-4 py-2 text-body-sm font-semibold text-foreground whitespace-nowrap
+      transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2
+      focus-visible:ring-brand-blue focus-visible:ring-offset-2;
+  }
+  .badge-success {
+    @apply inline-flex items-center rounded-full bg-brand-green/10 px-2.5 py-0.5
+      text-small font-medium text-brand-green;
+  }
+  .badge-warning {
+    @apply inline-flex items-center rounded-full bg-warning/10 px-2.5 py-0.5
+      text-small font-medium text-warning;
+  }
+  .badge-danger {
+    @apply inline-flex items-center rounded-full bg-danger/10 px-2.5 py-0.5
+      text-small font-medium text-danger;
+  }
+  .badge-info {
+    @apply inline-flex items-center rounded-full bg-brand-blue/10 px-2.5 py-0.5
+      text-small font-medium text-brand-blue;
+  }
+}
+
+/* Leaflet — overrides pour matcher la charte */
+.leaflet-container {
+  @apply rounded-xl border border-border;
+  font-family: var(--font-barlow), sans-serif !important;
+}
