@@ -4,6 +4,7 @@ import { Logo, cn } from '@myklintown/ui';
 import { MobileNavDrawer } from './mobile-nav-drawer';
 import { PORTALS, type PortalKey, type PortalNavItem } from '@/lib/portal-config';
 import { signOutAction } from '@/lib/auth-actions';
+import { getCurrentProfile } from '@/lib/get-profile';
 
 export type { PortalKey, PortalNavItem };
 
@@ -14,13 +15,16 @@ interface PortalShellProps {
    * frontière server → client en tant que props (règle React 19 RSC).
    */
   portalKey: PortalKey;
-  user: { nom: string; email: string; avatar_url?: string };
+  /** Fallback uniquement — le profil réel de l'utilisateur connecté est récupéré côté serveur. */
+  user?: { nom: string; email: string; avatar_url?: string };
   currentPath: string;
   children: React.ReactNode;
 }
 
-export function PortalShell({ portalKey, user, currentPath, children }: PortalShellProps) {
+export async function PortalShell({ portalKey, user, currentPath, children }: PortalShellProps) {
   const portal = PORTALS[portalKey];
+  const profile = await getCurrentProfile();
+  const display = profile ?? user ?? { nom: 'Utilisateur', email: '' };
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -114,11 +118,11 @@ export function PortalShell({ portalKey, user, currentPath, children }: PortalSh
             </button>
             <div className="flex items-center gap-3 rounded-md border border-border bg-surface p-1 sm:p-1.5 lg:px-3 lg:py-1.5">
               <div className="grid h-8 w-8 place-content-center rounded-full bg-brand-gradient text-small font-semibold text-white">
-                {user.nom.slice(0, 1).toUpperCase()}
+                {display.nom.slice(0, 1).toUpperCase()}
               </div>
               <div className="hidden text-body-sm leading-tight lg:block">
-                <p className="font-medium">{user.nom}</p>
-                <p className="truncate text-small text-muted-foreground">{user.email}</p>
+                <p className="font-medium">{display.nom}</p>
+                <p className="truncate text-small text-muted-foreground">{display.email}</p>
               </div>
             </div>
           </div>
