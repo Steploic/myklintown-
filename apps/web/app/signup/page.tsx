@@ -2,14 +2,16 @@
 
 import { useActionState } from 'react';
 import Link from 'next/link';
-import { AlertCircle, Building2, CheckCircle2, Recycle, Truck, Users } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Recycle, Users } from 'lucide-react';
 import { Logo } from '@myklintown/ui';
 import { signUpAction, type AuthState } from '@/lib/auth-actions';
 
+// Seuls les profils sans pouvoir sur les données d'autrui s'obtiennent en
+// ligne. Les accès Collecteur et Mairie donnent vue sur les ménages, les
+// tournées et les encaissements : ils sont ouverts par MyKlinTown, jamais
+// réclamés à l'inscription. Voir SELF_SERVICE_ROLES dans lib/roles.ts.
 const ROLES = [
   { value: 'citoyen', label: 'Citoyen / Ménage', icon: Users, desc: 'M\'abonner pour faire collecter mes déchets' },
-  { value: 'collecteur', label: 'Collecteur', icon: Truck, desc: 'Je travaille pour une structure de pré-collecte' },
-  { value: 'mairie', label: 'Agent Mairie', icon: Building2, desc: 'Je supervise la gestion territoriale' },
   { value: 'enterprise', label: 'Recycleur / Entreprise', icon: Recycle, desc: 'Je veux acheter ou collecter des déchets triés' },
 ];
 
@@ -74,6 +76,15 @@ export default function SignupPage() {
               </label>
             ))}
           </fieldset>
+
+          <p className="mx-auto max-w-xl text-center text-body-sm text-muted-foreground">
+            Vous êtes collecteur ou agent de la Mairie ? Votre accès est ouvert par
+            MyKlinTown —{' '}
+            <Link href="/#contact" className="font-medium text-brand-blue hover:underline">
+              contactez-nous
+            </Link>
+            .
+          </p>
 
           <div className="card-soft space-y-4 p-6">
             <div className="grid gap-4 md:grid-cols-2">

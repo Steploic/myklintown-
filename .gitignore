@@ -38,3 +38,13 @@ next-env.d.ts
 # Supabase
 supabase/.branches
 supabase/.temp
+
+# Documents métier — dépôt PUBLIC
+# Le rapport de réunion (participants nommés, numéros de téléphone) et la
+# planification du pilote (grille tarifaire, partage de la valeur, seuil de
+# rentabilité, projection de chiffre d'affaires) n'ont pas à être publiés.
+# Rappel : sur un dépôt public, un fichier commité reste consultable dans
+# l'historique même après suppression. L'exclusion est réversible, la
+# publication ne l'est pas.
+docs/livrables/
+docs/reunions/
