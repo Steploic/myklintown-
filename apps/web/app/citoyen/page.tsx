@@ -1,144 +1,184 @@
+import Link from 'next/link';
 import {
   AlertTriangle,
-  Calendar,
-  Home,
-  MessageSquare,
+  CalendarCheck,
+  CheckCircle2,
+  Clock,
+  FileText,
+  MessageCircle,
+  Phone,
   QrCode,
-  ShoppingBag,
+  ShieldAlert,
+  ShieldCheck,
   Sparkles,
-  Wallet,
+  TriangleAlert,
 } from 'lucide-react';
+import { cn } from '@myklintown/ui';
 import { PortalShell } from '@/components/portal-shell';
-import { StatCard } from '@/components/stat-card';
+import { Section } from '@/components/ui/blocks';
+import { ConfirmationPassage } from '@/components/client/confirmation-passage';
+import { getMonAbonnement } from '@/lib/client/context';
 import { getCurrentProfile } from '@/lib/get-profile';
+import { rows } from '@/lib/server';
+import { ajouterJours, dateFr, fcfa, isoJour, statutAbonnement, telInternational, telLisible } from '@/lib/format';
+import type { Collecte } from '@/lib/types';
 
-const PROCHAINES_COLLECTES = [
-  { date: 'Mardi 27 mai', creneau: 'Matin (06:00 - 09:00)', secteur: 'Nsam' },
-  { date: 'Vendredi 30 mai', creneau: 'Matin (06:00 - 09:00)', secteur: 'Nsam' },
-  { date: 'Mardi 03 juin', creneau: 'Matin (06:00 - 09:00)', secteur: 'Nsam' },
-];
+export const metadata = { title: 'Mon abonnement' };
 
-const ACTIVITES = [
-  { date: 'Hier · 06:42', label: 'Collecte effectuée', detail: 'Scan QR par Agent #C-217', tag: 'success' as const },
-  { date: '24 mai · 14:30', label: 'Paiement reçu', detail: 'Abonnement mensuel · 3 500 FCFA · MTN MoMo', tag: 'info' as const },
-  { date: '22 mai · 09:10', label: 'Signalement traité', detail: 'Bac plein rue de la Joie · résolu', tag: 'success' as const },
-  { date: '20 mai · 18:55', label: '+50 points', detail: 'Tri valorisé · 3 kg plastique', tag: 'warning' as const },
-];
+const HERO = {
+  ok: { classe: 'bg-terrain-ok', icone: ShieldCheck, titre: 'Votre collecte est assurée' },
+  relance: { classe: 'bg-terrain-relance', icone: TriangleAlert, titre: 'Pensez à renouveler' },
+  stop: { classe: 'bg-terrain-stop', icone: ShieldAlert, titre: 'Service interrompu' },
+  neutre: { classe: 'bg-brand-blue', icone: Clock, titre: 'Demande en cours' },
+} as const;
 
-export default async function CitoyenDashboard() {
+export default async function CitoyenAccueil({ searchParams }: { searchParams: Promise<{ demande?: string }> }) {
+  const { demande } = await searchParams;
+  const { supabase, client, entreprise } = await getMonAbonnement();
   const profile = await getCurrentProfile();
-  const firstName = profile?.nom?.split(' ')[0] ?? '';
+  const prenom = profile?.nom?.split(' ')[0] ?? '';
+
+  if (!client) {
+    return (
+      <PortalShell portalKey="citoyen" currentPath="/citoyen">
+        <section className="overflow-hidden rounded-2xl bg-brand-gradient-ink p-6 text-white sm:p-10">
+          <p className="text-small font-semibold uppercase tracking-wider text-brand-leaf">Bienvenue{prenom ? `, ${prenom}` : ''}</p>
+          <h1 className="mt-2 max-w-xl text-[1.75rem] font-bold leading-tight text-white sm:text-[2.25rem]">
+            Faites collecter vos déchets par un précollecteur de votre quartier.
+          </h1>
+          <p className="mt-3 max-w-xl text-white/75">
+            Choisissez une formule, indiquez votre domicile : MyKlinTown trouve le précollecteur qui dessert votre zone.
+            Vous suivez ensuite chaque passage et chaque paiement depuis votre téléphone.
+          </p>
+          <Link href="/citoyen/souscrire" className="btn-primary mt-6">
+            <Sparkles size={16} /> M’abonner maintenant
+          </Link>
+        </section>
+        <div className="mt-6 grid gap-4 md:grid-cols-3">
+          {[
+            { icon: CalendarCheck, t: 'Passages suivis', d: 'Vous voyez quand le précollecteur est passé, et vous confirmez.' },
+            { icon: FileText, t: 'Factures claires', d: 'Même grille de prix partout, reçus consultables à tout moment.' },
+            { icon: AlertTriangle, t: 'Un problème ?', d: 'Signalez-le avec une photo ou une vidéo prise sur place.' },
+          ].map(({ icon: Icon, t, d }) => (
+            <div key={t} className="card-soft p-5">
+              <Icon size={22} className="text-brand-green" />
+              <p className="mt-2 font-semibold text-brand-ink">{t}</p>
+              <p className="text-body-sm text-muted-foreground">{d}</p>
+            </div>
+          ))}
+        </div>
+      </PortalShell>
+    );
+  }
+
+  const il30 = ajouterJours(isoJour(), -30);
+  const { data } = await supabase
+    .from('collectes')
+    .select('*')
+    .eq('client_id', client.id)
+    .gte('date_prevue', il30)
+    .order('date_prevue', { ascending: false })
+    .limit(10);
+  const collectes = rows<Collecte>(data);
+  const aConfirmer = collectes.filter((c) => c.statut === 'realisee' && !c.confirmation_client).slice(0, 3);
+  const faits = collectes.filter((c) => c.statut === 'realisee').length;
+
+  const s = statutAbonnement(client.statut_abonnement);
+  const h = HERO[s.terrain];
+  const Icone = h.icone;
+  const tel = telInternational(entreprise?.telephone);
 
   return (
-    <PortalShell portalKey="citoyen" currentPath="/citoyen">
-      <div className="space-y-6">
-        <header className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1>{firstName ? `Bonjour ${firstName} 👋` : 'Bonjour 👋'}</h1>
-            <p className="text-body text-muted-foreground">
-              Voici l'état de votre service de collecte cette semaine.
-            </p>
-          </div>
-          <a href="/citoyen/signaler" className="btn-primary">
-            <AlertTriangle size={16} /> Signaler un problème
-          </a>
-        </header>
+    <PortalShell portalKey="citoyen" currentPath="/citoyen" titre={client.nom}>
+      {demande && (
+        <p className="mb-5 flex items-center gap-2 rounded-lg border border-terrain-ok/25 bg-terrain-ok/5 px-4 py-3 text-body-sm font-medium text-terrain-ok">
+          <CheckCircle2 size={18} /> Demande envoyée à {entreprise?.nom}. Il vous contactera pour valider et encaisser la première période.
+        </p>
+      )}
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <StatCard icon={Wallet} label="Statut abonnement" value="À jour" accent="green" delta={{ value: 'Expire dans 18 j', positive: true }} />
-          <StatCard icon={Home} label="Foyer enregistré" value="Nsam · Bloc C" accent="blue" />
-          <StatCard icon={Calendar} label="Prochaine collecte" value="Mardi 27" accent="teal" delta={{ value: 'dans 1 jour' }} />
-          <StatCard icon={Sparkles} label="Mes points écolo" value="1 240" accent="warning" delta={{ value: '+50 cette semaine', positive: true }} />
-        </div>
-
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* QR Code */}
-          <section className="card-soft p-6">
-            <div className="flex items-center justify-between">
-              <h2>Mon QR Code de service</h2>
-              <a href="/citoyen/qr-code" className="text-body-sm font-medium text-brand-blue hover:underline">
-                Imprimer
-              </a>
-            </div>
-            <p className="mt-1 text-body-sm text-muted-foreground">
-              À afficher sur votre portail. Le collecteur le scanne à chaque passage.
+      <section className={cn('rounded-2xl p-6 text-white sm:p-8', h.classe)}>
+        <div className="flex items-start gap-4">
+          <Icone size={40} className="shrink-0" />
+          <div className="min-w-0">
+            <p className="text-small font-semibold uppercase tracking-wider opacity-85">{s.label}</p>
+            <h1 className="text-[1.6rem] font-bold leading-tight text-white sm:text-[2rem]">{h.titre}</h1>
+            <p className="mt-1 opacity-90">
+              {client.statut === 'demande'
+                ? `En attente de validation par ${entreprise?.nom ?? 'votre précollecteur'}.`
+                : client.couverture_fin
+                  ? `Formule ${client.plan_nom} · couvert jusqu’au ${dateFr(client.couverture_fin, { day: 'numeric', month: 'long', year: 'numeric' })}`
+                  : `Formule ${client.plan_nom} · première période à régler`}
             </p>
-            <div className="mt-4 grid place-items-center rounded-xl border-2 border-dashed border-border bg-muted py-8">
-              <div className="grid h-40 w-40 place-content-center rounded-md bg-foreground text-surface">
-                <QrCode size={120} strokeWidth={1} />
-              </div>
-              <p className="mt-3 text-small uppercase tracking-wider text-muted-foreground">
-                ID : MKT-YDE3-NSAM-C0427
+            {Number(client.montant_impaye) > 0 && (
+              <p className="num mt-3 inline-block rounded-lg bg-white/15 px-3 py-1.5 font-semibold">
+                À régler : {fcfa(client.montant_impaye)}
               </p>
-            </div>
-          </section>
+            )}
+          </div>
+        </div>
+      </section>
 
-          {/* Prochaines collectes */}
-          <section className="card-soft p-6">
-            <h2>Prochaines collectes</h2>
-            <p className="text-body-sm text-muted-foreground">Planifiées sur votre secteur.</p>
-            <ul className="mt-4 space-y-3">
-              {PROCHAINES_COLLECTES.map((c, i) => (
-                <li key={i} className="flex items-start gap-3 rounded-lg border border-border p-3">
-                  <span className="grid h-10 w-10 place-content-center rounded-md bg-brand-green/10 text-brand-green">
-                    <Calendar size={18} />
-                  </span>
-                  <div>
-                    <p className="text-body-sm font-semibold">{c.date}</p>
-                    <p className="text-small text-muted-foreground">{c.creneau}</p>
-                    <p className="text-small text-muted-foreground">Secteur {c.secteur}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          {/* Activité */}
-          <section className="card-soft p-6">
-            <h2>Activité récente</h2>
-            <ul className="mt-4 space-y-3">
-              {ACTIVITES.map((a, i) => {
-                const tagClass =
-                  a.tag === 'success'
-                    ? 'badge-success'
-                    : a.tag === 'warning'
-                      ? 'badge-warning'
-                      : 'badge-info';
-                return (
-                  <li key={i} className="flex items-start gap-3">
-                    <MessageSquare size={16} className="mt-1 text-muted-foreground" />
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-body-sm font-semibold">{a.label}</p>
-                        <span className={tagClass}>
-                          {a.tag === 'success' ? '✓' : a.tag === 'warning' ? '★' : 'ℹ'}
-                        </span>
-                      </div>
-                      <p className="text-small text-muted-foreground">{a.detail}</p>
-                      <p className="text-small text-muted-foreground">{a.date}</p>
-                    </div>
+      <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_20rem]">
+        <div className="space-y-6">
+          {aConfirmer.length > 0 && (
+            <Section titre="Confirmez les derniers passages" sousTitre="Votre réponse sert de preuve de service." flush>
+              <ul className="divide-y divide-border">
+                {aConfirmer.map((c) => (
+                  <li key={c.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
+                    <span className="font-medium">{dateFr(c.date_prevue, { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+                    <ConfirmationPassage collecteId={c.id} />
                   </li>
-                );
-              })}
-            </ul>
-          </section>
+                ))}
+              </ul>
+            </Section>
+          )}
+
+          <Section
+            titre="Derniers passages"
+            sousTitre={`${faits} collecte${faits > 1 ? 's' : ''} sur les 30 derniers jours`}
+            actions={<Link href="/citoyen/collectes" className="btn-ghost">Historique</Link>}
+            flush
+          >
+            {collectes.length === 0 ? (
+              <p className="px-5 py-6 text-body-sm text-muted-foreground">Aucun passage enregistré pour l’instant.</p>
+            ) : (
+              <ul className="divide-y divide-border">
+                {collectes.slice(0, 5).map((c) => (
+                  <li key={c.id} className="flex items-center justify-between gap-3 px-5 py-3 text-body-sm">
+                    <span>{dateFr(c.date_prevue, { weekday: 'short', day: 'numeric', month: 'short' })}</span>
+                    <span className={c.statut === 'realisee' ? 'chip-ok' : c.statut === 'non_realisee' ? 'chip-stop' : 'chip-info'}>
+                      {c.statut === 'realisee' ? 'Collecté' : c.statut === 'non_realisee' ? `Non collecté${c.motif ? ` · ${c.motif}` : ''}` : 'Prévu'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Section>
         </div>
 
-        {/* Marketplace CTA */}
-        <section className="card-soft overflow-hidden bg-gradient-to-r from-brand-green/15 to-brand-green-light/15 p-6">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="space-y-1">
-              <h2>Vos déchets ont de la valeur</h2>
-              <p className="text-body-sm text-muted-foreground">
-                Triez plastique, métal et carton — proposez-les à un recycleur partenaire et gagnez
-                des points + de l'argent.
-              </p>
-            </div>
-            <a href="/citoyen/marketplace" className="btn-primary">
-              Voir la marketplace <ShoppingBag size={16} />
-            </a>
+        <div className="space-y-6">
+          {entreprise && (
+            <Section titre="Mon précollecteur">
+              <p className="font-semibold text-brand-ink">{entreprise.nom}</p>
+              <p className="text-body-sm text-muted-foreground">{telLisible(entreprise.telephone)}</p>
+              {client.zone_nom && <p className="text-small text-muted-foreground">Zone {client.zone_nom}</p>}
+              {tel && (
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <a href={`tel:+${tel}`} className="btn-outline"><Phone size={16} /> Appeler</a>
+                  <a href={`https://wa.me/${tel}`} target="_blank" rel="noreferrer" className="btn-outline"><MessageCircle size={16} /> WhatsApp</a>
+                </div>
+              )}
+            </Section>
+          )}
+          <div className="grid grid-cols-2 gap-3">
+            <Link href="/citoyen/qr-code" className="card-soft flex flex-col items-center gap-2 p-4 text-center text-body-sm font-semibold text-brand-ink hover:shadow-elevated">
+              <QrCode size={24} className="text-brand-green" /> Mon QR code
+            </Link>
+            <Link href="/citoyen/signaler" className="card-soft flex flex-col items-center gap-2 p-4 text-center text-body-sm font-semibold text-brand-ink hover:shadow-elevated">
+              <AlertTriangle size={24} className="text-terrain-relance" /> Signaler
+            </Link>
           </div>
-        </section>
+        </div>
       </div>
     </PortalShell>
   );

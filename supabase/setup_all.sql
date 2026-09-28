@@ -2,6 +2,18 @@
 -- MyKlinTown — SETUP COMPLET (à coller en une fois dans le SQL Editor Supabase)
 -- Concaténation de : 20260526000001_init.sql + 20260530000002_features...sql
 -- =============================================================================
+--
+-- ⚠️ CE FICHIER NE REFLÈTE PLUS À LUI SEUL L'ÉTAT DE LA BASE.
+--    Il s'arrête à la migration du 30/05/2026. Depuis, la migration
+--    20260831000003_securite_rls_et_roles.sql (= supabase/setup_rls.sql) a été
+--    appliquée en production le 2026-08-31 et REMPLACE deux objets définis ici :
+--      • handle_new_user()      — ne concède plus que 'citoyen' et 'enterprise'
+--      • profiles_update_own    — reçoit un `with check`, et un déclencheur
+--                                 interdit qu'un compte change son propre rôle
+--    Elle ajoute aussi les politiques manquantes sur 15 tables.
+--    👉 Lire les deux fichiers ensemble. Ne jamais rejouer celui-ci sur une
+--       base déjà installée : aucun `create` n'y porte de `if not exists`.
+-- =============================================================================
 
 -- =============================================================================
 -- MyKlinTown — Schéma initial

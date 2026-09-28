@@ -1,116 +1,94 @@
-import { CheckCircle2 } from 'lucide-react';
+import Link from 'next/link';
+import { Sparkles } from 'lucide-react';
 import { PortalShell } from '@/components/portal-shell';
-import { DEMO_USERS } from '@/lib/portal-config';
-import { CitoyenSignalerForm } from '@/components/citoyen-signaler-form';
-import { getMesSignalements } from '@/lib/signalement-actions';
+import { EmptyState, PageHeader, Section } from '@/components/ui/blocks';
+import { IncidentForm } from '@/components/capture/incident-form';
+import { Preuve } from '@/components/ui/preuve';
+import { getMonAbonnement } from '@/lib/client/context';
+import { signalerIncidentClientAction } from '@/lib/client/actions';
+import { rows } from '@/lib/server';
+import { urlsPreuves } from '@/lib/preuves';
+import { CATEGORIES_INCIDENT, CATEGORIES_INCIDENT_CLIENT, dateFr, dateHeureFr, STATUT_INCIDENT } from '@/lib/format';
+import type { Incident } from '@/lib/types';
 
-// Page de données par-utilisateur : rendu à chaque requête (pas de cache statique).
-export const dynamic = 'force-dynamic';
+export const metadata = { title: 'Signaler un problème' };
 
-const TYPE_LABEL: Record<string, string> = {
-  bac_plein: 'Bac débordant',
-  depot_sauvage: 'Dépôt sauvage',
-  retard_collecte: 'Retard collecte',
-  incident_collecteur: 'Incident collecteur',
-};
+export default async function SignalerPage({ searchParams }: { searchParams: Promise<{ collecte?: string }> }) {
+  const { collecte } = await searchParams;
+  const { supabase, user, client } = await getMonAbonnement();
 
-const STATUT_BADGE: Record<string, { label: string; class: string }> = {
-  nouveau: { label: 'Nouveau', class: 'badge-info' },
-  en_traitement: { label: 'En traitement', class: 'badge-warning' },
-  resolu: { label: 'Résolu', class: 'badge-success' },
-  rejete: { label: 'Rejeté', class: 'badge-danger' },
-};
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString('fr-FR', {
-      day: '2-digit',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
-    return iso;
+  if (!client) {
+    return (
+      <PortalShell portalKey="citoyen" currentPath="/citoyen/signaler">
+        <PageHeader titre="Signaler un problème" />
+        <div className="card-soft">
+          <EmptyState
+            icon={Sparkles}
+            titre="Abonnez-vous d’abord"
+            texte="Les signalements sont transmis à votre précollecteur : il en faut un !"
+            action={<Link href="/citoyen/souscrire" className="btn-primary">M’abonner</Link>}
+          />
+        </div>
+      </PortalShell>
+    );
   }
-}
 
-export default async function CitoyenSignaler() {
-  const signalements = await getMesSignalements();
+  let dateCollecte: string | null = null;
+  if (collecte) {
+    const { data } = await supabase.from('collectes').select('date_prevue').eq('id', collecte).maybeSingle();
+    dateCollecte = (data as { date_prevue?: string } | null)?.date_prevue ?? null;
+  }
+  const { data } = await supabase
+    .from('incidents_precollecte')
+    .select('*')
+    .eq('auteur_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(20);
+  const mes = rows<Incident>(data);
+  const urls = await urlsPreuves(supabase, mes.map((i) => i.media_path));
 
   return (
-    <PortalShell portalKey="citoyen" user={DEMO_USERS.citoyen} currentPath="/citoyen/signaler">
-      <div className="space-y-6">
-        <header>
-          <h1>Signaler un problème</h1>
-          <p className="text-body text-muted-foreground">
-            Aidez la Mairie à intervenir plus vite. Votre signalement est géolocalisé et transmis à
-            l'équipe de collecte en charge de votre secteur.
-          </p>
-        </header>
-
-        <div className="grid gap-6 lg:grid-cols-3">
-          <CitoyenSignalerForm />
-
-          <aside className="space-y-6">
-            <section className="card-soft p-5">
-              <h2 className="m-0">Comment ça marche ?</h2>
-              <ol className="mt-3 space-y-3 text-body-sm">
-                <li className="flex gap-3">
-                  <span className="grid h-6 w-6 shrink-0 place-content-center rounded-full bg-brand-blue text-small font-bold text-white">
-                    1
-                  </span>
-                  Vous signalez avec géolocalisation.
-                </li>
-                <li className="flex gap-3">
-                  <span className="grid h-6 w-6 shrink-0 place-content-center rounded-full bg-brand-blue text-small font-bold text-white">
-                    2
-                  </span>
-                  Le Service Hygiène de la Mairie reçoit l'alerte.
-                </li>
-                <li className="flex gap-3">
-                  <span className="grid h-6 w-6 shrink-0 place-content-center rounded-full bg-brand-blue text-small font-bold text-white">
-                    3
-                  </span>
-                  Une équipe est dépêchée. Vous êtes notifié à la résolution.
-                </li>
-              </ol>
-              <div className="mt-4 flex items-center gap-2 rounded-md bg-brand-green/10 px-3 py-2 text-body-sm text-brand-green">
-                <CheckCircle2 size={14} /> +20 points écolo par signalement validé
-              </div>
-            </section>
-
-            <section className="card-soft p-5">
-              <h2 className="m-0">Mes signalements</h2>
-              <p className="text-small text-muted-foreground">
-                {signalements.length === 0
-                  ? 'Aucun signalement pour le moment.'
-                  : `Vos ${signalements.length} derniers signalements.`}
-              </p>
-              {signalements.length > 0 && (
-                <ul className="mt-3 space-y-2">
-                  {signalements.map((s) => {
-                    const badge = STATUT_BADGE[s.statut] ?? STATUT_BADGE.nouveau!;
-                    return (
-                      <li key={s.id} className="rounded-lg border border-border p-3">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-body-sm font-semibold">
-                            {TYPE_LABEL[s.type] ?? s.type}
-                          </p>
-                          <span className={badge.class}>{badge.label}</span>
-                        </div>
-                        {s.description && (
-                          <p className="truncate text-small text-muted-foreground">{s.description}</p>
-                        )}
-                        <p className="text-small text-muted-foreground">{formatDate(s.created_at)}</p>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </section>
-          </aside>
-        </div>
+    <PortalShell portalKey="citoyen" currentPath="/citoyen/signaler" titre={client.nom}>
+      <PageHeader
+        titre={collecte ? 'Le précollecteur n’est pas passé' : 'Signaler un problème'}
+        sousTitre={
+          collecte
+            ? `Passage du ${dateFr(dateCollecte)} : prenez une photo ou une vidéo maintenant, elle sera jointe à votre contestation.`
+            : 'Photo ou vidéo prise sur place : c’est ce qui rend le signalement incontestable.'
+        }
+        retour={{ href: '/citoyen', label: 'Mon espace' }}
+      />
+      <div className="card-soft p-5 sm:p-6">
+        <IncidentForm
+          entrepriseId={client.entreprise_id}
+          categories={collecte ? ['passage_non_effectue', 'collecte_incomplete'] : CATEGORIES_INCIDENT_CLIENT}
+          action={signalerIncidentClientAction}
+          preuveObligatoire={!!collecte}
+          associations={{ clientId: client.id, collecteId: collecte ?? null }}
+          retour={collecte ? '/citoyen/collectes' : undefined}
+          libelleEnvoi={collecte ? 'Envoyer ma contestation' : 'Envoyer le signalement'}
+        />
       </div>
+
+      {mes.length > 0 && (
+        <Section titre="Mes signalements" className="mt-6" flush>
+          <ul className="divide-y divide-border">
+            {mes.map((i) => (
+              <li key={i.id} className="flex gap-3 px-5 py-3">
+                <Preuve url={i.media_path ? urls.get(i.media_path) : undefined} type={i.media_type} capture={i.capture_at} />
+                <div className="min-w-0 text-body-sm">
+                  <p className="flex flex-wrap items-center gap-2 font-semibold text-brand-ink">
+                    {CATEGORIES_INCIDENT[i.categorie] ?? i.categorie}
+                    <span className={STATUT_INCIDENT[i.statut]?.chip}>{STATUT_INCIDENT[i.statut]?.label}</span>
+                  </p>
+                  {i.description && <p className="text-muted-foreground">{i.description}</p>}
+                  <p className="text-small text-muted-foreground">{dateHeureFr(i.created_at)}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
     </PortalShell>
   );
 }
