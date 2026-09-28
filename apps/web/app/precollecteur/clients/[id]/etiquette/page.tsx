@@ -43,6 +43,9 @@ export default async function EtiquettePage({ params }: { params: Promise<{ id: 
             Collecte assurée par <strong>{entreprise.nom}</strong>
             {entreprise.telephone && <span className="block">{telLisible(entreprise.telephone)}</span>}
           </div>
+          <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
+            Suivez vos passages et vos factures : créez votre compte MyKlinTown, puis saisissez ce code et votre téléphone.
+          </p>
         </div>
       </article>
     </div>
