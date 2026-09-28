@@ -13,6 +13,8 @@ interface MobileNavDrawerProps {
   currentPath: string;
   /** Nom réel de l'utilisateur connecté (fourni par PortalShell). */
   userName?: string;
+  /** Nom affiché (entreprise, foyer…). */
+  titre?: string;
 }
 
 /**
@@ -21,7 +23,7 @@ interface MobileNavDrawerProps {
  * éviter de passer des icônes Lucide à travers la frontière server → client
  * (les composants ne sont pas sérialisables).
  */
-export function MobileNavDrawer({ portalKey, currentPath, userName }: MobileNavDrawerProps) {
+export function MobileNavDrawer({ portalKey, currentPath, userName, titre }: MobileNavDrawerProps) {
   const [open, setOpen] = useState(false);
   const portal = PORTALS[portalKey];
 
@@ -40,7 +42,7 @@ export function MobileNavDrawer({ portalKey, currentPath, userName }: MobileNavD
         <Dialog.Overlay className="fixed inset-0 z-50 bg-foreground/40 backdrop-blur-sm data-[state=open]:animate-fade-in lg:hidden" />
         <Dialog.Content
           className={cn(
-            'fixed left-0 top-0 z-50 flex h-full w-[82vw] max-w-xs flex-col bg-brand-blue text-white shadow-elevated lg:hidden',
+            'fixed left-0 top-0 z-50 flex h-full w-[82vw] max-w-xs flex-col bg-brand-gradient-ink text-white shadow-elevated lg:hidden',
             'data-[state=open]:animate-slide-up',
           )}
         >
@@ -64,15 +66,18 @@ export function MobileNavDrawer({ portalKey, currentPath, userName }: MobileNavD
           </div>
 
           <div className="border-b border-white/10 px-5 py-4">
-            <p className="text-small uppercase tracking-wider text-white/60">{portal.role}</p>
-            <p className="text-body-sm font-semibold">{userName ?? portal.name}</p>
+            <p className="text-small font-semibold uppercase tracking-wider text-brand-leaf">{portal.role}</p>
+            <p className="text-body-sm font-semibold">{titre ?? userName ?? portal.name}</p>
           </div>
 
           <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
             {portal.nav.map((item) => {
               const Icon = item.icon;
+              const racine = portal.nav[0]?.href;
               const isActive =
-                currentPath === item.href || currentPath.startsWith(item.href + '/');
+                item.href === racine
+                  ? currentPath === item.href
+                  : currentPath === item.href || currentPath.startsWith(item.href + '/');
               return (
                 <Link
                   key={item.href}

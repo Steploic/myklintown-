@@ -20,6 +20,11 @@ import {
   Users,
   Wallet,
   Warehouse,
+  Tags,
+  Bike,
+  FileText,
+  CalendarCheck,
+  Shapes,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -28,6 +33,8 @@ export interface PortalNavItem {
   label: string;
   icon: LucideIcon;
   badge?: string | number;
+  /** Libellé court pour la barre d'onglets mobile. */
+  court?: string;
 }
 
 /** Données démo utilisateur — à remplacer par l'utilisateur authentifié Supabase. */
@@ -38,13 +45,22 @@ export const DEMO_USERS = {
   enterprise: { nom: 'Paul Essomba', email: 'p.essomba@ecocycle.cm' },
 } as const;
 
+export const PRECOLLECTEUR_NAV: PortalNavItem[] = [
+  { href: '/precollecteur', label: 'Tableau de bord', icon: LayoutDashboard, court: 'Accueil' },
+  { href: '/precollecteur/clients', label: 'Clients', icon: Users },
+  { href: '/precollecteur/facturation', label: 'Factures & relances', icon: Receipt, court: 'Factures' },
+  { href: '/precollecteur/tournees', label: 'Tournées', icon: Route },
+  { href: '/precollecteur/flotte', label: 'Flotte & équipe', icon: Bike },
+  { href: '/precollecteur/incidents', label: 'Incidents', icon: Camera },
+  { href: '/precollecteur/grille', label: 'Grille tarifaire', icon: Tags },
+];
+
 export const CITOYEN_NAV: PortalNavItem[] = [
-  { href: '/citoyen', label: 'Tableau de bord', icon: LayoutDashboard },
-  { href: '/citoyen/abonnement', label: 'Mon abonnement', icon: Wallet },
-  { href: '/citoyen/qr-code', label: 'Mon QR Code', icon: QrCode },
-  { href: '/citoyen/signaler', label: 'Signaler', icon: AlertTriangle, badge: 'NEW' },
-  { href: '/citoyen/marketplace', label: 'Marketplace', icon: ShoppingBag },
-  { href: '/citoyen/recyclage', label: 'Mes recyclages', icon: Recycle },
+  { href: '/citoyen', label: 'Mon abonnement', icon: Home, court: 'Accueil' },
+  { href: '/citoyen/collectes', label: 'Mes collectes', icon: CalendarCheck, court: 'Collectes' },
+  { href: '/citoyen/factures', label: 'Mes factures', icon: FileText, court: 'Factures' },
+  { href: '/citoyen/qr-code', label: 'Mon QR code', icon: QrCode, court: 'QR code' },
+  { href: '/citoyen/signaler', label: 'Signaler un problème', icon: AlertTriangle },
 ];
 
 export const COLLECTEUR_NAV: PortalNavItem[] = [
@@ -57,14 +73,10 @@ export const COLLECTEUR_NAV: PortalNavItem[] = [
 ];
 
 export const DASHBOARD_NAV: PortalNavItem[] = [
-  { href: '/dashboard', label: "Vue d'ensemble", icon: LayoutDashboard },
-  { href: '/dashboard/territoire', label: 'Territoire', icon: MapIcon },
-  { href: '/dashboard/menages', label: 'Ménages', icon: Users, badge: '4.2k' },
-  { href: '/dashboard/tournees', label: 'Tournées', icon: Truck },
-  { href: '/dashboard/recouvrement', label: 'Recouvrement', icon: Wallet },
-  { href: '/dashboard/transformation', label: 'Transformation', icon: Recycle },
-  { href: '/dashboard/signalements', label: 'Signalements', icon: AlertTriangle, badge: 3 },
-  { href: '/dashboard/rapports', label: 'Rapports', icon: BarChart3 },
+  { href: '/dashboard', label: 'Supervision', icon: LayoutDashboard },
+  { href: '/dashboard/zones', label: 'Zones de collecte', icon: Shapes, court: 'Zones' },
+  { href: '/dashboard/precollecteurs', label: 'Précollecteurs', icon: Truck },
+  { href: '/dashboard/incidents', label: 'Incidents', icon: AlertTriangle },
 ];
 
 export const ENTERPRISE_NAV: PortalNavItem[] = [
@@ -76,12 +88,17 @@ export const ENTERPRISE_NAV: PortalNavItem[] = [
   { href: '/enterprise/facturation', label: 'Facturation', icon: DollarSign },
 ];
 
-export type PortalKey = 'citoyen' | 'collecteur' | 'mairie' | 'enterprise';
+export type PortalKey = 'precollecteur' | 'citoyen' | 'collecteur' | 'mairie' | 'enterprise';
 
 export const PORTALS = {
+  precollecteur: {
+    name: 'Mon entreprise',
+    role: 'Espace Précollecteur',
+    nav: PRECOLLECTEUR_NAV,
+  },
   citoyen: {
-    name: 'Famille TSANGA',
-    role: 'Portail Citoyen',
+    name: 'Mon foyer',
+    role: 'Espace Client',
     nav: CITOYEN_NAV,
   },
   collecteur: {
@@ -90,8 +107,8 @@ export const PORTALS = {
     nav: COLLECTEUR_NAV,
   },
   mairie: {
-    name: 'Service Hygiène · Yaoundé III',
-    role: 'Dashboard Mairie',
+    name: 'Service d’hygiène',
+    role: 'Espace Mairie',
     nav: DASHBOARD_NAV,
   },
   enterprise: {

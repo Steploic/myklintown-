@@ -2,13 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
+/* =============================================================================
+   MyKlinTown — Charte V2 (pivot précollecteurs, septembre 2026)
+   Principes : pensée pour le terrain (téléphone, plein soleil, pouce),
+   chiffres alignés, code couleur servir / relancer / ne pas servir.
+   ============================================================================= */
+
 @layer base {
   :root {
-    /* Variables CSS — utiles pour les composants qui ont besoin de vraies
-       valeurs hex (Leaflet, Recharts) et non de classes Tailwind. */
+    /* Valeurs brutes pour Leaflet / Recharts, qui ne lisent pas les classes. */
+    --color-brand-ink: 13 36 56;        /* #0D2438 */
     --color-brand-blue: 27 63 99;       /* #1B3F63 */
     --color-brand-blue-hover: 31 79 122; /* #1F4F7A */
-    --color-brand-green: 79 163 106;    /* #4FA36A */
+    --color-brand-green: 62 154 94;     /* #3E9A5E */
     --color-brand-green-light: 123 194 138; /* #7BC28A */
     --color-brand-teal: 46 127 142;     /* #2E7F8E */
     --color-danger: 239 68 68;
@@ -21,6 +27,7 @@
 
   html {
     @apply antialiased;
+    -webkit-tap-highlight-color: transparent;
   }
 
   body {
@@ -29,57 +36,124 @@
   }
 
   h1 {
-    @apply text-h1-sm md:text-h1 text-brand-blue;
+    @apply text-h1-sm md:text-h1 text-brand-ink tracking-tight;
   }
   h2 {
-    @apply text-h2-sm md:text-h2;
+    @apply text-h2-sm md:text-h2 text-brand-ink;
   }
 }
 
 @layer components {
   .card-soft {
-    @apply rounded-xl border border-border bg-surface shadow-soft;
+    @apply rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(13,36,56,0.05),0_4px_12px_-4px_rgba(13,36,56,0.08)];
   }
+
+  /* Boutons : 44 px minimum de hauteur — cible de pouce, pas de souris. */
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-md bg-brand-green
+    @apply inline-flex min-h-[44px] items-center justify-center gap-2 rounded-md bg-brand-green
       px-4 py-2 text-body-sm font-semibold text-white whitespace-nowrap shadow-soft
-      transition-colors hover:bg-brand-green/90 focus-visible:outline-none
+      transition-colors hover:bg-[#358851] focus-visible:outline-none
       focus-visible:ring-2 focus-visible:ring-brand-blue focus-visible:ring-offset-2
-      disabled:opacity-50;
+      disabled:cursor-not-allowed disabled:opacity-50;
   }
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-md bg-brand-blue
+    @apply inline-flex min-h-[44px] items-center justify-center gap-2 rounded-md bg-brand-blue
       px-4 py-2 text-body-sm font-semibold text-white whitespace-nowrap shadow-soft
       transition-colors hover:bg-brand-blue-hover focus-visible:outline-none
       focus-visible:ring-2 focus-visible:ring-brand-blue focus-visible:ring-offset-2
-      disabled:opacity-50;
+      disabled:cursor-not-allowed disabled:opacity-50;
   }
   .btn-outline {
-    @apply inline-flex items-center justify-center gap-2 rounded-md border-2 border-border
-      bg-transparent px-4 py-2 text-body-sm font-semibold text-foreground whitespace-nowrap
+    @apply inline-flex min-h-[44px] items-center justify-center gap-2 rounded-md border border-input
+      bg-surface px-4 py-2 text-body-sm font-semibold text-foreground whitespace-nowrap
       transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2
-      focus-visible:ring-brand-blue focus-visible:ring-offset-2;
+      focus-visible:ring-brand-blue focus-visible:ring-offset-2
+      disabled:cursor-not-allowed disabled:opacity-50;
   }
-  .badge-success {
-    @apply inline-flex items-center rounded-full bg-brand-green/10 px-2.5 py-0.5
-      text-small font-medium text-brand-green;
+  .btn-danger {
+    @apply inline-flex min-h-[44px] items-center justify-center gap-2 rounded-md bg-terrain-stop
+      px-4 py-2 text-body-sm font-semibold text-white whitespace-nowrap shadow-soft
+      transition-colors hover:bg-terrain-stop/90 disabled:opacity-50;
   }
-  .badge-warning {
-    @apply inline-flex items-center rounded-full bg-warning/10 px-2.5 py-0.5
-      text-small font-medium text-warning;
+  .btn-ghost {
+    @apply inline-flex min-h-[36px] items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5
+      text-body-sm font-medium text-brand-blue transition-colors hover:bg-brand-blue/5;
   }
-  .badge-danger {
-    @apply inline-flex items-center rounded-full bg-danger/10 px-2.5 py-0.5
-      text-small font-medium text-danger;
+
+  /* Champs de formulaire */
+  .field-label {
+    @apply mb-1 block text-body-sm font-semibold text-brand-ink;
   }
-  .badge-info {
-    @apply inline-flex items-center rounded-full bg-brand-blue/10 px-2.5 py-0.5
-      text-small font-medium text-brand-blue;
+  .field {
+    @apply block min-h-[44px] w-full rounded-md border border-input bg-surface px-3 py-2 text-body
+      text-foreground placeholder:text-muted-foreground/70 focus:border-brand-blue focus:outline-none
+      focus:ring-2 focus:ring-brand-blue/20 disabled:bg-muted;
+  }
+  .field-hint {
+    @apply mt-1 text-small text-muted-foreground;
+  }
+
+  /* Pastilles de statut */
+  .chip {
+    @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5 text-small font-semibold;
+  }
+  .chip-ok { @apply chip bg-terrain-ok/10 text-terrain-ok; }
+  .chip-relance { @apply chip bg-terrain-relance/10 text-terrain-relance; }
+  .chip-stop { @apply chip bg-terrain-stop/10 text-terrain-stop; }
+  .chip-neutre { @apply chip bg-muted text-muted-foreground; }
+  .chip-info { @apply chip bg-brand-blue/10 text-brand-blue; }
+
+  .badge-success { @apply chip-ok; }
+  .badge-warning { @apply chip-relance; }
+  .badge-danger { @apply chip-stop; }
+  .badge-info { @apply chip-info; }
+
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Tableaux de données */
+  .table-data {
+    @apply w-full text-left text-body-sm;
+  }
+  .table-data thead th {
+    @apply border-b border-border bg-muted/60 px-4 py-2.5 text-small font-semibold uppercase tracking-wider text-muted-foreground;
+  }
+  .table-data tbody td {
+    @apply border-b border-border px-4 py-3 align-middle;
+  }
+  .table-data tbody tr:last-child td {
+    @apply border-b-0;
+  }
+  .table-data tbody tr:hover {
+    @apply bg-muted/40;
+  }
+
+  /* Motif signature : la « traînée de pixels » du logo. */
+  .pixel-trail {
+    background-image:
+      linear-gradient(90deg, rgba(43, 108, 176, 0.9) 0 100%),
+      linear-gradient(90deg, rgba(43, 108, 176, 0.7) 0 100%),
+      linear-gradient(90deg, rgba(46, 127, 142, 0.6) 0 100%),
+      linear-gradient(90deg, rgba(46, 127, 142, 0.45) 0 100%),
+      linear-gradient(90deg, rgba(62, 154, 94, 0.35) 0 100%),
+      linear-gradient(90deg, rgba(121, 194, 103, 0.25) 0 100%);
+    background-size: 10px 10px, 8px 8px, 10px 10px, 6px 6px, 8px 8px, 6px 6px;
+    background-position: 0 0, 18px 14px, 34px 2px, 52px 20px, 70px 8px, 92px 22px;
+    background-repeat: no-repeat;
   }
 }
 
 /* Leaflet — overrides pour matcher la charte */
 .leaflet-container {
-  @apply rounded-xl border border-border;
   font-family: var(--font-barlow), sans-serif !important;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white !important;
+  }
 }

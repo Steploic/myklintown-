@@ -25,30 +25,42 @@ const preset: Partial<Config> = {
       colors: {
         // --- Brand (charte V1.0) -----------------------------------------
         brand: {
+          // Charte V2 (pivot précollecteurs, sept. 2026) — tirée du dégradé du
+          // logo : bleu « pixels » → sarcelle → vert feuille.
+          ink: '#0D2438',       // Nuit — barres latérales, fonds sombres
           blue: {
-            DEFAULT: '#1B3F63', // Bleu Primaire — Confiance / Mairie
+            DEFAULT: '#1B3F63', // Bleu Primaire — Confiance
             hover: '#1F4F7A',   // Bleu Secondaire — hover
+            pixel: '#2B6CB0',   // Bleu des pixels du logo — accents
           },
           green: {
-            DEFAULT: '#4FA36A', // Vert Primaire — Écologie / Succès
+            DEFAULT: '#3E9A5E', // Vert Primaire — action, succès (AA sur blanc en gras)
             light: '#7BC28A',   // Vert Clair — badges
-            pale: '#9ED5A8',    // Vert Très Clair — fonds graphiques
+            pale: '#DDF0E2',    // Vert Très Clair — fonds
           },
-          teal: '#2E7F8E',      // Teal — graphiques secondaires
+          leaf: '#79C267',      // Vert feuille du logo — accents sur fond sombre
+          teal: '#2E7F8E',      // Sarcelle — graphiques secondaires
+        },
+
+        // Code terrain, lisible au soleil : servir / relancer / ne pas servir.
+        terrain: {
+          ok: '#1F8A4C',
+          relance: '#B86E00',
+          stop: '#C8372D',
         },
 
         // --- Interface ----------------------------------------------------
         // Le token "background" et "foreground" suivent la convention shadcn/ui
         // pour rester compatible avec ses composants out-of-the-box.
-        background: '#F8FAFC',
-        foreground: '#222222',
+        background: '#F4F7F5',
+        foreground: '#1A2330',
         muted: {
-          DEFAULT: '#F1F5F9',
-          foreground: '#666666',
+          DEFAULT: '#EDF1EF',
+          foreground: '#5B6673',
         },
         surface: '#FFFFFF',
-        border: '#DEDEDE',
-        input: '#DEDEDE',
+        border: '#DDE4E1',
+        input: '#CBD5D1',
         ring: '#1B3F63',
 
         // shadcn/ui aliases (pour réutiliser les composants directement)
@@ -88,7 +100,7 @@ const preset: Partial<Config> = {
           foreground: '#222222',
         },
         success: {
-          DEFAULT: '#4FA36A',
+          DEFAULT: '#3E9A5E',
           foreground: '#FFFFFF',
         },
       },
@@ -152,7 +164,8 @@ const preset: Partial<Config> = {
 
       backgroundImage: {
         // Dégradé signature du logo : bleu profond → vert clair
-        'brand-gradient': 'linear-gradient(135deg, #1B3F63 0%, #2E7F8E 50%, #4FA36A 100%)',
+        'brand-gradient': 'linear-gradient(135deg, #1B3F63 0%, #2E7F8E 55%, #3E9A5E 100%)',
+        'brand-gradient-ink': 'linear-gradient(160deg, #0D2438 0%, #123A4F 60%, #15503F 100%)',
         'brand-gradient-soft': 'linear-gradient(135deg, rgba(27, 63, 99, 0.06) 0%, rgba(79, 163, 106, 0.06) 100%)',
       },
     },

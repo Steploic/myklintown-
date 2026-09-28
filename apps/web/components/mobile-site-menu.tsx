@@ -29,7 +29,7 @@ export function MobileSiteMenu({ nav }: MobileSiteMenuProps) {
         <Dialog.Content className="fixed right-0 top-0 z-50 flex h-full w-[82vw] max-w-xs flex-col bg-surface shadow-elevated md:hidden">
           <Dialog.Title className="sr-only">Menu</Dialog.Title>
           <div className="flex h-16 items-center justify-between border-b border-border px-5">
-            <Logo size={32} />
+            <Logo size={30} />
             <Dialog.Close asChild>
               <button
                 type="button"
@@ -61,11 +61,11 @@ export function MobileSiteMenu({ nav }: MobileSiteMenuProps) {
               Connexion
             </Link>
             <Link
-              href="/signup"
+              href="/signup?role=precollecteur"
               onClick={() => setOpen(false)}
               className="btn-primary w-full"
             >
-              S'inscrire
+              Créer mon espace
             </Link>
           </div>
         </Dialog.Content>

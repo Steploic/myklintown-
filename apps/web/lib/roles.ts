@@ -3,11 +3,12 @@
  * Partagé entre le middleware (protection des routes) et les Server Actions auth.
  * Doit rester aligné sur l'enum `user_role` de la base (migration init).
  */
-export type UserRole = 'citoyen' | 'collecteur' | 'mairie' | 'enterprise' | 'admin';
+export type UserRole = 'citoyen' | 'precollecteur' | 'collecteur' | 'mairie' | 'enterprise' | 'admin';
 
 /** Page d'accueil de chaque rôle après connexion. */
 export const ROLE_HOME: Record<UserRole, string> = {
   citoyen: '/citoyen',
+  precollecteur: '/precollecteur',
   collecteur: '/collecteur',
   mairie: '/dashboard',
   enterprise: '/enterprise',
@@ -17,6 +18,9 @@ export const ROLE_HOME: Record<UserRole, string> = {
 /**
  * Rôles qu'un visiteur peut s'attribuer lui-même en s'inscrivant.
  *
+ * `precollecteur` y figure : il ne donne accès qu'aux données de SA propre
+ * entreprise (RLS par appartenance, `est_membre()`), jamais à celles des autres.
+ *
  * `collecteur`, `mairie` et `admin` en sont exclus : ils ouvrent l'accès aux
  * données des ménages, aux tournées et aux encaissements. Ils se promeuvent
  * côté serveur, ils ne se demandent pas.
@@ -25,7 +29,7 @@ export const ROLE_HOME: Record<UserRole, string> = {
  * C'est la base qui fait autorité — cette liste n'est qu'un garde-fou en amont,
  * pour rendre le refus lisible plutôt que silencieux.
  */
-export const SELF_SERVICE_ROLES = ['citoyen', 'enterprise'] as const;
+export const SELF_SERVICE_ROLES = ['citoyen', 'precollecteur', 'enterprise'] as const;
 
 export type SelfServiceRole = (typeof SELF_SERVICE_ROLES)[number];
 
@@ -36,6 +40,7 @@ export function isSelfServiceRole(value: string): value is SelfServiceRole {
 /** Préfixes de routes nécessitant une authentification. */
 export const PROTECTED_PREFIXES = [
   '/citoyen',
+  '/precollecteur',
   '/collecteur',
   '/dashboard',
   '/enterprise',
@@ -57,10 +62,11 @@ export function isProtectedPath(pathname: string): boolean {
  */
 export const ROLE_ALLOWED_PREFIXES: Record<UserRole, readonly string[]> = {
   citoyen: ['/citoyen', '/settings'],
+  precollecteur: ['/precollecteur', '/settings'],
   collecteur: ['/collecteur', '/settings'],
   mairie: ['/dashboard', '/settings'],
   enterprise: ['/enterprise', '/settings'],
-  admin: ['/citoyen', '/collecteur', '/dashboard', '/enterprise', '/settings'],
+  admin: ['/citoyen', '/precollecteur', '/collecteur', '/dashboard', '/enterprise', '/settings'],
 };
 
 /** Ce rôle a-t-il le droit d'ouvrir ce chemin ? Refuse par défaut. */
