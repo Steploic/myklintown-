@@ -635,7 +635,7 @@ export async function chargerDemoAction(_p: ActionState, _fd: FormData): Promise
   const { data: tris } = await supabase
     .from('tricycles')
     .insert([
-      { entreprise_id: entreprise.id, nom: 'Tricycle A (démo)', immatriculation: 'CE-001-DM', capacite_kg: 500 },
+      { entreprise_id: entreprise.id, nom: 'Tricycle A (démo)', immatriculation: 'CE-001-DM', capacite_kg: 500, statut: 'actif' },
       { entreprise_id: entreprise.id, nom: 'Tricycle B (démo)', immatriculation: 'CE-002-DM', capacite_kg: 500, statut: 'maintenance' },
     ])
     .select('id');
