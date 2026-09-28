@@ -1,27 +1,19 @@
-import Link from 'next/link';
-import { Logo } from '@myklintown/ui';
+import { SiteHeader } from '@/components/site-header';
 import { SiteFooter } from '@/components/site-footer';
+
+export const metadata = { title: 'Mentions légales' };
 
 export default function LegalPage() {
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-surface">
-        <div className="container flex h-16 items-center justify-between">
-          <Link href="/">
-            <Logo size={36} />
-          </Link>
-        </div>
-      </header>
-
-      <main className="container max-w-3xl space-y-8 py-12">
+    <div className="flex min-h-screen flex-col bg-surface">
+      <SiteHeader />
+      <main className="container max-w-3xl flex-1 space-y-6 py-12">
         <header>
           <h1>Mentions légales</h1>
-          <p className="text-body text-muted-foreground">
-            Dernière mise à jour : 27 mai 2026
-          </p>
+          <p className="mt-1 text-body text-muted-foreground">Dernière mise à jour : 28 septembre 2026 · phase pilote</p>
         </header>
 
-        <section className="card-soft space-y-3 p-6">
+        <section className="card-soft space-y-2 p-6">
           <h2>Éditeur</h2>
           <p className="text-body-sm">
             <strong>MyKlinTown</strong> — Yaoundé, Cameroun
@@ -30,49 +22,43 @@ export default function LegalPage() {
           </p>
         </section>
 
-        <section className="card-soft space-y-3 p-6">
+        <section className="card-soft space-y-2 p-6">
           <h2>Hébergement</h2>
           <p className="text-body-sm">
-            Vercel Inc. (frontend) et Supabase (backend, base de données et stockage).
-            Les données sont hébergées dans des centres de données conformes au RGPD.
+            Application : Vercel Inc. Base de données, authentification et stockage des preuves : Supabase.
           </p>
         </section>
 
-        <section className="card-soft space-y-3 p-6">
-          <h2>Propriété intellectuelle</h2>
+        <section className="card-soft space-y-2 p-6">
+          <h2>Données personnelles</h2>
           <p className="text-body-sm">
-            L'ensemble du code source, des algorithmes (notamment l'algorithme VRP d'optimisation
-            des tournées) et des éléments graphiques (charte V1.0, logo) sont la propriété
-            exclusive de MyKlinTown. Toute reproduction ou exploitation non autorisée est interdite.
+            Les données des ménages (nom, téléphone, adresse, position, abonnement, paiements, passages) sont
+            collectées pour l’exécution du service de précollecte. Chaque précollecteur ne voit que ses propres
+            clients. Les mairies n’accèdent qu’à des statistiques agrégées par zone, sans liste nominative.
+            Les photos et vidéos de preuve sont stockées dans un espace privé et ne sont jamais publiques.
           </p>
           <p className="text-body-sm">
-            Le partenariat avec la Mairie de Yaoundé III repose sur un modèle de licence
-            d'exploitation, la Mairie restant propriétaire des infrastructures physiques.
-          </p>
-        </section>
-
-        <section className="card-soft space-y-3 p-6">
-          <h2>Protection des données</h2>
-          <p className="text-body-sm">
-            Les données personnelles des ménages (nom, téléphone, localisation GPS, historique de
-            collecte) sont collectées exclusivement pour l'exécution du service de gestion des
-            déchets. Elles ne sont jamais cédées à un tiers commercial sans consentement explicite.
-          </p>
-          <p className="text-body-sm">
-            Chaque utilisateur peut exercer son droit d'accès, de rectification et de suppression
-            en contactant <a href="mailto:privacy@myklintown.cm" className="text-brand-blue hover:underline">privacy@myklintown.cm</a>.
+            Aucune donnée n’est cédée à un tiers commercial. Pour exercer vos droits d’accès, de rectification ou
+            de suppression, contactez MyKlinTown aux numéros ci-dessus.
           </p>
         </section>
 
-        <section className="card-soft space-y-3 p-6">
+        <section className="card-soft space-y-2 p-6">
           <h2>Cookies</h2>
           <p className="text-body-sm">
-            Le site utilise uniquement des cookies techniques nécessaires au fonctionnement
-            (session, préférences). Aucun cookie tiers de traçage publicitaire n'est déposé.
+            Seuls des cookies techniques nécessaires à la connexion sont utilisés. Aucun cookie publicitaire ni de
+            traçage tiers.
+          </p>
+        </section>
+
+        <section className="card-soft space-y-2 p-6">
+          <h2>Propriété intellectuelle</h2>
+          <p className="text-body-sm">
+            Le code, la marque MyKlinTown, son logo et sa charte graphique sont la propriété de MyKlinTown. Toute
+            reproduction non autorisée est interdite.
           </p>
         </section>
       </main>
-
       <SiteFooter />
     </div>
   );

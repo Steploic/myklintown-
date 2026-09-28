@@ -159,9 +159,12 @@ export function Souscription({ plans, nomDefaut, telDefaut }: { plans: Plan[]; n
                   Vérifiez la position de votre domicile sur la carte. Si elle est juste, votre quartier n’est pas
                   encore couvert : la Mairie et MyKlinTown étendent les zones au fil du pilote.
                 </p>
-                <button type="button" className="btn-outline" onClick={() => setEtape(1)}>
-                  <ArrowLeft size={16} /> Corriger ma position
-                </button>
+                <div className="flex flex-wrap justify-center gap-2">
+                  <button type="button" className="btn-outline" onClick={() => setEtape(1)}>
+                    <ArrowLeft size={16} /> Corriger ma position
+                  </button>
+                  <a href="/citoyen" className="btn-secondary">J’ai déjà un code client</a>
+                </div>
               </div>
             ) : (
               <>

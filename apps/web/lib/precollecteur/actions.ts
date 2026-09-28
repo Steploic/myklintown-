@@ -387,10 +387,18 @@ export async function statutTricycleAction(fd: FormData) {
 }
 
 export async function affecterEmployeAction(fd: FormData) {
-  const { supabase } = await requireEntreprise();
+  const { supabase, entreprise } = await requireEntreprise();
   const tricycle_id = String(fd.get('tricycle_id'));
   const employe_id = String(fd.get('employe_id') ?? '');
   if (!employe_id) return;
+  // La RLS vérifie le tricycle ; l'employé doit lui aussi être de la maison.
+  const { data: e } = await supabase
+    .from('employes')
+    .select('id')
+    .eq('id', employe_id)
+    .eq('entreprise_id', entreprise.id)
+    .maybeSingle();
+  if (!e) return;
   await supabase.from('tricycle_employes').upsert({ tricycle_id, employe_id });
   rafraichir();
 }

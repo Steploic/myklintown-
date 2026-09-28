@@ -17,6 +17,8 @@ import { cn } from '@myklintown/ui';
 import { PortalShell } from '@/components/portal-shell';
 import { Section } from '@/components/ui/blocks';
 import { ConfirmationPassage } from '@/components/client/confirmation-passage';
+import { ActionForm, SubmitButton } from '@/components/ui/action-form';
+import { rattacherCompteAction } from '@/lib/compte-actions';
 import { getMonAbonnement } from '@/lib/client/context';
 import { getCurrentProfile } from '@/lib/get-profile';
 import { rows } from '@/lib/server';
@@ -32,8 +34,12 @@ const HERO = {
   neutre: { classe: 'bg-brand-blue', icone: Clock, titre: 'Demande en cours' },
 } as const;
 
-export default async function CitoyenAccueil({ searchParams }: { searchParams: Promise<{ demande?: string }> }) {
-  const { demande } = await searchParams;
+export default async function CitoyenAccueil({
+  searchParams,
+}: {
+  searchParams: Promise<{ demande?: string; rattache?: string }>;
+}) {
+  const { demande, rattache } = await searchParams;
   const { supabase, client, entreprise } = await getMonAbonnement();
   const profile = await getCurrentProfile();
   const prenom = profile?.nom?.split(' ')[0] ?? '';
@@ -53,6 +59,26 @@ export default async function CitoyenAccueil({ searchParams }: { searchParams: P
           <Link href="/citoyen/souscrire" className="btn-primary mt-6">
             <Sparkles size={16} /> M’abonner maintenant
           </Link>
+        </section>
+        <section className="card-soft mt-6 p-5 sm:p-6">
+          <h2 className="flex items-center gap-2">
+            <QrCode size={20} className="text-brand-green" /> Déjà servi par un précollecteur ?
+          </h2>
+          <p className="mt-1 text-body-sm text-muted-foreground">
+            Saisissez le code de l’étiquette collée à votre portail (il commence par « MKT- ») et le téléphone que
+            vous lui avez donné : votre compte retrouve votre abonnement, vos factures et vos passages.
+          </p>
+          <ActionForm action={rattacherCompteAction} className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+            <div>
+              <label className="field-label" htmlFor="r-code">Code client</label>
+              <input id="r-code" name="code" required placeholder="MKT-XXXXXXXX" autoCapitalize="characters" className="field num uppercase" />
+            </div>
+            <div>
+              <label className="field-label" htmlFor="r-tel">Téléphone</label>
+              <input id="r-tel" name="telephone" type="tel" required placeholder="6 XX XX XX XX" className="field" />
+            </div>
+            <SubmitButton pendingLabel="Vérification…">Retrouver mon abonnement</SubmitButton>
+          </ActionForm>
         </section>
         <div className="mt-6 grid gap-4 md:grid-cols-3">
           {[
@@ -90,6 +116,11 @@ export default async function CitoyenAccueil({ searchParams }: { searchParams: P
 
   return (
     <PortalShell portalKey="citoyen" currentPath="/citoyen" titre={client.nom}>
+      {rattache && (
+        <p className="mb-5 flex items-center gap-2 rounded-lg border border-terrain-ok/25 bg-terrain-ok/5 px-4 py-3 text-body-sm font-medium text-terrain-ok">
+          <CheckCircle2 size={18} /> Compte rattaché : voici votre abonnement chez {entreprise?.nom}.
+        </p>
+      )}
       {demande && (
         <p className="mb-5 flex items-center gap-2 rounded-lg border border-terrain-ok/25 bg-terrain-ok/5 px-4 py-3 text-body-sm font-medium text-terrain-ok">
           <CheckCircle2 size={18} /> Demande envoyée à {entreprise?.nom}. Il vous contactera pour valider et encaisser la première période.
