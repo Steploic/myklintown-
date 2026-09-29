@@ -1,11 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { AlertCircle, CheckCircle2, Loader2, Send } from 'lucide-react';
 import { createClient } from '@myklintown/db/client';
 import { CameraCapture, type Capture } from './camera-capture';
-import { CATEGORIES_INCIDENT } from '@/lib/format';
+import { CATEGORIES_INCIDENT, estErreurReseau, MESSAGE_RESEAU } from '@/lib/format';
+
+const DUREE_MAX_ENVOI_MS = 90_000;
+const DELAI_DEPASSE = 'MKT_DELAI_ENVOI';
 import type { ActionState } from '@/lib/types';
 
 export interface IncidentInput {
@@ -19,6 +21,8 @@ export interface IncidentInput {
   captureAt: string | null;
   lat: number | null;
   lng: number | null;
+  /** Page où le serveur renvoie après l'enregistrement (redirection côté serveur). */
+  retour?: string | null;
 }
 
 /**
@@ -45,7 +49,6 @@ export function IncidentForm({
   retour?: string;
   libelleEnvoi?: string;
 }) {
-  const router = useRouter();
   const [capture, setCapture] = useState<Capture | null>(null);
   const [categorie, setCategorie] = useState(categories[0] ?? 'autre');
   const [description, setDescription] = useState('');
@@ -65,16 +68,25 @@ export function IncidentForm({
       let mediaPath: string | null = null;
       if (capture) {
         const supabase = createClient();
+        // Identité lue sur l'appareil (pas d'appel réseau) : une coupure ne doit
+        // pas se déguiser en « session expirée ». Le serveur revérifie de toute façon.
         const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) throw new Error('Session expirée : reconnectez-vous.');
-        mediaPath = `${entrepriseId}/${user.id}/${crypto.randomUUID()}.${capture.ext}`;
-        const { error } = await supabase.storage.from('preuves').upload(mediaPath, capture.blob, {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session) throw new Error('Session expirée : reconnectez-vous.');
+        mediaPath = `${entrepriseId}/${session.user.id}/${crypto.randomUUID()}.${capture.ext}`;
+        const envoi = supabase.storage.from('preuves').upload(mediaPath, capture.blob, {
           contentType: capture.mime,
           upsert: false,
         });
-        if (error) throw new Error(`Envoi de la preuve impossible : ${error.message}`);
+        // Jamais d'attente infinie sur un réseau qui ne répond plus.
+        const delai = new Promise<never>((_, rejeter) =>
+          setTimeout(() => rejeter(new Error(DELAI_DEPASSE)), DUREE_MAX_ENVOI_MS),
+        );
+        const { error } = await Promise.race([envoi, delai]);
+        if (error) {
+          throw new Error(estErreurReseau(error) ? MESSAGE_RESEAU : `Envoi de la preuve impossible : ${error.message}`);
+        }
       }
       const r = await action({
         categorie,
@@ -87,16 +99,23 @@ export function IncidentForm({
         captureAt: capture?.capturedAt ?? null,
         lat: capture?.lat ?? null,
         lng: capture?.lng ?? null,
+        retour: retour ?? null,
       });
-      if (r.error) throw new Error(r.error);
+      if (r?.error) throw new Error(r.error);
       setEtat('ok');
-      if (retour) {
-        router.push(retour);
-        router.refresh();
-      }
+      // Avec `retour`, c'est le serveur qui redirige dans la même réponse : une
+      // navigation lancée ici après coup pouvait être écrasée par la mise à jour
+      // de page que déclenche l'action (constaté par les tests).
     } catch (err) {
       setEtat('idle');
-      setErreur((err as Error).message);
+      const message = (err as Error).message ?? '';
+      setErreur(
+        message === DELAI_DEPASSE
+          ? 'L’envoi de la preuve prend trop de temps (réseau lent). Votre photo est conservée : réessayez.'
+          : estErreurReseau({ message }) || /unexpected response/i.test(message)
+            ? MESSAGE_RESEAU
+            : message,
+      );
     }
   };
 
@@ -167,9 +186,9 @@ export function IncidentForm({
             <AlertCircle size={16} className="mt-0.5 shrink-0" /> {erreur}
           </p>
         )}
-        <button type="submit" disabled={etat === 'envoi'} className="btn-primary w-full">
-          {etat === 'envoi' ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-          {etat === 'envoi' ? 'Envoi de la preuve…' : libelleEnvoi}
+        <button type="submit" disabled={etat !== 'idle'} className="btn-primary w-full">
+          {etat === 'envoi' ? <Loader2 size={16} className="animate-spin" /> : etat === 'ok' ? <CheckCircle2 size={16} /> : <Send size={16} />}
+          {etat === 'envoi' ? 'Envoi de la preuve…' : etat === 'ok' ? 'Enregistré' : libelleEnvoi}
         </button>
       </div>
     </form>

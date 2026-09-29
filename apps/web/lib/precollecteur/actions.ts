@@ -4,7 +4,8 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { getSupabase, parametre, row, rows, rpc, type Supa } from '@/lib/server';
 import { requireEntreprise } from './context';
-import { ajouterJours, ajouterMois, dateFr, isoJour } from '@/lib/format';
+import { ajouterJours, ajouterMois, dateFr, estErreurReseau, isoJour, MESSAGE_RESEAU } from '@/lib/format';
+import { cheminInterne, extraireCodeClient, periodeFacture } from '@/lib/metier';
 import type { ActionState, ClientStatut, Plan } from '@/lib/types';
 
 const txt = (fd: FormData, k: string) => {
@@ -24,6 +25,7 @@ function rafraichir() {
 
 function erreurLisible(message: string | undefined): string {
   if (!message) return 'Une erreur est survenue.';
+  if (estErreurReseau({ message })) return MESSAGE_RESEAU;
   if (/row-level security|42501|permission/i.test(message)) {
     return 'Action refusée : vos droits ne le permettent pas.';
   }
@@ -105,11 +107,13 @@ async function emettreFacturePour(
     .maybeSingle();
   const finPrecedente = row<{ periode_fin: string }>(derniere)?.periode_fin;
 
-  const aujourdhui = isoJour();
-  const lendemain = finPrecedente ? ajouterJours(finPrecedente, 1) : aujourdhui;
-  const debut = lendemain > aujourdhui ? lendemain : aujourdhui;
-  const fin = ajouterJours(ajouterMois(debut, plan.duree_mois), -1);
   const grace = await parametre(supabase, 'delai_grace_jours', 7);
+  const { debut, fin, echeance } = periodeFacture({
+    aujourdhui: isoJour(),
+    finPrecedente,
+    dureeMois: plan.duree_mois,
+    grace,
+  });
 
   const { data: f, error } = await supabase
     .from('factures')
@@ -121,7 +125,7 @@ async function emettreFacturePour(
       periode_debut: debut,
       periode_fin: fin,
       montant_fcfa: plan.prix_fcfa,
-      echeance: ajouterJours(debut, grace),
+      echeance,
     })
     .select('numero')
     .single();
@@ -507,7 +511,7 @@ export interface ResultatScan {
 /** Scan du QR d'un client pendant la tournée : trace le passage en base, immédiatement. */
 export async function scannerClientAction(tourneeId: string, codeLu: string): Promise<ResultatScan> {
   const { supabase, entreprise } = await requireEntreprise();
-  const code = codeLu.trim().toUpperCase().replace(/^.*\/(MKT-[A-Z0-9]+).*$/, '$1');
+  const code = extraireCodeClient(codeLu);
 
   const { data: c } = await supabase
     .from('v_clients_statut')
@@ -570,6 +574,7 @@ export async function creerIncidentAction(input: {
   captureAt: string | null;
   lat: number | null;
   lng: number | null;
+  retour?: string | null;
 }): Promise<ActionState> {
   const { supabase, entreprise, user } = await requireEntreprise();
   // Le fichier doit avoir été déposé par CE compte, dans le dossier de CETTE entreprise.
@@ -592,6 +597,7 @@ export async function creerIncidentAction(input: {
   });
   if (error) return { error: erreurLisible(error.message) };
   rafraichir();
+  if (cheminInterne(input.retour)) redirect(input.retour!);
   return { ok: 'Incident enregistré avec sa preuve.' };
 }
 

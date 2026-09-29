@@ -2,19 +2,11 @@
 
 import { revalidatePath } from 'next/cache';
 import { getSupabase, rpc } from '@/lib/server';
-import type { ActionState, GeoPolygon } from '@/lib/types';
+import { contourDepuisPoints } from '@/lib/metier';
+import type { ActionState } from '@/lib/types';
 
 function rafraichir() {
   revalidatePath('/dashboard', 'layout');
-}
-
-/** Ferme l'anneau et vérifie qu'il s'agit d'un vrai polygone. */
-function normaliser(points: [number, number][]): GeoPolygon | null {
-  if (points.length < 3) return null;
-  const anneau = points.map(([lat, lng]) => [Number(lng.toFixed(6)), Number(lat.toFixed(6))] as [number, number]);
-  const [a, z] = [anneau[0]!, anneau[anneau.length - 1]!];
-  if (a[0] !== z[0] || a[1] !== z[1]) anneau.push([a[0], a[1]]);
-  return { type: 'Polygon', coordinates: [anneau] };
 }
 
 export interface Conflit {
@@ -24,7 +16,7 @@ export interface Conflit {
 }
 
 export async function verifierConflitsAction(points: [number, number][], exclure?: string | null): Promise<Conflit[]> {
-  const contour = normaliser(points);
+  const contour = contourDepuisPoints(points);
   if (!contour) return [];
   const supabase = await getSupabase();
   const { data } = await rpc(supabase, 'zones_en_conflit', { p_contour: contour, p_exclure: exclure ?? null });
@@ -41,7 +33,7 @@ export async function enregistrerZoneAction(input: {
 }): Promise<ActionState & { id?: string }> {
   const nom = input.nom.trim();
   if (!nom) return { error: 'Donnez un nom à la zone.' };
-  const contour = normaliser(input.points);
+  const contour = contourDepuisPoints(input.points);
   if (!contour) return { error: 'Une zone a besoin d’au moins 3 points.' };
 
   const supabase = await getSupabase();

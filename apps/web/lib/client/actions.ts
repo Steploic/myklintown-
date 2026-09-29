@@ -1,7 +1,9 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { getSupabase, row, rpc } from '@/lib/server';
+import { cheminInterne } from '@/lib/metier';
 import type { ActionState } from '@/lib/types';
 import type { IncidentInput } from '@/components/capture/incident-form';
 
@@ -45,7 +47,7 @@ export async function souscrireAction(input: {
   });
   if (error) return { error: error.message };
   revalidatePath('/citoyen', 'layout');
-  return { ok: 'Demande envoyée.' };
+  redirect('/citoyen?demande=1');
 }
 
 export async function confirmerPassageAction(collecteId: string): Promise<ActionState> {
@@ -101,5 +103,6 @@ export async function signalerIncidentClientAction(input: IncidentInput): Promis
     await rpc(supabase, 'confirmer_passage', { p_collecte: input.collecteId, p_confirme: false });
   }
   revalidatePath('/citoyen', 'layout');
+  if (cheminInterne(input.retour)) redirect(input.retour!);
   return { ok: 'Signalement transmis à votre précollecteur.' };
 }

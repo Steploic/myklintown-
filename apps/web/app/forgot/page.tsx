@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useSoumission } from '@/components/ui/action-form';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
@@ -19,7 +19,7 @@ const MOTIFS: Record<string, string> = {
 };
 
 function FormulaireOubli() {
-  const [state, formAction, pending] = useActionState(requestPasswordResetAction, INITIAL);
+  const [state, formAction, pending] = useSoumission(requestPasswordResetAction, INITIAL);
   const motif = useSearchParams().get('motif');
   const avertissement = motif ? MOTIFS[motif] : null;
 
@@ -55,7 +55,7 @@ function FormulaireOubli() {
           <span>{state.message}</span>
         </div>
       ) : (
-        <form action={formAction} className="mt-6 space-y-4">
+        <form onSubmit={formAction} className="mt-6 space-y-4">
           <div className="space-y-1">
             <label htmlFor="email" className="text-body-sm font-medium">
               Adresse e-mail

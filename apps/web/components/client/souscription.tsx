@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
 import { AlertCircle, ArrowLeft, ArrowRight, Check, Loader2, MapPinOff, Phone, Truck } from 'lucide-react';
 import { cn } from '@myklintown/ui';
 import { LocationPicker } from '@/components/map/location-picker';
@@ -17,7 +16,6 @@ const ETAPES = ['Formule', 'Adresse', 'Précollecteur'];
  * le(s) précollecteur(s) de la zone → demande envoyée au précollecteur choisi.
  */
 export function Souscription({ plans, nomDefaut, telDefaut }: { plans: Plan[]; nomDefaut: string; telDefaut: string }) {
-  const router = useRouter();
   const [etape, setEtape] = useState(0);
   const [planId, setPlanId] = useState(plans[0]?.id ?? '');
   const [nom, setNom] = useState(nomDefaut);
@@ -49,9 +47,8 @@ export function Souscription({ plans, nomDefaut, telDefaut }: { plans: Plan[]; n
     setErreur('');
     startTransition(async () => {
       const r = await souscrireAction({ entrepriseId: choix, planId, nom, telephone, adresse, quartier, lat: pos[0], lng: pos[1] });
-      if (r.error) return setErreur(r.error);
-      router.push('/citoyen?demande=1');
-      router.refresh();
+      // En cas de succès, le serveur redirige lui-même vers /citoyen?demande=1.
+      if (r?.error) setErreur(r.error);
     });
   };
 

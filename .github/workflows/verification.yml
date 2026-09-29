@@ -1,0 +1,33 @@
+name: Vérification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verification:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    env:
+      # Valeurs factices : le build et les tests unitaires ne contactent pas la base.
+      NEXT_PUBLIC_SUPABASE_URL: https://exemple.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: cle-factice-ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Installation
+        run: pnpm install --frozen-lockfile --ignore-scripts
+        working-directory: .
+      - name: Types
+        run: pnpm type-check
+      - name: Tests unitaires
+        run: pnpm test
+      - name: Build
+        run: pnpm build
