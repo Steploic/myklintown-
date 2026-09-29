@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useSoumission } from '@/components/ui/action-form';
 import Link from 'next/link';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { signInAction, type AuthState } from '@/lib/auth-actions';
@@ -8,10 +8,10 @@ import { signInAction, type AuthState } from '@/lib/auth-actions';
 const INITIAL: AuthState = {};
 
 export function LoginForm() {
-  const [state, formAction, pending] = useActionState(signInAction, INITIAL);
+  const [state, formAction, pending] = useSoumission(signInAction, INITIAL);
 
   return (
-    <form action={formAction} className="space-y-4">
+    <form onSubmit={formAction} className="space-y-4">
       {state.error && (
         <p role="alert" className="flex items-start gap-2 rounded-md border border-terrain-stop/25 bg-terrain-stop/5 px-3 py-2 text-body-sm text-terrain-stop">
           <AlertCircle size={16} className="mt-0.5 shrink-0" /> {state.error}

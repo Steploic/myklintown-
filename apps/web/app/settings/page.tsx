@@ -4,7 +4,7 @@ import { PageHeader, Section } from '@/components/ui/blocks';
 import { ActionForm, SubmitButton } from '@/components/ui/action-form';
 import { changerMotDePasseAction, majProfilAction } from '@/lib/compte-actions';
 import { majEntrepriseAction } from '@/lib/precollecteur/actions';
-import { getSupabase, row } from '@/lib/server';
+import { getSupabase, row, utilisateurCourant } from '@/lib/server';
 import type { Entreprise } from '@/lib/types';
 
 export const metadata = { title: 'Paramètres' };
@@ -21,9 +21,7 @@ const PORTAIL: Record<string, PortalKey> = {
 /** Paramètres du compte connecté : profil, entreprise (précollecteur), mot de passe. */
 export default async function SettingsPage() {
   const supabase = await getSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await utilisateurCourant(supabase);
   if (!user) redirect('/login?next=/settings');
 
   const { data } = await supabase

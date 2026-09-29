@@ -61,7 +61,7 @@ export function joursEntre(a: string, b: string): number {
 /** Numéro camerounais → format international sans « + » (pour wa.me). */
 export function telInternational(tel: string | null | undefined): string | null {
   if (!tel) return null;
-  const chiffres = tel.replace(/\D/g, '');
+  const chiffres = tel.replace(/\D/g, '').replace(/^00/, '');
   if (chiffres.length === 9) return '237' + chiffres;
   if (chiffres.length === 12 && chiffres.startsWith('237')) return chiffres;
   return chiffres.length >= 8 ? chiffres : null;
@@ -207,4 +207,15 @@ export function messageRelance(p: {
 
 export function messageEcheance(p: { client: string; fin: string; entreprise: string; prix?: number | null }): string {
   return `Bonjour ${p.client}, votre abonnement de collecte se termine le ${dateFr(p.fin)}.${p.prix ? ` Renouvellement : ${fcfa(p.prix)}.` : ''} Pensez à régler pour ne pas interrompre le service. — ${p.entreprise} (MyKlinTown)`;
+}
+
+// --- Erreurs réseau (connexion mobile instable) -------------------------------------
+
+export const MESSAGE_RESEAU =
+  'Connexion au serveur impossible. Vérifiez votre réseau (données mobiles, Wi-Fi) puis réessayez : rien n’a été perdu.';
+
+/** Coupure réseau, et non refus du serveur : à ne jamais présenter comme une erreur de saisie. */
+export function estErreurReseau(e: { message?: string; status?: number } | null | undefined): boolean {
+  if (!e) return false;
+  return e.status === 0 || /fetch failed|network|ECONNRESET|ETIMEDOUT|ENOTFOUND|Failed to fetch/i.test(e.message ?? '');
 }
