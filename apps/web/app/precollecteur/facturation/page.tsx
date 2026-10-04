@@ -229,7 +229,24 @@ export default async function FacturationPage({
               <EmptyState icon={FileText} titre="Aucune facture en attente" />
             </div>
           ) : (
-            <div className="card-soft overflow-x-auto">
+            <>
+            <ul className="space-y-2 md:hidden">
+              {factures.map((f) => (
+                <li key={f.id}>
+                  <Link href={`/precollecteur/facturation/${f.id}`} className="card-soft flex items-center justify-between gap-3 p-3.5">
+                    <span className="min-w-0">
+                      <span className="block truncate font-semibold text-brand-ink">{f.clients.nom}</span>
+                      <span className="num block text-small text-muted-foreground">{f.numero} · {dateFr(f.periode_debut)} → {dateFr(f.periode_fin)}</span>
+                    </span>
+                    <span className="flex shrink-0 flex-col items-end gap-1">
+                      <span className="num font-semibold">{fcfa(reste(f))}</span>
+                      <span className={f.echeance < auj ? 'chip-stop' : 'chip-relance'}>{dateFr(f.echeance)}</span>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <div className="card-soft hidden overflow-x-auto md:block">
               <table className="table-data min-w-[640px]">
                 <thead>
                   <tr>
@@ -259,6 +276,7 @@ export default async function FacturationPage({
                 </tbody>
               </table>
             </div>
+            </>
           ))}
 
         {onglet === 'paiements' &&
@@ -267,7 +285,22 @@ export default async function FacturationPage({
               <EmptyState icon={Banknote} titre="Aucun paiement enregistré" />
             </div>
           ) : (
-            <div className="card-soft overflow-x-auto">
+            <>
+            <ul className="space-y-2 md:hidden">
+              {paiements.map((p) => (
+                <li key={p.id} className="card-soft flex items-center justify-between gap-3 p-3.5">
+                  <span className="min-w-0">
+                    <Link href={`/precollecteur/clients/${p.client_id}`} className="block truncate font-semibold text-brand-ink">{p.clients?.nom ?? '—'}</Link>
+                    <span className="block text-small text-muted-foreground">
+                      {dateHeureFr(p.created_at)} · {METHODES_PAIEMENT[p.methode] ?? p.methode}
+                      {p.reference && <> · réf. {p.reference}</>}
+                    </span>
+                  </span>
+                  <span className="num shrink-0 font-semibold text-terrain-ok">{fcfa(p.montant_fcfa)}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="card-soft hidden overflow-x-auto md:block">
               <table className="table-data min-w-[640px]">
                 <thead>
                   <tr>
@@ -298,6 +331,7 @@ export default async function FacturationPage({
                 </tbody>
               </table>
             </div>
+            </>
           ))}
       </div>
     </PrecoShell>

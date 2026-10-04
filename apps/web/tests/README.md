@@ -43,6 +43,10 @@ n'est pas promu :
 select public.promouvoir_utilisateur('mkt.test.mairie.<suffixe>@gmail.com', 'mairie');
 ```
 
+**Retours d'équipe** (liste d'attente des ménages hors zone, accès Mairie sur demande) : ces tests
+sont ignorés, avec la consigne, tant que `supabase/migrations/20261004000006_retours_tests_equipe.sql`
+n'est pas exécutée. Les demandes de test sont déposées **en mer** et retirées en fin de test.
+
 **Nettoyage** : `supabase/NETTOYAGE_TESTS.sql` supprime tous les comptes `mkt.test.…` et leurs
 données (y compris la promotion Mairie, à refaire ensuite).
 
@@ -55,6 +59,16 @@ Ce que ça ne remplace pas : un essai sur de vrais téléphones Android d'entré
 ## Règles de la suite navigateur
 
 - Un test **échoue** si la page produit la moindre erreur JavaScript ou erreur console.
+  **Une seule exception, connue et ouverte** : l'erreur d'hydratation React **#418**. Intermittente
+  (1 à 3 fois par exécution complète, 0 sur 65 chargements isolés en développement comme en
+  production), sans effet fonctionnel : React reconstruit la page dans le navigateur et le test
+  vérifie ensuite que tout fonctionne. Elle est **signalée** (annotation dans le rapport + ligne
+  `⚠️ Hydratation #418` dans la sortie) au lieu de faire échouer le test : dans un groupe de tests
+  enchaînés, un échec fait sauter tous les suivants.
+- **À ne pas réintroduire** (mesuré le 04/10/2026) : des fichiers `loading.tsx` (21 changements de
+  filtre ou d'onglet perdus sur 30 avec, 0 sur 30 sans) et le middleware en `runtime: 'nodejs'`
+  (pages figées après un enregistrement). Le retour visuel de chargement passe par
+  `components/ui/barre-navigation.tsx`.
 - Une **reprise** automatique absorbe une coupure réseau ponctuelle ; un test repris est signalé
   « flaky » dans le rapport (`e2e/playwright-report/`) — rien n'est masqué.
 

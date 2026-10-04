@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { getSupabase, row, rpc } from '@/lib/server';
-import { cheminInterne } from '@/lib/metier';
+import { cheminInterne, normaliserNom } from '@/lib/metier';
 import type { ActionState } from '@/lib/types';
 import type { IncidentInput } from '@/components/capture/incident-form';
 
@@ -38,10 +38,10 @@ export async function souscrireAction(input: {
   const { error } = await rpc(supabase, 'souscrire_client', {
     p_entreprise: input.entrepriseId,
     p_plan: input.planId,
-    p_nom: input.nom.trim(),
+    p_nom: normaliserNom(input.nom),
     p_telephone: input.telephone.trim(),
     p_adresse: input.adresse.trim() || null,
-    p_quartier: input.quartier.trim() || null,
+    p_quartier: normaliserNom(input.quartier) || null,
     p_lat: input.lat,
     p_lng: input.lng,
   });
@@ -105,4 +105,41 @@ export async function signalerIncidentClientAction(input: IncidentInput): Promis
   revalidatePath('/citoyen', 'layout');
   if (cheminInterne(input.retour)) redirect(input.retour!);
   return { ok: 'Signalement transmis à votre précollecteur.' };
+}
+
+/** R3 — aucun précollecteur ne dessert le point : la demande est enregistrée, pas abandonnée. */
+export async function deposerDemandeAction(input: {
+  planId: string;
+  nom: string;
+  telephone: string;
+  adresse: string;
+  quartier: string;
+  lat: number;
+  lng: number;
+}): Promise<ActionState> {
+  if (!input.nom.trim()) return { error: 'Indiquez votre nom.' };
+  if (!input.telephone.trim()) return { error: 'Indiquez un numéro de téléphone : le précollecteur vous appellera.' };
+  const supabase = await getSupabase();
+  const { error } = await rpc(supabase, 'deposer_demande_abonnement', {
+    p_plan: input.planId,
+    p_nom: normaliserNom(input.nom),
+    p_telephone: input.telephone.trim(),
+    p_adresse: input.adresse.trim() || null,
+    p_quartier: normaliserNom(input.quartier) || null,
+    p_lat: input.lat,
+    p_lng: input.lng,
+  });
+  if (error) return { error: error.message };
+  revalidatePath('/citoyen', 'layout');
+  redirect('/citoyen?demande=attente');
+}
+
+export async function annulerDemandeAction(fd: FormData) {
+  const supabase = await getSupabase();
+  await supabase
+    .from('demandes_abonnement')
+    .update({ statut: 'annulee' })
+    .eq('id', String(fd.get('demande_id')))
+    .eq('statut', 'en_attente');
+  revalidatePath('/citoyen', 'layout');
 }

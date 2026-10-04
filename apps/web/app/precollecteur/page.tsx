@@ -6,6 +6,7 @@ import {
   CalendarClock,
   CheckCircle2,
   FlaskConical,
+  Inbox,
   Receipt,
   Route,
   UserPlus,
@@ -17,7 +18,7 @@ import { ActionForm, SubmitButton } from '@/components/ui/action-form';
 import { CollectesChart, EncaissementsChart } from '@/components/precollecteur/charts';
 import { requireEntreprise } from '@/lib/precollecteur/context';
 import { chargerDemoAction, supprimerDemoAction } from '@/lib/precollecteur/actions';
-import { parametre, rows } from '@/lib/server';
+import { parametre, rows, rpc } from '@/lib/server';
 import { ajouterJours, dateFr, fcfa, isoJour, nombre, pct, STATUT_TOURNEE } from '@/lib/format';
 
 export const metadata = { title: 'Tableau de bord' };
@@ -64,6 +65,8 @@ export default async function PrecollecteurDashboard({
       .neq('statut', 'resolu'),
     parametre(supabase, 'commission_taux', 0.1),
   ]);
+  const { data: ouvertes } = await rpc(supabase, 'demandes_ouvertes');
+  const nbDemandesOuvertes = rows(ouvertes).length;
 
   const clients = rows<{
     id: string;
@@ -196,6 +199,18 @@ export default async function PrecollecteurDashboard({
             </SubmitButton>
           </ActionForm>
         </div>
+      )}
+
+      {nbDemandesOuvertes > 0 && (
+        <Link
+          href="/precollecteur/demandes"
+          className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-brand-blue/25 bg-brand-blue/5 px-4 py-3 text-body-sm font-semibold text-brand-blue"
+        >
+          <span className="flex items-center gap-2">
+            <Inbox size={18} /> {nbDemandesOuvertes} ménage{nbDemandesOuvertes > 1 ? 's attendent' : ' attend'} un précollecteur : prenez-le{nbDemandesOuvertes > 1 ? 's' : ''} en charge
+          </span>
+          <span aria-hidden>→</span>
+        </Link>
       )}
 
       {demandes > 0 && (

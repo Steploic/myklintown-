@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 import { getSupabase, parametre, row, rows, rpc, type Supa } from '@/lib/server';
 import { requireEntreprise } from './context';
 import { ajouterJours, ajouterMois, dateFr, estErreurReseau, isoJour, MESSAGE_RESEAU } from '@/lib/format';
-import { cheminInterne, extraireCodeClient, periodeFacture } from '@/lib/metier';
+import { cheminInterne, extraireCodeClient, normaliserNom, periodeFacture } from '@/lib/metier';
 import type { ActionState, ClientStatut, Plan } from '@/lib/types';
 
 const txt = (fd: FormData, k: string) => {
@@ -253,7 +253,7 @@ async function zoneDuPoint(supabase: Supa, lat: number | null, lng: number | nul
 
 export async function creerClientAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   const { supabase, entreprise } = await requireEntreprise();
-  const nom = txt(fd, 'nom');
+  const nom = normaliserNom(txt(fd, 'nom')) || null;
   const planId = txt(fd, 'plan_id');
   if (!nom) return { error: 'Le nom du client est obligatoire.' };
   if (!planId) return { error: 'Choisissez une formule dans la grille tarifaire.' };
@@ -270,7 +270,7 @@ export async function creerClientAction(_p: ActionState, fd: FormData): Promise<
       nom,
       telephone: txt(fd, 'telephone'),
       adresse: txt(fd, 'adresse'),
-      quartier: txt(fd, 'quartier'),
+      quartier: normaliserNom(txt(fd, 'quartier')) || null,
       lat,
       lng,
       zone_id: zone,
@@ -293,7 +293,7 @@ export async function creerClientAction(_p: ActionState, fd: FormData): Promise<
 export async function majClientAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   const { supabase, entreprise } = await requireEntreprise();
   const id = String(fd.get('id'));
-  const nom = txt(fd, 'nom');
+  const nom = normaliserNom(txt(fd, 'nom')) || null;
   if (!nom) return { error: 'Le nom est obligatoire.' };
   const lat = num(fd, 'lat');
   const lng = num(fd, 'lng');
@@ -304,7 +304,7 @@ export async function majClientAction(_p: ActionState, fd: FormData): Promise<Ac
       nom,
       telephone: txt(fd, 'telephone'),
       adresse: txt(fd, 'adresse'),
-      quartier: txt(fd, 'quartier'),
+      quartier: normaliserNom(txt(fd, 'quartier')) || null,
       plan_id: txt(fd, 'plan_id'),
       notes: txt(fd, 'notes'),
       lat,
@@ -340,7 +340,7 @@ export async function changerStatutClientAction(fd: FormData) {
 
 export async function creerEmployeAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   const { supabase, entreprise } = await requireEntreprise();
-  const nom = txt(fd, 'nom');
+  const nom = normaliserNom(txt(fd, 'nom')) || null;
   if (!nom) return { error: 'Le nom est obligatoire.' };
   const { error } = await supabase.from('employes').insert({
     entreprise_id: entreprise.id,
@@ -467,7 +467,12 @@ export async function statutTourneeAction(fd: FormData) {
   const id = String(fd.get('tournee_id'));
   const statut = String(fd.get('statut'));
   const maj: Record<string, unknown> = { statut };
-  if (statut === 'en_cours') maj.debut_at = new Date().toISOString();
+  if (statut === 'en_cours') {
+    // Démarrage, ou réouverture d'une tournée terminée (on efface l'heure de retour).
+    maj.fin_at = null;
+    const { data: t } = await supabase.from('tournees_precollecte').select('debut_at').eq('id', id).single();
+    if (!(t as { debut_at: string | null } | null)?.debut_at) maj.debut_at = new Date().toISOString();
+  }
   if (statut === 'terminee') {
     maj.fin_at = new Date().toISOString();
     // Fin de tournée : ce qui n'a pas été visité est tracé comme non réalisé.
@@ -776,4 +781,19 @@ export async function supprimerDemoAction(_p: ActionState, _fd: FormData): Promi
   await supabase.from('tricycles').delete().eq('entreprise_id', entreprise.id).like('nom', '%(démo)');
   rafraichir();
   return { ok: 'Données de démonstration supprimées.' };
+}
+
+// =============================================================================
+// R3 — Demandes de ménages sans précollecteur
+// =============================================================================
+
+export async function prendreDemandeAction(fd: FormData) {
+  const { supabase, entreprise } = await requireEntreprise();
+  const { data, error } = await rpc(supabase, 'prendre_demande', { p_demande: String(fd.get('demande_id')) });
+  if (error) redirect(`/precollecteur/demandes?erreur=${encodeURIComponent(error.message)}`);
+  const clientId = data as string;
+  // Paiement avant service : la première période est facturée tout de suite.
+  await emettreFacturePour(supabase, entreprise.id, clientId);
+  rafraichir();
+  redirect(`/precollecteur/clients/${clientId}?pris=1`);
 }

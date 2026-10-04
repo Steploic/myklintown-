@@ -30,7 +30,7 @@ export function LocationPicker({
   hauteur?: number;
 }) {
   const [pos, setPos] = useState<[number, number] | null>(defaut ?? null);
-  const [gps, setGps] = useState<'idle' | 'attente' | 'refus'>('idle');
+  const [gps, setGps] = useState<'idle' | 'attente' | 'bloque' | 'indisponible' | 'delai' | 'absent'>('idle');
   const [cle, setCle] = useState(0);
 
   const choisir = (lat: number, lng: number, recentrer = false) => {
@@ -40,15 +40,17 @@ export function LocationPicker({
   };
 
   const maPosition = () => {
-    if (!navigator.geolocation) return setGps('refus');
+    if (!navigator.geolocation) return setGps('absent');
     setGps('attente');
     navigator.geolocation.getCurrentPosition(
       (p) => {
         setGps('idle');
         choisir(p.coords.latitude, p.coords.longitude, true);
       },
-      () => setGps('refus'),
-      { enableHighAccuracy: true, timeout: 15000 },
+      // Le navigateur ne redemande JAMAIS une autorisation déjà refusée : il faut
+      // dire précisément quoi faire selon la cause (retour de test de Pie).
+      (e) => setGps(e.code === 1 ? 'bloque' : e.code === 3 ? 'delai' : 'indisponible'),
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 },
     );
   };
 
@@ -66,10 +68,29 @@ export function LocationPicker({
           Ma position
         </button>
       </div>
-      {gps === 'refus' && (
-        <p className="text-small text-terrain-relance">
-          Position indisponible : autorisez la localisation, ou placez le point à la main sur la carte.
-        </p>
+      {gps !== 'idle' && gps !== 'attente' && (
+        <div role="status" className="rounded-md border border-terrain-relance/30 bg-terrain-relance/5 px-3 py-2 text-small text-terrain-relance">
+          {gps === 'bloque' && (
+            <>
+              <strong>La localisation est bloquée pour ce site.</strong> Touchez le cadenas (ou ⓘ) à gauche de
+              l’adresse, puis Autorisations → Position → Autoriser, et touchez à nouveau « Ma position ».
+            </>
+          )}
+          {gps === 'indisponible' && (
+            <>
+              <strong>Le téléphone ne trouve pas sa position.</strong> Activez la localisation (GPS) dans les
+              réglages rapides du téléphone, puis réessayez.
+            </>
+          )}
+          {gps === 'delai' && (
+            <>
+              <strong>La position met trop de temps à arriver.</strong> Réessayez près d’une fenêtre ou à
+              l’extérieur.
+            </>
+          )}
+          {gps === 'absent' && <strong>Ce navigateur ne sait pas localiser l’appareil.</strong>}{' '}
+          Vous pouvez aussi toucher la carte pour placer le domicile à la main.
+        </div>
       )}
       <Carte key={cle} valeur={pos} onChange={(lat, lng) => choisir(lat, lng)} zones={zones} hauteur={hauteur} />
     </div>

@@ -18,14 +18,24 @@ import {
 import { SiteHeader } from '@/components/site-header';
 import { SiteFooter } from '@/components/site-footer';
 import { PixelDots } from '@/components/ui/blocks';
-import { getSupabase, rows } from '@/lib/server';
+import { createClient } from '@supabase/supabase-js';
+import { rows } from '@/lib/server';
 import { fcfa } from '@/lib/format';
 import type { Plan } from '@/lib/types';
 
 
+// Page publique servie depuis le cache et regénérée toutes les 5 minutes :
+// elle ne dépend plus d'un aller-retour vers la base à chaque visite (retour R10).
+export const revalidate = 300;
+
 async function lireGrille(): Promise<Plan[]> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const cle = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !cle) return [];
   try {
-    const supabase = await getSupabase();
+    // Client anonyme SANS cookies : la grille est publique, et les cookies
+    // rendraient la page dynamique (donc non mise en cache).
+    const supabase = createClient(url, cle, { auth: { persistSession: false } });
     const { data } = await supabase.from('plans_tarifaires').select('*').eq('actif', true).order('ordre');
     return rows<Plan>(data);
   } catch {
@@ -271,7 +281,7 @@ export default async function HomePage() {
                   <li key={t} className="flex gap-2"><Check size={16} className="mt-0.5 shrink-0 text-brand-leaf" /> {t}</li>
                 ))}
               </ul>
-              <a href="tel:+237653565348" className="btn-primary mt-6">Demander un accès <ArrowRight size={16} /></a>
+              <Link href="/acces-mairie" className="btn-primary mt-6">Demander un accès <ArrowRight size={16} /></Link>
             </article>
           </div>
         </section>

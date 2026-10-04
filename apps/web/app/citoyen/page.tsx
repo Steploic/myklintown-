@@ -19,6 +19,8 @@ import { Section } from '@/components/ui/blocks';
 import { ConfirmationPassage } from '@/components/client/confirmation-passage';
 import { ActionForm, SubmitButton } from '@/components/ui/action-form';
 import { rattacherCompteAction } from '@/lib/compte-actions';
+import { annulerDemandeAction } from '@/lib/client/actions';
+import { BandeauAccesMairie } from '@/components/client/bandeau-acces';
 import { getMonAbonnement } from '@/lib/client/context';
 import { getCurrentProfile } from '@/lib/get-profile';
 import { rows } from '@/lib/server';
@@ -40,13 +42,42 @@ export default async function CitoyenAccueil({
   searchParams: Promise<{ demande?: string; rattache?: string }>;
 }) {
   const { demande, rattache } = await searchParams;
-  const { supabase, client, entreprise } = await getMonAbonnement();
+  const { supabase, client, entreprise, demande: enAttente } = await getMonAbonnement();
   const profile = await getCurrentProfile();
   const prenom = profile?.nom?.split(' ')[0] ?? '';
+
+  if (!client && enAttente) {
+    return (
+      <PortalShell portalKey="citoyen" currentPath="/citoyen">
+        <BandeauAccesMairie />
+        <section className="rounded-2xl bg-brand-blue p-6 text-white sm:p-8">
+          <div className="flex items-start gap-4">
+            <Clock size={40} className="shrink-0" />
+            <div>
+              <p className="text-small font-semibold uppercase tracking-wider opacity-85">Demande transmise</p>
+              <h1 className="text-[1.6rem] font-bold leading-tight text-white sm:text-[2rem]">Un précollecteur va vous contacter</h1>
+              <p className="mt-1 opacity-90">
+                Votre demande{enAttente.quartier ? ` pour ${enAttente.quartier}` : ''} est proposée aux précollecteurs
+                MyKlinTown depuis le {dateFr(enAttente.created_at, { day: 'numeric', month: 'long' })}. Dès qu’il la prend en
+                charge, votre abonnement apparaît ici.
+              </p>
+            </div>
+          </div>
+        </section>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <form action={annulerDemandeAction}>
+            <input type="hidden" name="demande_id" value={enAttente.id} />
+            <SubmitButton variant="outline" pendingLabel="Annulation…">Annuler ma demande</SubmitButton>
+          </form>
+        </div>
+      </PortalShell>
+    );
+  }
 
   if (!client) {
     return (
       <PortalShell portalKey="citoyen" currentPath="/citoyen">
+        <BandeauAccesMairie />
         <section className="overflow-hidden rounded-2xl bg-brand-gradient-ink p-6 text-white sm:p-10">
           <p className="text-small font-semibold uppercase tracking-wider text-brand-leaf">Bienvenue{prenom ? `, ${prenom}` : ''}</p>
           <h1 className="mt-2 max-w-xl text-[1.75rem] font-bold leading-tight text-white sm:text-[2.25rem]">
@@ -116,6 +147,7 @@ export default async function CitoyenAccueil({
 
   return (
     <PortalShell portalKey="citoyen" currentPath="/citoyen" titre={client.nom}>
+      <BandeauAccesMairie />
       {rattache && (
         <p className="mb-5 flex items-center gap-2 rounded-lg border border-terrain-ok/25 bg-terrain-ok/5 px-4 py-3 text-body-sm font-medium text-terrain-ok">
           <CheckCircle2 size={18} /> Compte rattaché : voici votre abonnement chez {entreprise?.nom}.

@@ -192,7 +192,14 @@ export function TourneeRunner({ tourneeId, passages, modifiable }: { tourneeId: 
                           </button>
                         </>
                       ) : (
-                        <button type="button" onClick={() => marquer(p.id, 'prevue')} className="btn-ghost" aria-label="Annuler">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm(`Annuler le passage enregistré chez ${p.client.nom} ?`)) marquer(p.id, 'prevue');
+                          }}
+                          className="btn-ghost"
+                          aria-label="Annuler"
+                        >
                           <RotateCcw size={16} /> Annuler
                         </button>
                       ))}

@@ -2,14 +2,19 @@
  * Téléphone (Pixel 7) : chaque écran s'affiche sans défilement horizontal,
  * sans erreur, avec la barre d'onglets du bas.
  */
-import { expect, pasDeDebordement, session, test } from './base';
+import { emailDe, identifiants } from '../../apps/web/tests/support/fixtures';
+import { expect, pasDeDebordement, seConnecter, session, test } from './base';
 
-const PUBLIQUES = ['/', '/login', '/signup', '/marque', '/legal'];
+const PUBLIQUES = ['/', '/login', '/signup', '/marque', '/legal', '/acces-mairie'];
 const PRECOLLECTEUR = [
   '/precollecteur',
   '/precollecteur/clients',
   '/precollecteur/clients/nouveau',
   '/precollecteur/facturation',
+  '/precollecteur/facturation?onglet=factures',
+  '/precollecteur/facturation?onglet=paiements',
+  '/precollecteur/carte',
+  '/precollecteur/demandes',
   '/precollecteur/tournees',
   '/precollecteur/flotte',
   '/precollecteur/incidents',
@@ -59,4 +64,28 @@ test.describe('ménage', () => {
       await pasDeDebordement(page);
     });
   }
+});
+
+// Retour R9 : sur téléphone, « Déconnexion » refermait le menu avant l'envoi
+// du formulaire — on restait connecté.
+test.describe('déconnexion sur téléphone', () => {
+  test('depuis le menu latéral', async ({ page }) => {
+    await seConnecter(page, emailDe('deconnexion'), identifiants().motDePasse);
+    await expect(page).toHaveURL(/\/citoyen/);
+    await page.getByRole('button', { name: 'Ouvrir la navigation' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Déconnexion' }).click();
+    await expect(page).toHaveURL(/\/logout$/);
+    await page.goto('/citoyen');
+    await expect(page).toHaveURL(/\/login/);
+  });
+});
+
+test.describe('facturation sur téléphone', () => {
+  test.use({ storageState: session('precoA') });
+  test('les paiements s’affichent en cartes lisibles', async ({ page }) => {
+    await page.goto('/precollecteur/facturation?onglet=paiements');
+    await expect(page.locator('ul').getByText('Famille Scan').first()).toBeVisible();
+    await expect(page.locator('table')).toBeHidden();
+    await pasDeDebordement(page);
+  });
 });

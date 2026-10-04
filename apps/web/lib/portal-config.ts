@@ -25,6 +25,8 @@ import {
   FileText,
   CalendarCheck,
   Shapes,
+  Inbox,
+  KeyRound,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -35,6 +37,8 @@ export interface PortalNavItem {
   badge?: string | number;
   /** Libellé court pour la barre d'onglets mobile. */
   court?: string;
+  /** Réservé à certains rôles (absent = visible par tous ceux du portail). */
+  roles?: string[];
 }
 
 /** Données démo utilisateur — à remplacer par l'utilisateur authentifié Supabase. */
@@ -50,6 +54,8 @@ export const PRECOLLECTEUR_NAV: PortalNavItem[] = [
   { href: '/precollecteur/clients', label: 'Clients', icon: Users },
   { href: '/precollecteur/facturation', label: 'Factures & relances', icon: Receipt, court: 'Factures' },
   { href: '/precollecteur/tournees', label: 'Tournées', icon: Route },
+  { href: '/precollecteur/carte', label: 'Carte', icon: MapIcon },
+  { href: '/precollecteur/demandes', label: 'Demandes en attente', icon: Inbox, court: 'Demandes' },
   { href: '/precollecteur/flotte', label: 'Flotte & équipe', icon: Bike },
   { href: '/precollecteur/incidents', label: 'Incidents', icon: Camera },
   { href: '/precollecteur/grille', label: 'Grille tarifaire', icon: Tags },
@@ -77,6 +83,7 @@ export const DASHBOARD_NAV: PortalNavItem[] = [
   { href: '/dashboard/zones', label: 'Zones de collecte', icon: Shapes, court: 'Zones' },
   { href: '/dashboard/precollecteurs', label: 'Précollecteurs', icon: Truck },
   { href: '/dashboard/incidents', label: 'Incidents', icon: AlertTriangle },
+  { href: '/dashboard/acces', label: 'Demandes d’accès', icon: KeyRound, roles: ['admin'] },
 ];
 
 export const ENTERPRISE_NAV: PortalNavItem[] = [
@@ -128,3 +135,8 @@ export const ICONS = {
   Recycle,
   Truck,
 } as const;
+
+/** Entrées de navigation visibles pour ce rôle. */
+export function navPourRole(nav: PortalNavItem[], role: string | null | undefined): PortalNavItem[] {
+  return nav.filter((i) => !i.roles || (role != null && i.roles.includes(role)));
+}

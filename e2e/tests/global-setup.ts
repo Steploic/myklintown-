@@ -37,14 +37,14 @@ export default async function globalSetup() {
     exiger<{ id: string }>(etape, () => A.sb.from('tournees_precollecte').insert({ entreprise_id: e, date, statut: 'terminee', notes: 'e2e' }).select('id').single());
 
   // Client scanné pendant la tournée : abonnement payé → « Servir » (vert).
-  const scan = await client('client scanné', { nom: 'Famille Scan', code: CODE_SCAN, telephone: '677000999', quartier: 'Nsam' });
+  const scan = await client('client scanné', { nom: 'Famille Scan', code: CODE_SCAN, telephone: '677000999', quartier: 'Nsam', lat: 3.8295, lng: 11.5023 });
   const f = await facture('facture du client scanné', { client_id: scan.id, periode_debut: iso(-5), periode_fin: iso(25), echeance: iso(2) });
   await exiger('paiement du client scanné', () =>
     A.sb.from('paiements_clients').insert({ facture_id: f.id, entreprise_id: e, client_id: scan.id, montant_fcfa: mensuel!.prix_fcfa, methode: 'especes' }).select('id').single(),
   );
 
   // Client en retard : doit apparaître au recouvrement.
-  const retard = await client('client en retard', { nom: 'Famille Retard', telephone: '677000888' });
+  const retard = await client('client en retard', { nom: 'Famille Retard', telephone: '677000888', lat: 3.8331, lng: 11.4987 });
   await facture('facture en retard', { client_id: retard.id, periode_debut: iso(-30), periode_fin: iso(-1), echeance: iso(-23) });
 
   // Fiche que le ménage de test rattachera depuis l'interface, avec deux passages à confirmer / contester.
@@ -59,14 +59,29 @@ export default async function globalSetup() {
 
   // Comptes utilisés par les tests (créés au besoin).
   await compte('menage', 'citoyen');
-  await compte('souscripteur', 'citoyen');
+  const S = await compte('souscripteur', 'citoyen');
+  const acces = await compte('acces', 'citoyen');
+  await compte('deconnexion', 'citoyen');
   const M = await mairie();
+
+  // Migration 20261004000006 (liste d'attente, accès Mairie) jouée ? Sinon
+  // les tests qui en dépendent sont ignorés, avec la consigne.
+  const sonde = await A.sb.rpc('demandes_ouvertes');
+  const migration0006 = !sonde.error;
+  if (migration0006) {
+    // Rien ne reste « en attente » d'un essai précédent.
+    await S.sb.from('demandes_abonnement').update({ statut: 'annulee' }).eq('statut', 'en_attente');
+    await acces.sb.rpc('annuler_demande_acces');
+  }
 
   genererVideoQr(CODE_SCAN, path.resolve(__dirname, '..', '.media', 'qr.y4m'));
   fs.writeFileSync(
     FICHIER_ETAT,
-    JSON.stringify({ precoA: A.entrepriseId, precoB: B.entrepriseId, clientScan: scan.id, clientLien: lien.id, mairiePromue: M.promue, mairieEmail: M.email }, null, 2),
+    JSON.stringify({ precoA: A.entrepriseId, precoB: B.entrepriseId, clientScan: scan.id, clientLien: lien.id, mairiePromue: M.promue, mairieEmail: M.email, migration0006 }, null, 2),
   );
+  if (!migration0006) {
+    console.warn('\n⚠️  Tests « liste d’attente » et « accès Mairie » ignorés : exécuter supabase/migrations/20261004000006_retours_tests_equipe.sql\n');
+  }
   if (!M.promue) {
     console.warn(`\n⚠️  Tests Mairie ignorés : select public.promouvoir_utilisateur('${M.email}', 'mairie');\n`);
   }

@@ -62,3 +62,17 @@ export function consigneTerrain(statut: string): 'servir' | 'servir_rappeler' | 
 export function cheminInterne(chemin: string | null | undefined): boolean {
   return !!chemin && /^\/(?![/\\])\S*$/.test(chemin);
 }
+
+/**
+ * Nom harmonisé : espaces resserrés, « Initiale Majuscule » à chaque mot
+ * (après un espace, un tiret ou une apostrophe). Même règle que la fonction SQL
+ * `normaliser_nom` (initcap) : « BEKOLO », « motto » et « menage 2 » deviennent
+ * « Bekolo », « Motto », « Menage 2 ». Retour à l'avis de l'équipe (R8).
+ */
+export function normaliserNom(nom: string | null | undefined): string {
+  return (nom ?? '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase()
+    .replace(/(^|[^\p{L}\p{N}])(\p{L})/gu, (_, avant: string, lettre: string) => avant + lettre.toUpperCase());
+}

@@ -3,8 +3,9 @@
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createServerSupabase } from '@myklintown/db/server';
-import { homeForRole, isSelfServiceRole, type UserRole } from './roles';
+import { canAccessPath, homeForRole, isProtectedPath, isSelfServiceRole, type UserRole } from './roles';
 import { estErreurReseau, MESSAGE_RESEAU } from './format';
+import { cheminInterne, normaliserNom } from './metier';
 
 export interface AuthState {
   error?: string;
@@ -33,12 +34,18 @@ export async function signInAction(_prev: AuthState, formData: FormData): Promis
     .single();
 
   const role = (profile as unknown as { role?: string } | null)?.role;
+  // Retour à la page demandée avant la connexion, si elle est interne et
+  // permise pour ce rôle (sinon, accueil de l'espace).
+  const suite = String(formData.get('next') ?? '');
+  if (cheminInterne(suite) && (!isProtectedPath(suite.split('?')[0]!) || canAccessPath(role, suite.split('?')[0]!))) {
+    redirect(suite);
+  }
   redirect(homeForRole(role));
 }
 
 /** Inscription : crée l'utilisateur (le trigger SQL crée le profil avec le rôle). */
 export async function signUpAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
-  const nomComplet = String(formData.get('nom') ?? '').trim();
+  const nomComplet = normaliserNom(String(formData.get('nom') ?? ''));
   const email = String(formData.get('email') ?? '').trim();
   const password = String(formData.get('password') ?? '');
   const telephone = String(formData.get('tel') ?? '').trim();

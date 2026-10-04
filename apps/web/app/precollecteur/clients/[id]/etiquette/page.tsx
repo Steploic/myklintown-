@@ -5,9 +5,16 @@ import { PrintButton } from '@/components/ui/print-button';
 import { requireEntreprise } from '@/lib/precollecteur/context';
 import { row } from '@/lib/server';
 import { qrSvg } from '@/lib/qr';
-import { telLisible } from '@/lib/format';
+import { nomFichier, telLisible } from '@/lib/format';
 
-export const metadata = { title: 'Étiquette QR' };
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  // Le nom du PDF enregistré = le titre de la page : on y met le foyer (retour de Pie).
+  const { id } = await params;
+  const { supabase } = await requireEntreprise();
+  const { data } = await supabase.from('clients').select('nom, code').eq('id', id).maybeSingle();
+  const c = data as { nom: string; code: string } | null;
+  return { title: c ? { absolute: `QR_code_${nomFichier(c.nom)}_${c.code}` } : 'Étiquette QR' };
+}
 
 /** Étiquette à coller au portail du foyer : le précollecteur la scanne à chaque passage. */
 export default async function EtiquettePage({ params }: { params: Promise<{ id: string }> }) {
@@ -29,7 +36,7 @@ export default async function EtiquettePage({ params }: { params: Promise<{ id: 
         <Link href={`/precollecteur/clients/${client.id}`} className="btn-ghost">← Retour</Link>
         <PrintButton />
       </div>
-      <article className="mx-auto w-[9.5cm] overflow-hidden rounded-2xl border-2 border-brand-ink bg-white shadow-elevated print:shadow-none">
+      <article className="impression-fidele mx-auto w-[9.5cm] overflow-hidden rounded-2xl border-2 border-brand-ink bg-white shadow-elevated print:shadow-none">
         <header className="flex items-center justify-between bg-brand-gradient-ink px-4 py-3 text-white">
           <Logo size={24} variant="bare" />
           <span className="text-small font-semibold uppercase tracking-wider text-brand-leaf">Foyer abonné</span>

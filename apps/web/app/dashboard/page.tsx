@@ -30,15 +30,18 @@ interface LigneZone {
  */
 export default async function SupervisionPage() {
   const supabase = await getSupabase();
-  const [z, p, a] = await Promise.all([
+  const [z, p, a, dm] = await Promise.all([
     rpc(supabase, 'supervision_zones'),
     rpc(supabase, 'supervision_precollecteurs'),
     rpc(supabase, 'supervision_activite', { p_semaines: 12 }),
+    rpc(supabase, 'supervision_demandes'),
   ]);
   const zones = rows<LigneZone>(z.data);
   const precos = rows<{ entreprise_id: string; statut: string; zones: string[]; nb_clients: number }>(p.data);
   const activite = rows<{ semaine: string; prevues: number; realisees: number; non_realisees: number }>(a.data);
 
+  const demandes = rows<{ quartier: string; zone_nom: string | null; nombre: number; plus_ancienne: string }>(dm.data);
+  const nbDemandes = demandes.reduce((t, d) => t + Number(d.nombre), 0);
   const couvertes = zones.filter((x) => x.precollecteurs.length > 0).length;
   const actifs = precos.filter((x) => x.statut !== 'suspendu' && x.zones.length > 0).length;
   const clients = zones.reduce((s, x) => s + Number(x.nb_clients_actifs), 0);
@@ -105,6 +108,30 @@ export default async function SupervisionPage() {
               )}
             </Section>
           </div>
+
+          {nbDemandes > 0 && (
+            <Section
+              titre={`${nbDemandes} ménage${nbDemandes > 1 ? 's' : ''} sans précollecteur`}
+              sousTitre="Demandes d’abonnement là où aucun précollecteur n’est attitré : zones à créer ou à attribuer."
+              className="mt-6"
+              flush
+            >
+              <ul className="divide-y divide-border">
+                {demandes.map((d) => (
+                  <li key={`${d.quartier}-${d.zone_nom}`} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 text-body-sm">
+                    <span>
+                      <strong className="text-brand-ink">{d.quartier}</strong>
+                      <span className="text-muted-foreground"> · {d.zone_nom ? `zone ${d.zone_nom} (non attribuée)` : 'hors de toute zone'}</span>
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <span className="text-small text-muted-foreground">depuis le {dateFr(d.plus_ancienne, { day: 'numeric', month: 'short' })}</span>
+                      <span className="chip-info num">{d.nombre}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
 
           <Section titre="Statistiques par zone" className="mt-6" flush>
             <div className="overflow-x-auto">

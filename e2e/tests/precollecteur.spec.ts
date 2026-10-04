@@ -3,7 +3,7 @@ import { emailDe, identifiants } from '../../apps/web/tests/support/fixtures';
 import { expect, RUN, session, test } from './base';
 
 // Nom unique par exécution : une reprise ne tombe jamais sur le client d'un essai précédent.
-const NOM = `Famille Nouvelle ${Date.now().toString(36).toUpperCase()}`;
+const NOM = `Famille Nouvelle ${Date.now().toString().slice(-8)}`;
 
 test.describe('précollecteur : inscription et démarrage', () => {
   test('s’inscrire → créer son entreprise → tableau de bord', async ({ page }) => {
@@ -133,18 +133,18 @@ test.describe('précollecteur : exploitation', () => {
     await page.goto('/precollecteur/flotte');
     const volet = page.locator('details', { hasText: 'Ajouter un employé' });
     if ((await volet.getAttribute('open')) === null) await volet.locator('summary').click();
-    await page.locator('#e-nom').fill('Agent UI');
+    await page.locator('#e-nom').fill('Agent Terrain');
     await page.locator('#e-nom').locator('xpath=ancestor::form').getByRole('button', { name: 'Ajouter' }).click();
-    await expect(page.getByText('Agent UI a rejoint l’équipe.')).toBeVisible();
+    await expect(page.getByText('Agent Terrain a rejoint l’équipe.')).toBeVisible();
     await page.getByText('Ajouter un tricycle').click();
     await page.locator('#t-nom').fill('Tricycle UI');
     await page.locator('#t-imm').fill('CE-999-UI');
     await page.locator('#t-nom').locator('xpath=ancestor::form').getByRole('button', { name: 'Ajouter' }).click();
     await expect(page.getByText('Tricycle UI ajouté à la flotte.')).toBeVisible();
     const tri = page.locator('li', { hasText: 'Tricycle UI' });
-    await tri.getByLabel('Affecter un employé').selectOption({ label: 'Agent UI' });
+    await tri.getByLabel('Affecter un employé').selectOption({ label: 'Agent Terrain' });
     await tri.getByRole('button', { name: 'Affecter' }).click();
-    await expect(tri.getByRole('button', { name: /Agent UI/ })).toBeVisible();
+    await expect(tri.getByRole('button', { name: /Agent Terrain/ })).toBeVisible();
     await tri.getByLabel('Changer l’état').selectOption('maintenance');
     await tri.getByRole('button', { name: 'OK' }).click();
     await expect(tri.getByText('Maintenance').first()).toBeVisible();

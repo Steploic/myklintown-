@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useSoumission } from '@/components/ui/action-form';
 import { AlertCircle, CheckCircle2, Home, Loader2, Truck } from 'lucide-react';
 import { signUpAction, type AuthState } from '@/lib/auth-actions';
@@ -73,7 +74,11 @@ export function SignupForm({ defaut }: { defaut: 'precollecteur' | 'citoyen' }) 
         {pending && <Loader2 size={16} className="animate-spin" />} {pending ? 'Création…' : 'Créer mon compte'}
       </button>
       <p className="text-center text-small text-muted-foreground">
-        Vous représentez une Mairie ? L’accès est ouvert par MyKlinTown sur demande.
+        Vous représentez une Mairie ?{' '}
+        <Link href="/acces-mairie" className="font-semibold text-brand-blue hover:underline">
+          Demandez votre accès
+        </Link>
+        .
       </p>
     </form>
   );

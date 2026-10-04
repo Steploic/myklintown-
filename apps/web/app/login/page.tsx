@@ -5,7 +5,8 @@ import { LoginForm } from './login-form';
 
 export const metadata = { title: 'Connexion' };
 
-export default function LoginPage() {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
+  const { next } = await searchParams;
   return (
     <div className="grid min-h-screen bg-surface lg:grid-cols-2">
       <AuthAside
@@ -23,7 +24,7 @@ export default function LoginPage() {
           </Link>
           <h1>Connexion</h1>
           <p className="mb-6 mt-1 text-body text-muted-foreground">Accédez à votre espace MyKlinTown.</p>
-          <LoginForm />
+          <LoginForm suite={next} />
           <p className="mt-6 text-center text-body-sm text-muted-foreground">
             Pas encore de compte ?{' '}
             <Link href="/signup" className="font-semibold text-brand-blue hover:underline">

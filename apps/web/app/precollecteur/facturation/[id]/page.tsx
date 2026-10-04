@@ -4,10 +4,18 @@ import { Logo } from '@myklintown/ui';
 import { PrintButton } from '@/components/ui/print-button';
 import { requireEntreprise } from '@/lib/precollecteur/context';
 import { row, rows } from '@/lib/server';
-import { dateFr, dateHeureFr, fcfa, METHODES_PAIEMENT, telLisible } from '@/lib/format';
+import { dateFr, dateHeureFr, fcfa, METHODES_PAIEMENT, nomFichier, telLisible } from '@/lib/format';
 import type { Facture, Paiement } from '@/lib/types';
 
-export const metadata = { title: 'Facture' };
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const { supabase } = await requireEntreprise();
+  const { data } = await supabase.from('factures').select('numero, statut, created_at, clients(nom)').eq('id', id).maybeSingle();
+  const f = data as { numero: string; statut: string; created_at: string; clients: { nom: string } | null } | null;
+  if (!f) return { title: 'Facture' };
+  const type = f.statut === 'payee' ? 'Reçu' : 'Facture';
+  return { title: { absolute: `${type}_${f.numero}_${nomFichier(f.clients?.nom ?? '')}_${f.created_at.slice(0, 10)}` } };
+}
 
 /** Facture / reçu imprimable (ou à enregistrer en PDF depuis le navigateur). */
 export default async function FacturePage({ params }: { params: Promise<{ id: string }> }) {
@@ -32,7 +40,7 @@ export default async function FacturePage({ params }: { params: Promise<{ id: st
         <Link href={`/precollecteur/clients/${f.client_id}`} className="btn-ghost">← Fiche client</Link>
         <PrintButton label={f.statut === 'payee' ? 'Imprimer le reçu' : 'Imprimer la facture'} />
       </div>
-      <article className="mx-auto max-w-2xl rounded-2xl bg-white p-8 shadow-elevated print:max-w-none print:rounded-none print:shadow-none">
+      <article className="impression-fidele mx-auto max-w-2xl rounded-2xl bg-white p-8 shadow-elevated print:max-w-none print:rounded-none print:shadow-none">
         <header className="flex flex-wrap items-start justify-between gap-6 border-b border-border pb-6">
           <div>
             <p className="text-h2 font-bold text-brand-ink">{entreprise.nom}</p>

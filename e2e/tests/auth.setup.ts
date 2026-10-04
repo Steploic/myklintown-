@@ -15,6 +15,7 @@ const COMPTES: [string, RegExp][] = [
   ['precoB', /\/precollecteur/],
   ['menage', /\/citoyen/],
   ['souscripteur', /\/citoyen/],
+  ['acces', /\/citoyen/],
   ['mairie', /\/(dashboard|citoyen)/],
 ];
 

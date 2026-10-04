@@ -7,11 +7,12 @@ import { signInAction, type AuthState } from '@/lib/auth-actions';
 
 const INITIAL: AuthState = {};
 
-export function LoginForm() {
+export function LoginForm({ suite }: { suite?: string }) {
   const [state, formAction, pending] = useSoumission(signInAction, INITIAL);
 
   return (
     <form onSubmit={formAction} className="space-y-4">
+      {suite && <input type="hidden" name="next" value={suite} />}
       {state.error && (
         <p role="alert" className="flex items-start gap-2 rounded-md border border-terrain-stop/25 bg-terrain-stop/5 px-3 py-2 text-body-sm text-terrain-stop">
           <AlertCircle size={16} className="mt-0.5 shrink-0" /> {state.error}

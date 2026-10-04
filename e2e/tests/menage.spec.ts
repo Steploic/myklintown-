@@ -1,5 +1,5 @@
 import { carreEnMer, compte, mairie, POINT_EN_MER } from '../../apps/web/tests/support/fixtures';
-import { expect, etat, RUN, session, test } from './base';
+import { expect, etat, RUN, SANS_MIGRATION_0006, session, test } from './base';
 import { CODE_LIEN, TEL_LIEN } from './global-setup';
 
 const CONTESTATION = `Bac toujours plein ${RUN}`;
@@ -101,8 +101,71 @@ test.describe('nouveau ménage : souscription en ligne', () => {
     await page.getByRole('button', { name: 'Ma position' }).click();
     await expect(page.getByText(/Position : 3\.84/)).toBeVisible();
     await page.getByRole('button', { name: /Trouver mon précollecteur/ }).click();
-    await expect(page.getByText(/Aucun précollecteur partenaire ne dessert encore ce point/)).toBeVisible();
+    await expect(page.getByText(/n’a pas encore de précollecteur partenaire attitré/)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Transmettre ma demande' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'J’ai déjà un code client' })).toBeVisible();
+  });
+
+  // Retour R3 : plus d'impasse hors zone — la demande part en liste d'attente
+  // et un précollecteur la prend en charge. Point en mer : aucun vrai
+  // précollecteur ne peut la voir dans sa zone.
+  test('hors zone : demande en liste d’attente, prise en charge par un précollecteur', async ({ page, browser, context }) => {
+    test.skip(!etat().migration0006, SANS_MIGRATION_0006);
+    const quartier = `Quartier Essai ${Date.now().toString().slice(-6)}`;
+    const S = await compte('souscripteur', 'citoyen');
+    const A = await compte('precoA', 'precollecteur');
+    try {
+      await context.setGeolocation({ latitude: POINT_EN_MER.lat + 0.3, longitude: POINT_EN_MER.lng + 0.3 });
+      await page.goto('/citoyen/souscrire');
+      await page.getByRole('button', { name: /Mensuel/ }).click();
+      await page.getByRole('button', { name: 'Continuer' }).click();
+      await page.getByLabel('Quartier').fill(quartier);
+      await page.getByRole('button', { name: 'Ma position' }).click();
+      await page.getByRole('button', { name: /Trouver mon précollecteur/ }).click();
+      await page.getByRole('button', { name: 'Transmettre ma demande' }).click();
+      await expect(page).toHaveURL(/\/citoyen\?demande=attente/);
+      await expect(page.getByText('Demande transmise')).toBeVisible();
+      await expect(page.getByText(new RegExp(`pour ${quartier}`))).toBeVisible();
+
+      // Côté précollecteur : la demande est visible SANS nom ni téléphone, puis prise.
+      const ctx = await browser.newContext({ storageState: session('precoA') });
+      const p2 = await ctx.newPage();
+      await p2.goto('/precollecteur/demandes');
+      const carte = p2.locator('li', { hasText: quartier });
+      await expect(carte).toBeVisible();
+      await expect(carte).not.toContainText('Test Souscripteur');
+      await expect(carte).not.toContainText('690000000');
+      await carte.getByRole('button', { name: 'Prendre en charge' }).click();
+      await expect(p2).toHaveURL(/\/precollecteur\/clients\/[0-9a-f-]+\?pris=1/);
+      await expect(p2.getByText('Test Souscripteur').first()).toBeVisible();
+      await ctx.close();
+
+      await page.goto('/citoyen');
+      await expect(page.getByText('Demande transmise')).toHaveCount(0);
+      await expect(page.getByText(/Test Propreté A/).first()).toBeVisible();
+    } finally {
+      await S.sb.from('demandes_abonnement').update({ statut: 'annulee' }).eq('statut', 'en_attente');
+      await A.sb.from('clients').delete().eq('entreprise_id', etat().precoA).eq('quartier', quartier);
+    }
+  });
+
+  test('liste d’attente : le ménage peut retirer sa demande', async ({ page, context }) => {
+    test.skip(!etat().migration0006, SANS_MIGRATION_0006);
+    const S = await compte('souscripteur', 'citoyen');
+    try {
+      await context.setGeolocation({ latitude: POINT_EN_MER.lat + 0.3, longitude: POINT_EN_MER.lng + 0.3 });
+      await page.goto('/citoyen/souscrire');
+      await page.getByRole('button', { name: /Mensuel/ }).click();
+      await page.getByRole('button', { name: 'Continuer' }).click();
+      await page.getByRole('button', { name: 'Ma position' }).click();
+      await page.getByRole('button', { name: /Trouver mon précollecteur/ }).click();
+      await page.getByRole('button', { name: 'Transmettre ma demande' }).click();
+      await expect(page.getByText('Demande transmise')).toBeVisible();
+      await page.getByRole('button', { name: 'Annuler ma demande' }).click();
+      await expect(page.getByRole('link', { name: /M’abonner maintenant/ })).toBeVisible();
+    } finally {
+      await S.sb.from('demandes_abonnement').update({ statut: 'annulee' }).eq('statut', 'en_attente');
+    }
   });
 
   test('dans une zone couverte : demande envoyée, acceptée par le précollecteur', async ({ page, browser, context }) => {
@@ -127,7 +190,7 @@ test.describe('nouveau ménage : souscription en ligne', () => {
       const ctx = await browser.newContext({ storageState: session('precoA') });
       const p2 = await ctx.newPage();
       await p2.goto('/precollecteur/clients?filtre=demande');
-      await p2.getByRole('link', { name: 'Test souscripteur' }).first().click();
+      await p2.getByRole('link', { name: 'Test Souscripteur' }).first().click();
       await p2.getByRole('button', { name: 'Accepter le client' }).click();
       await expect(p2.getByText(/À régler avant le/)).toBeVisible();
       await ctx.close();
@@ -135,7 +198,7 @@ test.describe('nouveau ménage : souscription en ligne', () => {
       await page.goto('/citoyen');
       await expect(page.getByText(/première période à régler|À régler/)).toBeVisible();
     } finally {
-      await A.sb.from('clients').delete().eq('entreprise_id', etat().precoA).eq('nom', 'Test souscripteur');
+      await A.sb.from('clients').delete().eq('entreprise_id', etat().precoA).eq('nom', 'Test Souscripteur');
       await M.sb.from('zones').delete().eq('id', z.data!.id);
     }
   });

@@ -144,9 +144,22 @@
   }
 }
 
+@keyframes chargement {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+
 /* Leaflet — overrides pour matcher la charte */
 .leaflet-container {
   font-family: var(--font-barlow), sans-serif !important;
+}
+
+/* Couleurs conservées à l'impression (bandeau de l'étiquette QR, en-têtes) :
+   sans cela, les navigateurs suppriment les fonds et le logo blanc disparaît. */
+.impression-fidele,
+.impression-fidele * {
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
 }
 
 @media print {
