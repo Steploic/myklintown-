@@ -31,7 +31,7 @@ export default async function FacturePage({ params }: { params: Promise<{ id: st
   if (!f) notFound();
   const { data: pd } = await supabase.from('paiements_clients').select('*').eq('facture_id', id).order('created_at');
   const paiements = rows<Paiement>(pd);
-  const recu = paiements.reduce((s, p) => s + p.montant_fcfa, 0);
+  const recu = paiements.filter((p) => (p.statut ?? 'valide') === 'valide').reduce((s, p) => s + p.montant_fcfa, 0);
   const reste = Math.max(0, f.montant_fcfa - recu);
 
   return (

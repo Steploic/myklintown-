@@ -5,7 +5,8 @@ import { PageHeader, Section } from '@/components/ui/blocks';
 import { CartePoints, type PointCarte, type Ton } from '@/components/map/carte-points';
 import { requireEntreprise } from '@/lib/precollecteur/context';
 import { rows, rpc } from '@/lib/server';
-import { fcfa, statutAbonnement, telLisible } from '@/lib/format';
+import { fcfa, heureFr, statutAbonnement, telLisible } from '@/lib/format';
+import { RafraichissementAuto } from '@/components/ui/rafraichissement-auto';
 import type { ClientStatut, Zone } from '@/lib/types';
 
 export const metadata = { title: 'Carte des clients' };
@@ -16,7 +17,7 @@ export const metadata = { title: 'Carte des clients' };
  */
 export default async function CarteClientsPage() {
   const { supabase, entreprise } = await requireEntreprise();
-  const [cl, za, dem] = await Promise.all([
+  const [cl, za, dem, live] = await Promise.all([
     supabase
       .from('v_clients_statut')
       .select('id, nom, quartier, telephone, lat, lng, statut, statut_abonnement, plan_nom, montant_impaye')
@@ -24,6 +25,7 @@ export default async function CarteClientsPage() {
       .neq('statut', 'resilie'),
     supabase.from('zone_affectations').select('zones(*)').eq('entreprise_id', entreprise.id),
     rpc(supabase, 'demandes_ouvertes'),
+    rpc(supabase, 'positions_en_direct'),
   ]);
   const clients = rows<ClientStatut>(cl.data);
   const zones = rows<{ zones: Zone | null }>(za.data).map((a) => a.zones).filter((z): z is Zone => !!z);
@@ -57,8 +59,24 @@ export default async function CarteClientsPage() {
     });
   }
 
+  // Tricycles en tournée : dernière position envoyée par l'appli de l'équipe.
+  const enDirect = rows<{ tournee_id: string; lat: number; lng: number; vu_at: string; tricycle_nom: string | null; zone_nom: string | null; equipe: string | null }>(live.data);
+  for (const d of enDirect) {
+    points.push({
+      id: `direct-${d.tournee_id}`,
+      lat: d.lat,
+      lng: d.lng,
+      ton: 'direct',
+      picto: 'tricycle',
+      titre: d.tricycle_nom ?? 'Équipe en tournée',
+      lignes: [d.equipe ?? '', `Vu à ${heureFr(d.vu_at)}${d.zone_nom ? ` · ${d.zone_nom}` : ''}`],
+      lien: { href: `/precollecteur/tournees/${d.tournee_id}`, label: 'Tournée' },
+    });
+  }
+
   return (
     <PrecoShell path="/precollecteur/carte">
+      {enDirect.length > 0 && <RafraichissementAuto secondes={30} />}
       <PageHeader
         titre="Carte des clients"
         sousTitre="Chaque repère est un foyer ; sa couleur dit où en est le paiement. Touchez un repère pour la fiche ou l’itinéraire."
@@ -80,13 +98,15 @@ export default async function CarteClientsPage() {
             { ton: 'stop', label: 'Impayé / expiré' },
             { ton: 'neutre', label: 'Autre' },
             { ton: 'info', label: 'Demandes en attente' },
+            { ton: 'direct', label: 'Équipes en tournée' },
           ]}
           hauteur={560}
           sansPosition={clients.filter((c) => c.lat == null || c.lng == null).length}
         />
       </Section>
       <p className="mt-3 text-small text-muted-foreground">
-        La position en direct des tricycles arrivera avec l’espace employé (application de terrain).
+        Équipes en tournée : position envoyée toutes les 30 s par le téléphone d’un équipier, tant que l’espace employé
+        est ouvert. La carte se met à jour toute seule.
       </p>
     </PrecoShell>
   );

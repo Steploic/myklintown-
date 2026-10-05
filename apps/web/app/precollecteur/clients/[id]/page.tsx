@@ -82,7 +82,9 @@ export default async function FicheClientPage({
 
   const s = statutAbonnement(client.statut_abonnement);
   const auj = isoJour();
-  const payeParFacture = (fid: string) => paiements.filter((p) => p.facture_id === fid).reduce((t, p) => t + p.montant_fcfa, 0);
+  // Seuls les paiements VALIDÉS règlent une facture (les espèces d'un employé attendent le gérant).
+  const payeParFacture = (fid: string) =>
+    paiements.filter((p) => p.facture_id === fid && (p.statut ?? 'valide') === 'valide').reduce((t, p) => t + p.montant_fcfa, 0);
   const enAttente = factures.filter((f) => f.statut === 'emise');
   const realisees = collectes.filter((x) => x.statut === 'realisee').length;
 
@@ -240,7 +242,11 @@ export default async function FicheClientPage({
                                 {p.reference && <span className="text-muted-foreground"> · réf. {p.reference}</span>}
                                 {p.encaisse_par && <span className="text-muted-foreground"> · par {nomEmploye.get(p.encaisse_par) ?? 'un employé'}</span>}
                               </span>
-                              <span className="num font-semibold text-terrain-ok">+ {fcfa(p.montant_fcfa)}</span>
+                              <span className="num font-semibold text-terrain-ok">
+                                + {fcfa(p.montant_fcfa)}
+                                {p.statut === 'a_valider' && <span className="chip-relance ml-1">À valider</span>}
+                              {p.statut === 'rejete' && <span className="chip-stop ml-1">Rejeté</span>}
+                              </span>
                             </li>
                           ))}
                         </ul>

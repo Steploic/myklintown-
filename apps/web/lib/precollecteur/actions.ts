@@ -684,6 +684,10 @@ export async function chargerDemoAction(_p: ActionState, _fd: FormData): Promise
       .single();
     const tid = row<{ id: string }>(t)?.id;
     if (!tid) continue;
+    // Équipe de démonstration : chauffeur et ramasseur du tricycle.
+    await supabase.from('tournee_equipe').insert(
+      employes.slice(0, 2).map((e) => ({ tournee_id: tid, employe_id: e.id, entreprise_id: entreprise.id })),
+    );
     await supabase.from('collectes').insert(
       clients.slice(0, 17).map((c, i) => {
         const rate = (i + j) % 9 === 0;

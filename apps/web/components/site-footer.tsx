@@ -16,6 +16,7 @@ export function SiteFooter() {
           <ul className="space-y-2 text-body-sm text-white/75">
             <li><Link href="/signup?role=precollecteur" className="hover:text-white">Précollecteur</Link></li>
             <li><Link href="/signup?role=citoyen" className="hover:text-white">Ménage</Link></li>
+            <li><Link href="/rejoindre" className="hover:text-white">Employé (avec un code)</Link></li>
             <li><Link href="/acces-mairie" className="hover:text-white">Mairie (sur demande)</Link></li>
           </ul>
         </div>
