@@ -9,6 +9,7 @@
  */
 import { CLE_SERVICE, clientServiceTest, compte, iso, plans } from '../../apps/web/tests/support/fixtures';
 import { etat, expect, session, test } from './base';
+import { CODE_LIEN } from './global-setup';
 
 const FOYER_LIEN = 'Foyer Lien Paiement';
 const FOYER_TOURNEE = 'Foyer Tournee Paiement';
@@ -26,6 +27,9 @@ test.describe('paiement en ligne (simulation)', () => {
     const e = etat().precoA;
     // Point de départ : paiement en ligne fermé.
     await service().from('entreprises').update({ paiement_statut: 'inactif', paiement_compte_id: null }).eq('id', e);
+    // Le ménage de test est relié à sa fiche (« Foyer Lien ») : le test ne dépend pas de menage.spec.
+    const M = await compte('menage', 'citoyen');
+    await service().from('clients').update({ user_id: M.id }).eq('code', CODE_LIEN);
     const [plan] = await plans(A.sb);
     for (const [nom, telephone] of [[FOYER_LIEN, '677000444'], [FOYER_TOURNEE, '699000555']] as const) {
       await A.sb.from('clients').delete().eq('entreprise_id', e).eq('nom', nom);
