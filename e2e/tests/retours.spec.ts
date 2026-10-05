@@ -124,7 +124,7 @@ test.describe('R1 — accès Mairie sur demande', () => {
     if (etat().migration0006) {
       // Les communes sont lisibles avant toute création de compte (13 + « Choisir »).
       await expect.poll(() => page.getByLabel('Commune *').locator('option').count()).toBeGreaterThanOrEqual(14);
-      await expect(page.getByLabel('Commune *').locator('option', { hasText: 'Douala V' })).toHaveCount(1);
+      await expect(page.getByLabel('Commune *').locator('option', { hasText: /^Douala V$/ })).toHaveCount(1);
     }
   });
 
