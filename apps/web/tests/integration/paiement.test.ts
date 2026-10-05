@@ -27,7 +27,7 @@ beforeAll(async () => {
     return;
   }
   if (CLE_SERVICE) service = clientServiceTest();
-  else console.warn('\n⚠️  Enregistrement d’un paiement confirmé NON testé : SUPABASE_SERVICE_ROLE_KEY absente de apps/web/.env.local\n');
+  else console.warn('\n⚠️  Enregistrement d’un paiement confirmé NON testé : SUPABASE_SECRET_KEY absente de apps/web/.env.local\n');
 
   const planId = (await plans(A.sb))[0]!.id;
   const c = await A.sb.from('clients').insert({ entreprise_id: A.entrepriseId, nom: 'Foyer En Ligne', telephone: '677000333', plan_id: planId }).select('id').single();

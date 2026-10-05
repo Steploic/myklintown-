@@ -1,4 +1,4 @@
-import { clientService } from '@/lib/supabase-service';
+import { clientService, cleServiceSupabase } from '@/lib/supabase-service';
 import { parametre, row, rows } from '@/lib/server';
 import { fournisseurActif } from './fournisseur';
 import {
@@ -20,7 +20,7 @@ import {
 export const PAIEMENT_INDISPONIBLE = 'Le paiement en ligne n’est pas encore ouvert.';
 
 export function paiementEnLigneDisponible(): boolean {
-  return !!fournisseurActif() && !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+  return !!fournisseurActif() && !!cleServiceSupabase();
 }
 
 interface FactureAPayer {

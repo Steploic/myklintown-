@@ -56,9 +56,10 @@ migration n'est pas exécutée.
 **Paiement en ligne** (`20261006000008_paiement_en_ligne.sql`) : les tests navigateur tournent en
 **mode simulation** (`PAIEMENT_SIMULATION=1`, posé par `e2e/playwright.config.ts` ; jamais actif sur la
 production Vercel) : un numéro finissant par `000001` a un « solde insuffisant », les autres paient au
-bout de 5 s. Ils demandent aussi la clé service de Supabase dans `apps/web/.env.local`
-(`SUPABASE_SERVICE_ROLE_KEY=…`, Supabase → Project Settings → API ; fichier ignoré par git) : sans
-elle, ils sont ignorés avec la consigne. Ils ne tournent pas contre la production.
+bout de 5 s. Ils demandent aussi la « secret key » de Supabase dans `apps/web/.env.local`
+(`SUPABASE_SECRET_KEY=sb_secret_…`, Supabase → Settings → API Keys ; l'ancienne clé service_role
+reste acceptée sous `SUPABASE_SERVICE_ROLE_KEY` ; fichier ignoré par git) : sans elle, ils sont
+ignorés avec la consigne. Ils ne tournent pas contre la production.
 
 **Nettoyage** : `supabase/NETTOYAGE_TESTS.sql` supprime tous les comptes `mkt.test.…` et leurs
 données (y compris la promotion Mairie, à refaire ensuite).
