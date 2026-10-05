@@ -54,7 +54,10 @@ export async function confirmerPassageAction(collecteId: string): Promise<Action
   const supabase = await getSupabase();
   const { error } = await rpc(supabase, 'confirmer_passage', { p_collecte: collecteId, p_confirme: true });
   if (error) return { error: error.message };
-  revalidatePath('/citoyen', 'layout');
+  // Pas de revalidatePath ici : la liste rafraîchie retirait le passage en même
+  // temps que s'affichait « Confirmé », et le ménage ne voyait aucun retour
+  // (constaté en production). Le passage reste affiché « Confirmé » jusqu'à la
+  // prochaine visite, où il n'apparaît plus parmi ceux à confirmer.
   return { ok: 'Merci, passage confirmé.' };
 }
 

@@ -37,8 +37,13 @@ test.describe('ménage déjà servi : rattachement puis suivi', () => {
   test('confirme un passage', async ({ page }) => {
     await page.goto('/citoyen');
     const a = page.locator('section', { hasText: 'Confirmez les derniers passages' });
+    await expect(a.getByRole('button', { name: 'Il est passé' })).toHaveCount(2);
     await a.getByRole('button', { name: 'Il est passé' }).first().click();
+    // Retour visible tout de suite (en production, la liste rafraîchie le faisait disparaître).
     await expect(a.getByText('Confirmé')).toBeVisible();
+    // Et c'est en base : à la visite suivante, ce passage n'est plus à confirmer.
+    await page.reload();
+    await expect(a.getByRole('button', { name: 'Il est passé' })).toHaveCount(1);
   });
 
   test('conteste un passage : preuve obligatoire, prise sur le moment', async ({ page }) => {
