@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useSoumission } from '@/components/ui/action-form';
 import { AlertCircle, CheckCircle2, Home, Loader2, Truck } from 'lucide-react';
 import { signUpAction, type AuthState } from '@/lib/auth-actions';
 
@@ -15,10 +15,10 @@ const PROFILS = [
 const INITIAL: AuthState = {};
 
 export function SignupForm({ defaut }: { defaut: 'precollecteur' | 'citoyen' }) {
-  const [state, formAction, pending] = useActionState(signUpAction, INITIAL);
+  const [state, formAction, pending] = useSoumission(signUpAction, INITIAL);
 
   return (
-    <form action={formAction} className="space-y-5">
+    <form onSubmit={formAction} className="space-y-5">
       <fieldset className="grid gap-3 sm:grid-cols-2">
         <legend className="field-label">Je suis…</legend>
         {PROFILS.map(({ value, label, icon: Icon, desc }) => (

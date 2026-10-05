@@ -1,14 +1,12 @@
 import { cache } from 'react';
 import { redirect } from 'next/navigation';
-import { getSupabase, row } from '@/lib/server';
+import { getSupabase, row, utilisateurCourant } from '@/lib/server';
 import type { Entreprise } from '@/lib/types';
 
 /** Lecture unique par requête (la coque et la page la demandent toutes deux). */
 const lireContexte = cache(async () => {
   const supabase = await getSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await utilisateurCourant(supabase);
   if (!user) return { supabase, user: null, entreprise: null as Entreprise | null };
 
   const { data: membre } = await supabase

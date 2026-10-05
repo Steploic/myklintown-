@@ -2,6 +2,7 @@ import { Bike, Plus, UserRound, X } from 'lucide-react';
 import { PrecoShell } from '@/components/precollecteur/shell';
 import { EmptyState, PageHeader, Section } from '@/components/ui/blocks';
 import { ActionForm, SubmitButton } from '@/components/ui/action-form';
+import { Volet } from '@/components/ui/volet';
 import { requireEntreprise } from '@/lib/precollecteur/context';
 import {
   affecterEmployeAction,
@@ -118,10 +119,11 @@ export default async function FlottePage() {
               })}
             </ul>
           )}
-          <details className="border-t border-border">
-            <summary className="flex cursor-pointer list-none items-center gap-2 px-5 py-3 text-body-sm font-semibold text-brand-blue">
-              <Plus size={16} /> Ajouter un tricycle
-            </summary>
+          <Volet
+            className="border-t border-border"
+            classeTitre="flex cursor-pointer list-none items-center gap-2 px-5 py-3 text-body-sm font-semibold text-brand-blue"
+            titre={<><Plus size={16} /> Ajouter un tricycle</>}
+          >
             <ActionForm action={creerTricycleAction} resetOnSuccess className="grid gap-3 px-5 pb-5 sm:grid-cols-3">
               <div>
                 <label className="field-label" htmlFor="t-nom">Nom *</label>
@@ -137,7 +139,7 @@ export default async function FlottePage() {
               </div>
               <SubmitButton className="sm:col-span-3">Ajouter</SubmitButton>
             </ActionForm>
-          </details>
+          </Volet>
         </Section>
 
         <Section titre="Employés" sousTitre={`${employes.filter((e) => e.actif).length} actifs`} flush>
@@ -166,10 +168,11 @@ export default async function FlottePage() {
               })}
             </ul>
           )}
-          <details className="border-t border-border" open={employes.length === 0}>
-            <summary className="flex cursor-pointer list-none items-center gap-2 px-5 py-3 text-body-sm font-semibold text-brand-blue">
-              <Plus size={16} /> Ajouter un employé
-            </summary>
+          <Volet
+            className="border-t border-border" ouvertAuDepart={employes.length === 0}
+            classeTitre="flex cursor-pointer list-none items-center gap-2 px-5 py-3 text-body-sm font-semibold text-brand-blue"
+            titre={<><Plus size={16} /> Ajouter un employé</>}
+          >
             <ActionForm action={creerEmployeAction} resetOnSuccess className="grid gap-3 px-5 pb-5 sm:grid-cols-3">
               <div>
                 <label className="field-label" htmlFor="e-nom">Nom *</label>
@@ -189,7 +192,7 @@ export default async function FlottePage() {
               </div>
               <SubmitButton className="sm:col-span-3">Ajouter</SubmitButton>
             </ActionForm>
-          </details>
+          </Volet>
         </Section>
       </div>
     </PrecoShell>

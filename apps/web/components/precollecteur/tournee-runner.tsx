@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Check, Loader2, MapPin, QrCode, RotateCcw, ShieldAlert, ShieldCheck, TriangleAlert, X } from 'lucide-react';
@@ -35,6 +35,13 @@ const TERRAIN = {
 export function TourneeRunner({ tourneeId, passages, modifiable }: { tourneeId: string; passages: Passage[]; modifiable: boolean }) {
   const router = useRouter();
   const [etat, setEtat] = useState(() => new Map(passages.map((p) => [p.id, { statut: p.statut, motif: p.motif }])));
+  // Le serveur fait foi : quand il renvoie de nouvelles données (fin de tournée,
+  // passage ajouté hors planning), l'affichage s'aligne sans fermer le scanner.
+  const empreinte = passages.map((p) => `${p.id}:${p.statut}:${p.motif ?? ''}`).join('|');
+  useEffect(() => {
+    setEtat(new Map(passages.map((p) => [p.id, { statut: p.statut, motif: p.motif }])));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empreinte]);
   const [enCours, setEnCours] = useState<string | null>(null);
   const [motifPour, setMotifPour] = useState<string | null>(null);
   const [scan, setScan] = useState(false);

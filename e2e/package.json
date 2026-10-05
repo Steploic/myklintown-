@@ -1,0 +1,11 @@
+{
+  "name": "@myklintown/e2e",
+  "private": true,
+  "description": "Tests de bout en bout (Playwright) — hors espace de travail pnpm pour ne pas dupliquer Next.js.",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}

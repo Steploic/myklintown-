@@ -48,3 +48,10 @@ supabase/.temp
 # publication ne l'est pas.
 docs/livrables/
 docs/reunions/
+
+# Tests : identifiants des comptes de test (locaux) et rapports
+apps/web/tests/.fixtures.local.json
+e2e/.auth/
+e2e/.media/
+e2e/playwright-report/
+e2e/test-results/

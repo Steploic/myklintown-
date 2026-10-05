@@ -4,6 +4,7 @@ import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createServerSupabase } from '@myklintown/db/server';
 import { homeForRole, isSelfServiceRole, type UserRole } from './roles';
+import { estErreurReseau, MESSAGE_RESEAU } from './format';
 
 export interface AuthState {
   error?: string;
@@ -20,6 +21,7 @@ export async function signInAction(_prev: AuthState, formData: FormData): Promis
 
   const supabase = createServerSupabase(await cookies());
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (estErreurReseau(error)) return { error: MESSAGE_RESEAU };
   if (error || !data.user) {
     return { error: 'E-mail ou mot de passe incorrect.' };
   }
@@ -70,6 +72,10 @@ export async function signUpAction(_prev: AuthState, formData: FormData): Promis
   });
 
   if (error) {
+    if (estErreurReseau(error)) return { error: MESSAGE_RESEAU };
+    if (/already registered|already exists/i.test(error.message)) {
+      return { error: 'Un compte existe déjà avec cette adresse. Connectez-vous, ou utilisez « Mot de passe oublié ».' };
+    }
     return { error: error.message };
   }
 
@@ -141,6 +147,7 @@ export async function requestPasswordResetAction(
 
   // Une erreur de configuration (SMTP absent, domaine non autorisé) doit être
   // visible : la taire ferait croire à l'utilisateur que le message est parti.
+  if (estErreurReseau(error)) return { error: MESSAGE_RESEAU };
   if (error && /redirect|url|smtp|mail/i.test(error.message)) {
     return {
       error:

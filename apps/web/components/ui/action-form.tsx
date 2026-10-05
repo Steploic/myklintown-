@@ -1,12 +1,34 @@
 'use client';
 
-import { useActionState, useEffect, useRef } from 'react';
+import { createContext, startTransition, useActionState, useContext, useEffect, useRef } from 'react';
 import { useFormStatus } from 'react-dom';
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { cn } from '@myklintown/ui';
 import type { ActionState } from '@/lib/types';
 
 type Action = (prev: ActionState, fd: FormData) => Promise<ActionState>;
+
+/**
+ * Soumission SANS remise à zéro automatique.
+ *
+ * Avec `<form action={…}>`, React 19 vide tous les champs après chaque envoi,
+ * même refusé. Conséquence constatée par les tests : on choisit « MTN Mobile
+ * Money », l'envoi est refusé faute de référence, le menu revient en silence à
+ * « Espèces »… et le paiement est enregistré avec le mauvais moyen. On soumet
+ * donc nous-mêmes : les valeurs saisies restent en place quand l'envoi échoue.
+ */
+export function useSoumission<S>(action: (prev: Awaited<S>, fd: FormData) => Promise<S>, initial: Awaited<S>) {
+  const [state, dispatch, pending] = useActionState<S, FormData>(action, initial);
+  const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    startTransition(() => dispatch(fd));
+  };
+  return [state, onSubmit, pending] as const;
+}
+
+/** Transmet l'état « en cours » aux boutons (useFormStatus ne voit pas onSubmit). */
+const EnCours = createContext<boolean | null>(null);
 
 interface ActionFormProps extends Omit<React.FormHTMLAttributes<HTMLFormElement>, 'action'> {
   action: Action;
@@ -21,7 +43,7 @@ interface ActionFormProps extends Omit<React.FormHTMLAttributes<HTMLFormElement>
  * chaque soumission affiche soit une confirmation, soit la raison du refus.
  */
 export function ActionForm({ action, resetOnSuccess, children, className, ...rest }: ActionFormProps) {
-  const [state, formAction] = useActionState(action, {} as ActionState);
+  const [state, onSubmit, pending] = useSoumission(action, {} as ActionState);
   const ref = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
@@ -29,10 +51,12 @@ export function ActionForm({ action, resetOnSuccess, children, className, ...res
   }, [state, resetOnSuccess]);
 
   return (
-    <form ref={ref} action={formAction} className={className} {...rest}>
-      {children}
-      <FormMessage state={state} />
-    </form>
+    <EnCours.Provider value={pending}>
+      <form ref={ref} onSubmit={onSubmit} className={className} {...rest}>
+        {children}
+        <FormMessage state={state} />
+      </form>
+    </EnCours.Provider>
   );
 }
 
@@ -64,7 +88,8 @@ export function SubmitButton({
   pendingLabel?: string;
   variant?: 'primary' | 'secondary' | 'outline' | 'danger' | 'ghost';
 }) {
-  const { pending } = useFormStatus();
+  const statut = useFormStatus();
+  const pending = useContext(EnCours) ?? statut.pending;
   return (
     <button
       type="submit"

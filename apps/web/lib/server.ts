@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServerSupabase } from '@myklintown/db/server';
+import { estErreurReseau } from './format';
 
 /**
  * Client Supabase lié à la session de la requête en cours.
@@ -16,12 +17,26 @@ export async function getSupabase(): Promise<SupabaseClient> {
 
 export type Supa = SupabaseClient;
 
+/**
+ * Utilisateur connecté (ou null s'il n'y a pas de session).
+ *
+ * Une COUPURE RÉSEAU n'est pas une déconnexion : au lieu de renvoyer
+ * l'utilisateur à la page de connexion, on lève une erreur que `app/error.tsx`
+ * présente comme « Réseau indisponible — réessayer ».
+ */
+export async function utilisateurCourant(supabase: SupabaseClient) {
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+  if (!user && estErreurReseau(error)) throw new Error('MKT_RESEAU_INDISPONIBLE');
+  return user;
+}
+
 /** Utilisateur connecté, ou renvoi à la connexion. */
 export async function requireUser() {
   const supabase = await getSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await utilisateurCourant(supabase);
   if (!user) redirect('/login');
   return { supabase, user };
 }

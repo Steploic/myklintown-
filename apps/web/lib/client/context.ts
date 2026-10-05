@@ -1,14 +1,12 @@
 import { cache } from 'react';
 import { redirect } from 'next/navigation';
-import { getSupabase, row } from '@/lib/server';
+import { getSupabase, row, utilisateurCourant } from '@/lib/server';
 import type { ClientStatut, Entreprise } from '@/lib/types';
 
 /** Abonnement du ménage connecté (le plus récent non résilié), et son précollecteur. */
 export const getMonAbonnement = cache(async () => {
   const supabase = await getSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await utilisateurCourant(supabase);
   if (!user) redirect('/login?next=/citoyen');
 
   const { data } = await supabase
