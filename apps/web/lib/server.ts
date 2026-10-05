@@ -1,4 +1,4 @@
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServerSupabase } from '@myklintown/db/server';
@@ -65,4 +65,22 @@ export async function parametre(supabase: Supa, cle: string, defaut: number): Pr
 export function rpc(supabase: Supa, fn: string, args: Record<string, unknown> = {}) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (supabase as any).rpc(fn, args) as Promise<{ data: unknown; error: { message: string } | null }>;
+}
+
+/**
+ * Origine réelle de la requête (liens envoyés par e-mail ou WhatsApp).
+ *
+ * On la déduit des en-têtes plutôt que de `NEXT_PUBLIC_SITE_URL` : si cette
+ * variable est mal renseignée en production, les liens pointeraient vers
+ * `localhost` et personne ne s'en apercevrait avant qu'un utilisateur ne se
+ * plaigne. Les en-têtes, eux, ne peuvent pas se tromper.
+ */
+export async function origineDemande(): Promise<string> {
+  const h = await headers();
+  const host = h.get('x-forwarded-host') ?? h.get('host');
+  if (!host) return process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
+  const proto =
+    h.get('x-forwarded-proto') ??
+    (host.startsWith('localhost') || host.startsWith('127.0.0.1') ? 'http' : 'https');
+  return `${proto}://${host}`;
 }

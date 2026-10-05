@@ -3,12 +3,13 @@
  * Partagé entre le middleware (protection des routes) et les Server Actions auth.
  * Doit rester aligné sur l'enum `user_role` de la base (migration init).
  */
-export type UserRole = 'citoyen' | 'precollecteur' | 'collecteur' | 'mairie' | 'enterprise' | 'admin';
+export type UserRole = 'citoyen' | 'precollecteur' | 'employe' | 'collecteur' | 'mairie' | 'enterprise' | 'admin';
 
 /** Page d'accueil de chaque rôle après connexion. */
 export const ROLE_HOME: Record<UserRole, string> = {
   citoyen: '/citoyen',
   precollecteur: '/precollecteur',
+  employe: '/employe',
   collecteur: '/collecteur',
   mairie: '/dashboard',
   enterprise: '/enterprise',
@@ -20,6 +21,9 @@ export const ROLE_HOME: Record<UserRole, string> = {
  *
  * `precollecteur` y figure : il ne donne accès qu'aux données de SA propre
  * entreprise (RLS par appartenance, `est_membre()`), jamais à celles des autres.
+ *
+ * `employe` n'y figure pas non plus : on le devient en rejoignant une équipe
+ * avec le code d'invitation du gérant (`rejoindre_entreprise`).
  *
  * `collecteur`, `mairie` et `admin` en sont exclus : ils ouvrent l'accès aux
  * données des ménages, aux tournées et aux encaissements. Ils se promeuvent
@@ -41,6 +45,7 @@ export function isSelfServiceRole(value: string): value is SelfServiceRole {
 export const PROTECTED_PREFIXES = [
   '/citoyen',
   '/precollecteur',
+  '/employe',
   '/collecteur',
   '/dashboard',
   '/enterprise',
@@ -63,6 +68,7 @@ export function isProtectedPath(pathname: string): boolean {
 export const ROLE_ALLOWED_PREFIXES: Record<UserRole, readonly string[]> = {
   citoyen: ['/citoyen', '/settings'],
   precollecteur: ['/precollecteur', '/settings'],
+  employe: ['/employe', '/settings'],
   collecteur: ['/collecteur', '/settings'],
   mairie: ['/dashboard', '/settings'],
   enterprise: ['/enterprise', '/settings'],

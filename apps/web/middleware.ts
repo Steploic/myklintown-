@@ -112,6 +112,7 @@ export const config = {
   matcher: [
     '/citoyen/:path*',
     '/precollecteur/:path*',
+    '/employe/:path*',
     '/collecteur/:path*',
     '/dashboard/:path*',
     '/enterprise/:path*',

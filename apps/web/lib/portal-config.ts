@@ -27,6 +27,9 @@ import {
   Shapes,
   Inbox,
   KeyRound,
+  History,
+  ScanLine,
+  Sun,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -59,6 +62,14 @@ export const PRECOLLECTEUR_NAV: PortalNavItem[] = [
   { href: '/precollecteur/flotte', label: 'Flotte & équipe', icon: Bike },
   { href: '/precollecteur/incidents', label: 'Incidents', icon: Camera },
   { href: '/precollecteur/grille', label: 'Grille tarifaire', icon: Tags },
+];
+
+/** Employé (chauffeur, ramasseur) : le terrain, rien d'autre (proposition de Pie). */
+export const EMPLOYE_NAV: PortalNavItem[] = [
+  { href: '/employe', label: 'Aujourd’hui', icon: Sun },
+  { href: '/employe/scan', label: 'Scanner', icon: ScanLine },
+  { href: '/employe/incidents/nouveau', label: 'Déclarer un incident', icon: Camera, court: 'Incident' },
+  { href: '/employe/historique', label: 'Historique', icon: History },
 ];
 
 export const CITOYEN_NAV: PortalNavItem[] = [
@@ -95,13 +106,18 @@ export const ENTERPRISE_NAV: PortalNavItem[] = [
   { href: '/enterprise/facturation', label: 'Facturation', icon: DollarSign },
 ];
 
-export type PortalKey = 'precollecteur' | 'citoyen' | 'collecteur' | 'mairie' | 'enterprise';
+export type PortalKey = 'precollecteur' | 'employe' | 'citoyen' | 'collecteur' | 'mairie' | 'enterprise';
 
 export const PORTALS = {
   precollecteur: {
     name: 'Mon entreprise',
     role: 'Espace Précollecteur',
     nav: PRECOLLECTEUR_NAV,
+  },
+  employe: {
+    name: 'Mon équipe',
+    role: 'Espace Employé',
+    nav: EMPLOYE_NAV,
   },
   citoyen: {
     name: 'Mon foyer',

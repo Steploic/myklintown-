@@ -8,7 +8,7 @@ import { EmptyState, PageHeader } from '@/components/ui/blocks';
 import { SubmitButton } from '@/components/ui/action-form';
 import { TourneeRunner, type Passage } from '@/components/precollecteur/tournee-runner';
 import { requireEntreprise } from '@/lib/precollecteur/context';
-import { statutTourneeAction } from '@/lib/precollecteur/actions';
+import { statutTourneeAction } from '@/lib/terrain-actions';
 import { row, rows } from '@/lib/server';
 import { dateFr, dateHeureFr, STATUT_TOURNEE, statutAbonnement } from '@/lib/format';
 import type { Tournee } from '@/lib/types';

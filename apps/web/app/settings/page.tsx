@@ -14,6 +14,7 @@ export const metadata = { title: 'Paramètres' };
 const PORTAIL: Record<string, PortalKey> = {
   citoyen: 'citoyen',
   precollecteur: 'precollecteur',
+  employe: 'employe',
   collecteur: 'collecteur',
   mairie: 'mairie',
   admin: 'mairie',

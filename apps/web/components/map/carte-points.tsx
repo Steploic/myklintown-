@@ -22,6 +22,7 @@ const PASTILLE: Record<Ton, string> = {
   stop: 'bg-terrain-stop',
   neutre: 'bg-muted-foreground',
   info: 'bg-brand-blue-pixel',
+  direct: 'bg-brand-teal',
 };
 
 /**

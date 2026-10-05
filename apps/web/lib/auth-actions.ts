@@ -1,11 +1,12 @@
 'use server';
 
-import { cookies, headers } from 'next/headers';
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createServerSupabase } from '@myklintown/db/server';
 import { canAccessPath, homeForRole, isProtectedPath, isSelfServiceRole, type UserRole } from './roles';
 import { estErreurReseau, MESSAGE_RESEAU } from './format';
 import { cheminInterne, normaliserNom } from './metier';
+import { origineDemande } from './server';
 
 export interface AuthState {
   error?: string;
@@ -105,23 +106,6 @@ export async function signOutAction(): Promise<void> {
   redirect('/logout');
 }
 
-/**
- * Origine réelle de la requête.
- *
- * On la déduit des en-têtes plutôt que de `NEXT_PUBLIC_SITE_URL` : si cette
- * variable est mal renseignée en production, les liens de réinitialisation
- * pointeraient vers `localhost` et personne ne s'en apercevrait avant qu'un
- * utilisateur ne se plaigne. Les en-têtes, eux, ne peuvent pas se tromper.
- */
-async function origineDemande(): Promise<string> {
-  const h = await headers();
-  const host = h.get('x-forwarded-host') ?? h.get('host');
-  if (!host) return process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
-  const proto =
-    h.get('x-forwarded-proto') ??
-    (host.startsWith('localhost') || host.startsWith('127.0.0.1') ? 'http' : 'https');
-  return `${proto}://${host}`;
-}
 
 /**
  * Demande d'un lien de réinitialisation.
