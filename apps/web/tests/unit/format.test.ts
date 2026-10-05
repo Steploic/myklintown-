@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   ajouterJours,
   ajouterMois,
@@ -141,11 +141,48 @@ describe('erreurs réseau', () => {
     expect(estErreurReseau({ message: 'TypeError: Failed to fetch' })).toBe(true);
     expect(estErreurReseau({ message: 'x', status: 0 })).toBe(true);
     expect(estErreurReseau({ message: 'read ECONNRESET' })).toBe(true);
+    // Appel serveur abandonné après le délai maximal (connexion morte).
+    expect(estErreurReseau({ message: 'TimeoutError: The operation was aborted due to timeout' })).toBe(true);
   });
   it('ne confond pas un refus du serveur avec une coupure', async () => {
     const { estErreurReseau } = await import('@/lib/format');
     expect(estErreurReseau({ message: 'Invalid login credentials', status: 400 })).toBe(false);
     expect(estErreurReseau({ message: 'new row violates row-level security policy' })).toBe(false);
     expect(estErreurReseau(null)).toBe(false);
+  });
+});
+
+describe('fetch borné des appels serveur à Supabase', () => {
+  it('abandonne un appel bloqué au lieu de figer la page', async () => {
+    const { creerFetchAvecDelai, DELAI_SUPABASE_MS } = await import('@myklintown/db/server');
+    expect(DELAI_SUPABASE_MS).toBeLessThanOrEqual(30_000);
+    const origine = globalThis.fetch;
+    const journal = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // Serveur qui ne répond jamais, sauf abandon.
+    globalThis.fetch = ((_: unknown, init?: RequestInit) =>
+      new Promise((_r, rejeter) => init?.signal?.addEventListener('abort', () => rejeter(init.signal!.reason)))) as typeof fetch;
+    try {
+      const debut = Date.now();
+      await expect(creerFetchAvecDelai(50)('https://exemple.supabase.co/rest/v1/clients?select=id')).rejects.toThrow(/timeout|aborted/i);
+      expect(Date.now() - debut).toBeLessThan(2_000);
+      expect(journal).toHaveBeenCalledWith(expect.stringMatching(/abandon après 0\.05 s \/rest\/v1\/clients$/));
+    } finally {
+      journal.mockRestore();
+      globalThis.fetch = origine;
+    }
+  });
+  it('laisse passer un abandon demandé par l’appelant', async () => {
+    const { fetchAvecDelai } = await import('@myklintown/db/server');
+    const origine = globalThis.fetch;
+    globalThis.fetch = ((_: unknown, init?: RequestInit) =>
+      new Promise((_r, rejeter) => init?.signal?.addEventListener('abort', () => rejeter(new Error('annulé par l’appelant'))))) as typeof fetch;
+    try {
+      const ctrl = new AbortController();
+      const appel = fetchAvecDelai('https://exemple.supabase.co/rest/v1/x', { signal: ctrl.signal });
+      ctrl.abort();
+      await expect(appel).rejects.toThrow('annulé par l’appelant');
+    } finally {
+      globalThis.fetch = origine;
+    }
   });
 });

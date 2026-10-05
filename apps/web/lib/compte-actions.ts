@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { getSupabase, rpc } from '@/lib/server';
+import { normaliserNom } from '@/lib/metier';
 import type { ActionState } from '@/lib/types';
 
 /** Nom et téléphone du compte connecté (le rôle, lui, reste verrouillé en base). */
@@ -12,7 +13,7 @@ export async function majProfilAction(_p: ActionState, fd: FormData): Promise<Ac
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: 'Session expirée : reconnectez-vous.' };
-  const nom = String(fd.get('nom') ?? '').trim();
+  const nom = normaliserNom(String(fd.get('nom') ?? ''));
   if (!nom) return { error: 'Le nom est obligatoire.' };
   const telephone = String(fd.get('telephone') ?? '').trim() || null;
   const { error } = await supabase.from('profiles').update({ nom_complet: nom, telephone }).eq('id', user.id);

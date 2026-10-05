@@ -217,5 +217,10 @@ export const MESSAGE_RESEAU =
 /** Coupure réseau, et non refus du serveur : à ne jamais présenter comme une erreur de saisie. */
 export function estErreurReseau(e: { message?: string; status?: number } | null | undefined): boolean {
   if (!e) return false;
-  return e.status === 0 || /fetch failed|network|ECONNRESET|ETIMEDOUT|ENOTFOUND|Failed to fetch/i.test(e.message ?? '');
+  return e.status === 0 || /fetch failed|network|ECONNRESET|ETIMEDOUT|ENOTFOUND|Failed to fetch|TimeoutError|timed? ?out|aborted due to timeout/i.test(e.message ?? '');
+}
+
+/** Fragment de nom de fichier lisible : « Famille Ateba » → « Famille_Ateba ». */
+export function nomFichier(texte: string): string {
+  return texte.trim().replace(/[\/:*?"<>|]+/g, '').replace(/\s+/g, '_');
 }

@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { LogOut, Settings } from 'lucide-react';
 import { Logo, cn } from '@myklintown/ui';
 import { MobileNavDrawer } from './mobile-nav-drawer';
-import { PORTALS, type PortalKey, type PortalNavItem } from '@/lib/portal-config';
+import { navPourRole, PORTALS, type PortalKey, type PortalNavItem } from '@/lib/portal-config';
 import { signOutAction } from '@/lib/auth-actions';
 import { getCurrentProfile } from '@/lib/get-profile';
 
@@ -32,10 +32,11 @@ export async function PortalShell({ portalKey, user, titre, currentPath, childre
   const portal = PORTALS[portalKey];
   const profile = await getCurrentProfile();
   const display = profile ?? user ?? { nom: 'Utilisateur', email: '' };
-  const racine = portal.nav[0]?.href ?? '/';
+  const nav = navPourRole(portal.nav, profile?.role);
+  const racine = nav[0]?.href ?? '/';
   const sousTitre = titre ?? display.nom;
   // Barre d'onglets mobile : les 4 destinations les plus fréquentes, au pouce.
-  const onglets = portal.nav.slice(0, 4);
+  const onglets = nav.slice(0, 4);
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -52,7 +53,7 @@ export async function PortalShell({ portalKey, user, titre, currentPath, childre
           <p className="truncate text-body-sm font-semibold">{sousTitre}</p>
         </div>
         <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-2" aria-label="Navigation principale">
-          {portal.nav.map((item) => {
+          {nav.map((item) => {
             const Icon = item.icon;
             const actif = estActif(currentPath, item.href, racine);
             return (
@@ -105,7 +106,7 @@ export async function PortalShell({ portalKey, user, titre, currentPath, childre
       {/* Colonne principale */}
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-surface/90 px-3 backdrop-blur lg:hidden">
-          <MobileNavDrawer portalKey={portalKey} currentPath={currentPath} userName={display.nom} titre={sousTitre} />
+          <MobileNavDrawer portalKey={portalKey} currentPath={currentPath} userName={display.nom} titre={sousTitre} role={profile?.role} />
           <Link href="/" className="flex items-center" aria-label="Accueil">
             <Logo size={26} showWordmark={false} />
           </Link>

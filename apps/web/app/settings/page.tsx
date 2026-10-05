@@ -1,4 +1,6 @@
 import { redirect } from 'next/navigation';
+import { LogOut } from 'lucide-react';
+import { signOutAction } from '@/lib/auth-actions';
 import { PortalShell, type PortalKey } from '@/components/portal-shell';
 import { PageHeader, Section } from '@/components/ui/blocks';
 import { ActionForm, SubmitButton } from '@/components/ui/action-form';
@@ -99,6 +101,14 @@ export default async function SettingsPage() {
               <SubmitButton variant="secondary">Changer le mot de passe</SubmitButton>
             </div>
           </ActionForm>
+        </Section>
+        <Section titre="Session">
+          <form action={signOutAction} className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-body-sm text-muted-foreground">Fermez votre session sur cet appareil.</p>
+            <SubmitButton variant="outline" pendingLabel="Déconnexion…">
+              <LogOut size={16} /> Se déconnecter
+            </SubmitButton>
+          </form>
         </Section>
       </div>
     </PortalShell>

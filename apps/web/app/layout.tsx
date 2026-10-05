@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Barlow } from 'next/font/google';
 import './globals.css';
+import { BarreNavigation } from '@/components/ui/barre-navigation';
 
 const barlow = Barlow({
   subsets: ['latin'],
@@ -40,7 +41,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fr" className={barlow.variable} suppressHydrationWarning>
-      <body className="min-h-screen bg-background font-sans text-foreground">{children}</body>
+      <body className="min-h-screen bg-background font-sans text-foreground">
+        <BarreNavigation />
+        {children}
+      </body>
     </html>
   );
 }

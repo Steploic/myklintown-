@@ -103,3 +103,23 @@ describe('redirection après enregistrement : chemins internes seulement', () =>
     expect(cheminInterne(c as string | null)).toBe(false);
   });
 });
+
+describe('noms harmonisés (retour R8)', () => {
+  it.each([
+    ['BEKOLO', 'Bekolo'],
+    ['motto', 'Motto'],
+    ['menage 2', 'Menage 2'],
+    ['  famille   ateba ', 'Famille Ateba'],
+    ['NGO-BASSA marie', 'Ngo-Bassa Marie'],
+    ["d'souza", "D'Souza"],
+    ['élodie ÉKANI', 'Élodie Ékani'],
+    ['', ''],
+  ])('« %s » → « %s »', async (brut, attendu) => {
+    const { normaliserNom } = await import('@/lib/metier');
+    expect(normaliserNom(brut)).toBe(attendu);
+  });
+  it('idempotent', async () => {
+    const { normaliserNom } = await import('@/lib/metier');
+    expect(normaliserNom(normaliserNom('JULIEN rostand'))).toBe('Julien Rostand');
+  });
+});

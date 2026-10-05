@@ -105,6 +105,10 @@ function reseauIndisponible() {
 }
 
 export const config = {
+  // Runtime edge (par défaut), volontairement. Le runtime Node.js a été essayé
+  // pour le rapprocher de la base (retour R10) : il figeait des pages — réponse
+  // commencée mais jamais terminée après un filtre ou un enregistrement
+  // (3 séries de tests sur 3 en échec, 0 sur 1 en edge, 04/10/2026).
   matcher: [
     '/citoyen/:path*',
     '/precollecteur/:path*',

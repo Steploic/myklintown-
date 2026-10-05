@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Camera, Flag, Play } from 'lucide-react';
+import { Camera, Flag, Lock, Map as MapIcon, Play, RotateCcw } from 'lucide-react';
+import { Volet } from '@/components/ui/volet';
+import { CartePoints, type Ton } from '@/components/map/carte-points';
 import { PrecoShell } from '@/components/precollecteur/shell';
 import { EmptyState, PageHeader } from '@/components/ui/blocks';
 import { SubmitButton } from '@/components/ui/action-form';
@@ -8,7 +10,7 @@ import { TourneeRunner, type Passage } from '@/components/precollecteur/tournee-
 import { requireEntreprise } from '@/lib/precollecteur/context';
 import { statutTourneeAction } from '@/lib/precollecteur/actions';
 import { row, rows } from '@/lib/server';
-import { dateFr, dateHeureFr, STATUT_TOURNEE } from '@/lib/format';
+import { dateFr, dateHeureFr, STATUT_TOURNEE, statutAbonnement } from '@/lib/format';
 import type { Tournee } from '@/lib/types';
 
 export const metadata = { title: 'Tournée' };
@@ -40,7 +42,9 @@ export default async function TourneePage({ params }: { params: Promise<{ id: st
     .map((c) => ({ id: c.id, statut: c.statut, motif: c.motif, client: clients.get(c.client_id)! }));
 
   const s = STATUT_TOURNEE[t.statut] ?? STATUT_TOURNEE.planifiee!;
-  const modifiable = t.statut !== 'annulee';
+  // Une tournée terminée (ou annulée) est en lecture seule : plus de scan ni
+  // d'annulation par erreur (retour de Pie). On la rouvre explicitement si besoin.
+  const modifiable = t.statut === 'planifiee' || t.statut === 'en_cours';
 
   return (
     <PrecoShell path="/precollecteur/tournees">
@@ -67,6 +71,13 @@ export default async function TourneePage({ params }: { params: Promise<{ id: st
                 <SubmitButton pendingLabel="Départ…"><Play size={16} /> Démarrer</SubmitButton>
               </form>
             )}
+            {t.statut === 'terminee' && (
+              <form action={statutTourneeAction}>
+                <input type="hidden" name="tournee_id" value={t.id} />
+                <input type="hidden" name="statut" value="en_cours" />
+                <SubmitButton variant="outline" pendingLabel="Réouverture…"><RotateCcw size={16} /> Rouvrir la tournée</SubmitButton>
+              </form>
+            )}
             {t.statut === 'en_cours' && (
               <form action={statutTourneeAction}>
                 <input type="hidden" name="tournee_id" value={t.id} />
@@ -87,7 +98,51 @@ export default async function TourneePage({ params }: { params: Promise<{ id: st
           />
         </div>
       )}
+      {!modifiable && (
+        <p className="mb-4 flex items-center gap-2 rounded-lg border border-border bg-muted/60 px-4 py-3 text-body-sm text-muted-foreground">
+          <Lock size={16} /> Tournée {t.statut === 'annulee' ? 'annulée' : 'terminée'} : consultation seule. Rouvrez-la pour corriger un passage.
+        </p>
+      )}
       <TourneeRunner tourneeId={t.id} passages={passages} modifiable={modifiable} />
+
+      <Volet
+        className="card-soft mt-6"
+        ouvertAuDepart
+        classeTitre="flex cursor-pointer list-none items-center gap-2 px-5 py-4 font-semibold text-brand-ink"
+        titre={<><MapIcon size={18} /> Carte de la tournée</>}
+      >
+        <div className="px-3 pb-3">
+          <CartePoints
+            points={passages
+              .filter((p) => p.client.lat != null && p.client.lng != null)
+              .map((p) => {
+                const s = statutAbonnement(p.client.statut_abonnement);
+                return {
+                  id: p.id,
+                  lat: p.client.lat!,
+                  lng: p.client.lng!,
+                  ton: s.terrain as Ton,
+                  picto: p.statut === 'realisee' ? 'collecte' : p.statut === 'non_realisee' ? 'non_collecte' : 'a_collecter',
+                  titre: p.client.nom,
+                  lignes: [
+                    p.statut === 'realisee' ? 'Collecté' : p.statut === 'non_realisee' ? `Non collecté${p.motif ? ` · ${p.motif}` : ''}` : 'À collecter',
+                    s.label,
+                  ],
+                  lien: { href: `/precollecteur/clients/${p.client.id}`, label: 'Fiche' },
+                };
+              })}
+            legende={[
+              { ton: 'ok', label: 'À jour' },
+              { ton: 'relance', label: 'À relancer' },
+              { ton: 'stop', label: 'Impayé' },
+              { ton: 'neutre', label: 'Autre' },
+            ]}
+            hauteur={420}
+            sansPosition={passages.filter((p) => p.client.lat == null || p.client.lng == null).length}
+          />
+          <p className="mt-2 text-small text-muted-foreground">Pictogramme : poubelle = à collecter · coche = collecté · croix = non collecté.</p>
+        </div>
+      </Volet>
     </PrecoShell>
   );
 }

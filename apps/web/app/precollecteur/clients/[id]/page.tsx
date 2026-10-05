@@ -43,10 +43,10 @@ export default async function FicheClientPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ cree?: string }>;
+  searchParams: Promise<{ cree?: string; pris?: string }>;
 }) {
   const { id } = await params;
-  const { cree } = await searchParams;
+  const { cree, pris } = await searchParams;
   const { supabase, entreprise } = await requireEntreprise();
 
   const { data: c } = await supabase
@@ -100,6 +100,11 @@ export default async function FicheClientPage({
         retour={{ href: '/precollecteur/clients', label: 'Clients' }}
       />
 
+      {pris && (
+        <p className="mb-5 flex items-center gap-2 rounded-lg border border-terrain-ok/25 bg-terrain-ok/5 px-4 py-3 text-body-sm font-medium text-terrain-ok">
+          <CheckCircle2 size={18} /> Demande prise en charge : ce ménage est votre client et sa première facture est émise. Appelez-le pour convenir du premier passage.
+        </p>
+      )}
       {cree && (
         <p className="mb-5 flex items-center gap-2 rounded-lg border border-terrain-ok/25 bg-terrain-ok/5 px-4 py-3 text-body-sm font-medium text-terrain-ok">
           <CheckCircle2 size={18} /> Client enregistré. Imprimez son QR code pour le coller à son portail.

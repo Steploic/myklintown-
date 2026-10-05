@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { AlertCircle, ArrowLeft, ArrowRight, Check, Loader2, MapPinOff, Phone, Truck } from 'lucide-react';
+import { AlertCircle, ArrowLeft, ArrowRight, Check, Loader2, Phone, Send, Truck } from 'lucide-react';
 import { cn } from '@myklintown/ui';
 import { LocationPicker } from '@/components/map/location-picker';
-import { chercherPrecollecteursAction, souscrireAction, type PrecollecteurTrouve } from '@/lib/client/actions';
+import { chercherPrecollecteursAction, deposerDemandeAction, souscrireAction, type PrecollecteurTrouve } from '@/lib/client/actions';
 import { fcfa, telLisible } from '@/lib/format';
 import type { Plan } from '@/lib/types';
 
@@ -39,6 +39,16 @@ export function Souscription({ plans, nomDefaut, telDefaut }: { plans: Plan[]; n
       setTrouves(r);
       setChoix(r[0]?.entreprise_id ?? '');
       setEtape(2);
+    });
+  };
+
+  // R3 : plus d'impasse — la demande est enregistrée et proposée aux précollecteurs.
+  const transmettre = () => {
+    if (!pos) return;
+    setErreur('');
+    startTransition(async () => {
+      const r = await deposerDemandeAction({ planId, nom, telephone, adresse, quartier, lat: pos[0], lng: pos[1] });
+      if (r?.error) setErreur(r.error);
     });
   };
 
@@ -149,18 +159,22 @@ export function Souscription({ plans, nomDefaut, telDefaut }: { plans: Plan[]; n
           <div className="space-y-4">
             <h2>Votre précollecteur</h2>
             {trouves && trouves.length === 0 ? (
-              <div className="flex flex-col items-center gap-3 rounded-xl bg-muted/60 p-6 text-center">
-                <MapPinOff size={32} className="text-terrain-relance" />
-                <p className="font-semibold text-brand-ink">Aucun précollecteur partenaire ne dessert encore ce point.</p>
+              <div className="flex flex-col items-center gap-3 rounded-xl bg-brand-blue/5 p-6 text-center">
+                <Send size={30} className="text-brand-blue" />
+                <p className="font-semibold text-brand-ink">Votre quartier n’a pas encore de précollecteur partenaire attitré.</p>
                 <p className="max-w-md text-body-sm text-muted-foreground">
-                  Vérifiez la position de votre domicile sur la carte. Si elle est juste, votre quartier n’est pas
-                  encore couvert : la Mairie et MyKlinTown étendent les zones au fil du pilote.
+                  Transmettez votre demande : elle est proposée aux précollecteurs MyKlinTown, et le premier qui la
+                  prend en charge vous appelle pour démarrer. Vous suivez son avancement depuis votre espace.
                 </p>
+                {erreur && <Erreur texte={erreur} />}
+                <button type="button" className="btn-primary" onClick={transmettre} disabled={enCours}>
+                  {enCours ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} Transmettre ma demande
+                </button>
                 <div className="flex flex-wrap justify-center gap-2">
-                  <button type="button" className="btn-outline" onClick={() => setEtape(1)}>
+                  <button type="button" className="btn-ghost" onClick={() => setEtape(1)}>
                     <ArrowLeft size={16} /> Corriger ma position
                   </button>
-                  <a href="/citoyen" className="btn-secondary">J’ai déjà un code client</a>
+                  <a href="/citoyen" className="btn-ghost">J’ai déjà un code client</a>
                 </div>
               </div>
             ) : (

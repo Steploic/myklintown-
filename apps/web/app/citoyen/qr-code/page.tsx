@@ -39,7 +39,7 @@ export default async function QrCodePage() {
           actions={<PrintButton />}
         />
       </div>
-      <article className="mx-auto max-w-sm overflow-hidden rounded-2xl border-2 border-brand-ink bg-white shadow-elevated">
+      <article className="impression-fidele mx-auto max-w-sm overflow-hidden rounded-2xl border-2 border-brand-ink bg-white shadow-elevated">
         <header className="flex items-center justify-between bg-brand-gradient-ink px-4 py-3 text-white">
           <Logo size={24} variant="bare" />
           <span className="text-small font-semibold uppercase tracking-wider text-brand-leaf">Foyer abonné</span>

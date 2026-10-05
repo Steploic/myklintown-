@@ -3,9 +3,10 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import * as Dialog from '@radix-ui/react-dialog';
-import { LogOut, Menu, Settings, X } from 'lucide-react';
+import { Loader2, LogOut, Menu, Settings, X } from 'lucide-react';
+import { useFormStatus } from 'react-dom';
 import { Logo, cn } from '@myklintown/ui';
-import { PORTALS, type PortalKey } from '@/lib/portal-config';
+import { navPourRole, PORTALS, type PortalKey } from '@/lib/portal-config';
 import { signOutAction } from '@/lib/auth-actions';
 
 interface MobileNavDrawerProps {
@@ -15,6 +16,7 @@ interface MobileNavDrawerProps {
   userName?: string;
   /** Nom affiché (entreprise, foyer…). */
   titre?: string;
+  role?: string | null;
 }
 
 /**
@@ -23,9 +25,10 @@ interface MobileNavDrawerProps {
  * éviter de passer des icônes Lucide à travers la frontière server → client
  * (les composants ne sont pas sérialisables).
  */
-export function MobileNavDrawer({ portalKey, currentPath, userName, titre }: MobileNavDrawerProps) {
+export function MobileNavDrawer({ portalKey, currentPath, userName, titre, role }: MobileNavDrawerProps) {
   const [open, setOpen] = useState(false);
   const portal = PORTALS[portalKey];
+  const nav = navPourRole(portal.nav, role);
 
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
@@ -71,9 +74,9 @@ export function MobileNavDrawer({ portalKey, currentPath, userName, titre }: Mob
           </div>
 
           <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-            {portal.nav.map((item) => {
+            {nav.map((item) => {
               const Icon = item.icon;
-              const racine = portal.nav[0]?.href;
+              const racine = nav[0]?.href;
               const isActive =
                 item.href === racine
                   ? currentPath === item.href
@@ -112,18 +115,29 @@ export function MobileNavDrawer({ portalKey, currentPath, userName, titre }: Mob
             >
               <Settings size={18} aria-hidden /> Paramètres
             </Link>
+            {/* Ne PAS refermer le menu au clic : cela retirait le formulaire de la
+                page avant l'envoi, et la déconnexion n'avait jamais lieu (retour
+                de test R9). La redirection vers /logout ferme tout de toute façon. */}
             <form action={signOutAction}>
-              <button
-                type="submit"
-                onClick={() => setOpen(false)}
-                className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-body-sm text-white/80 hover:bg-white/10 hover:text-white"
-              >
-                <LogOut size={18} aria-hidden /> Déconnexion
-              </button>
+              <BoutonDeconnexion />
             </form>
           </div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+  );
+}
+
+function BoutonDeconnexion() {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-body-sm text-white/80 hover:bg-white/10 hover:text-white disabled:opacity-60"
+    >
+      {pending ? <Loader2 size={18} className="animate-spin" aria-hidden /> : <LogOut size={18} aria-hidden />}
+      {pending ? 'Déconnexion…' : 'Déconnexion'}
+    </button>
   );
 }

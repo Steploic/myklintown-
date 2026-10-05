@@ -24,5 +24,16 @@ export const getMonAbonnement = cache(async () => {
     const { data: e } = await supabase.from('entreprises').select('id, nom, telephone').eq('id', client.entreprise_id).maybeSingle();
     entreprise = row<Pick<Entreprise, 'id' | 'nom' | 'telephone'>>(e);
   }
-  return { supabase, user, client, entreprise };
+  // R3 : demande en attente d'un précollecteur (ménage hors zone couverte).
+  let demande: { id: string; quartier: string | null; created_at: string } | null = null;
+  if (!client) {
+    const { data: d } = await supabase
+      .from('demandes_abonnement')
+      .select('id, quartier, created_at')
+      .eq('user_id', user.id)
+      .eq('statut', 'en_attente')
+      .maybeSingle();
+    demande = row<{ id: string; quartier: string | null; created_at: string }>(d);
+  }
+  return { supabase, user, client, entreprise, demande };
 });
