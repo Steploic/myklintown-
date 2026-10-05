@@ -80,6 +80,8 @@ test.describe('espace employé : de l’invitation à la validation des espèces
     await expect(page.getByText(new RegExp(`Pour ${EMPLOYE}, ramasseur`))).toBeVisible();
     // Compte existant : connexion, puis retour sur l'invitation.
     await page.getByRole('link', { name: 'Connectez-vous' }).click();
+    // Attendre la page de connexion : « Rejoindre » a aussi un champ « E-mail ».
+    await expect(page).toHaveURL(/\/login\?next=/);
     await page.getByLabel('E-mail').fill(emailDe('employe'));
     await page.getByLabel('Mot de passe').fill(identifiants().motDePasse);
     await page.getByRole('button', { name: 'Se connecter' }).click();
