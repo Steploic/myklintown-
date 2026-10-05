@@ -3,7 +3,7 @@
  * sans erreur, avec la barre d'onglets du bas.
  */
 import { emailDe, identifiants } from '../../apps/web/tests/support/fixtures';
-import { expect, pasDeDebordement, seConnecter, session, test } from './base';
+import { etat, expect, pasDeDebordement, seConnecter, session, test } from './base';
 
 const PUBLIQUES = ['/', '/login', '/signup', '/marque', '/legal', '/acces-mairie'];
 const PRECOLLECTEUR = [
@@ -86,6 +86,20 @@ test.describe('facturation sur téléphone', () => {
     await page.goto('/precollecteur/facturation?onglet=paiements');
     await expect(page.locator('ul').getByText('Famille Scan').first()).toBeVisible();
     await expect(page.locator('table')).toBeHidden();
+    await pasDeDebordement(page);
+  });
+});
+
+test.describe('changer d’espace sur téléphone', () => {
+  test.use({ storageState: session('admin') });
+  test('depuis le menu latéral', async ({ page }) => {
+    test.skip(!etat().adminPromu, `Compte administrateur de test non promu (${etat().adminEmail})`);
+    await page.goto('/dashboard');
+    await page.getByRole('button', { name: 'Ouvrir la navigation' }).click();
+    const menu = page.getByRole('dialog');
+    await menu.getByText('Changer d’espace').click();
+    await menu.getByRole('link', { name: 'Espace Client' }).click();
+    await expect(page).toHaveURL(/\/citoyen/);
     await pasDeDebordement(page);
   });
 });

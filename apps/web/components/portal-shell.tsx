@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { LogOut, Settings } from 'lucide-react';
 import { Logo, cn } from '@myklintown/ui';
 import { MobileNavDrawer } from './mobile-nav-drawer';
+import { SelecteurEspace } from './selecteur-espace';
 import { navPourRole, PORTALS, type PortalKey, type PortalNavItem } from '@/lib/portal-config';
 import { signOutAction } from '@/lib/auth-actions';
 import { getCurrentProfile } from '@/lib/get-profile';
@@ -52,6 +53,7 @@ export async function PortalShell({ portalKey, user, titre, currentPath, childre
           <p className="text-small font-semibold uppercase tracking-wider text-brand-leaf">{portal.role}</p>
           <p className="truncate text-body-sm font-semibold">{sousTitre}</p>
         </div>
+        {profile?.role === 'admin' && <SelecteurEspace courant={portalKey} />}
         <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-2" aria-label="Navigation principale">
           {nav.map((item) => {
             const Icon = item.icon;

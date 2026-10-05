@@ -160,3 +160,39 @@ test.describe('R1 — accès Mairie sur demande', () => {
     });
   });
 });
+
+test.describe('Changer d’espace (administrateurs)', () => {
+  test.describe('précollecteur', () => {
+    test.use({ storageState: session('precoA') });
+    test('un non-administrateur ne voit pas le sélecteur', async ({ page }) => {
+      await page.goto('/precollecteur');
+      await expect(page.getByRole('heading', { name: 'Tableau de bord' })).toBeVisible();
+      await expect(page.getByText('Changer d’espace')).toHaveCount(0);
+    });
+  });
+
+  test.describe('administrateur', () => {
+    test.use({ storageState: session('admin') });
+    test('passer de la Mairie à l’espace Client puis Précollecteur, et revenir', async ({ page }) => {
+      test.skip(!etat().adminPromu, `Compte administrateur de test non promu (${etat().adminEmail})`);
+      const barre = page.getByRole('complementary');
+      // Sélecteur cherché dans toute la page : un administrateur sans entreprise
+      // arrive sur l'écran « Créer mon entreprise », qui n'a pas de barre latérale.
+      const changer = async (espace: string) => {
+        await page.getByText('Changer d’espace').click();
+        await page.getByRole('link', { name: espace }).click();
+      };
+      await page.goto('/dashboard');
+      await expect(barre.getByText('Espace Mairie')).toBeVisible();
+      await changer('Espace Client');
+      await expect(page).toHaveURL(/\/citoyen/);
+      await expect(barre.getByText('Espace Client')).toBeVisible();
+      await changer('Espace Précollecteur');
+      await expect(page).toHaveURL(/\/precollecteur/);
+      await changer('Espace Mairie');
+      await expect(page).toHaveURL(/\/dashboard/);
+      // La page de validation des accès reste dans le menu de l'espace Mairie.
+      await expect(barre.getByRole('link', { name: 'Demandes d’accès' })).toBeVisible();
+    });
+  });
+});

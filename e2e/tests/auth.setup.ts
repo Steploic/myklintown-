@@ -17,6 +17,7 @@ const COMPTES: [string, RegExp][] = [
   ['souscripteur', /\/citoyen/],
   ['acces', /\/citoyen/],
   ['mairie', /\/(dashboard|citoyen)/],
+  ['admin', /\/(dashboard|citoyen)/],
 ];
 
 for (const [cle, destination] of COMPTES) {
