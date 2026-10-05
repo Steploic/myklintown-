@@ -8,6 +8,7 @@ import { EmptyState, PageHeader } from '@/components/ui/blocks';
 import { SubmitButton } from '@/components/ui/action-form';
 import { TourneeRunner, type Passage } from '@/components/precollecteur/tournee-runner';
 import { RafraichissementAuto } from '@/components/ui/rafraichissement-auto';
+import { paiementEnLigneDisponible } from '@/lib/paiement/service';
 import { requireEntreprise } from '@/lib/precollecteur/context';
 import { statutTourneeAction } from '@/lib/terrain-actions';
 import { row, rows } from '@/lib/server';
@@ -37,7 +38,7 @@ export default async function TourneePage({ params }: { params: Promise<{ id: st
   const collectes = rows<{ id: string; statut: Passage['statut']; motif: string | null; client_id: string }>(co);
   const ids = collectes.map((c) => c.client_id);
   const { data: cl } = ids.length
-    ? await supabase.from('v_clients_statut').select('id, nom, code, quartier, adresse, statut_abonnement, lat, lng, montant_impaye').in('id', ids)
+    ? await supabase.from('v_clients_statut').select('id, nom, code, quartier, adresse, statut_abonnement, lat, lng, montant_impaye, telephone').in('id', ids)
     : { data: [] };
   const [eq, att, pos] = await Promise.all([
     supabase.from('tournee_equipe').select('employe_id, employes(nom)').eq('tournee_id', id),
@@ -142,7 +143,13 @@ export default async function TourneePage({ params }: { params: Promise<{ id: st
           <Lock size={16} /> Tournée {t.statut === 'annulee' ? 'annulée' : 'terminée'} : consultation seule. Rouvrez-la pour corriger un passage.
         </p>
       )}
-      <TourneeRunner tourneeId={t.id} passages={passages} modifiable={modifiable} encaissement={modifiable} />
+      <TourneeRunner
+        tourneeId={t.id}
+        passages={passages}
+        modifiable={modifiable}
+        encaissement={modifiable}
+        paiementEnLigne={modifiable && paiementEnLigneDisponible() && entreprise.paiement_statut === 'actif'}
+      />
 
       <Volet
         className="card-soft mt-6"

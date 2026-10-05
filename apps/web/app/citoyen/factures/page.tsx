@@ -1,8 +1,12 @@
-import { FileText } from 'lucide-react';
+import { FileText, Smartphone } from 'lucide-react';
 import { PortalShell } from '@/components/portal-shell';
 import { EmptyState, PageHeader } from '@/components/ui/blocks';
+import { Volet } from '@/components/ui/volet';
+import { PaiementMobile } from '@/components/paiement/paiement-mobile';
 import { getMonAbonnement } from '@/lib/client/context';
-import { rows } from '@/lib/server';
+import { payerFactureAction } from '@/lib/paiement/actions';
+import { paiementEnLigneDisponible } from '@/lib/paiement/service';
+import { row, rows } from '@/lib/server';
 import { dateFr, dateHeureFr, fcfa, isoJour, METHODES_PAIEMENT } from '@/lib/format';
 import type { Facture, Paiement } from '@/lib/types';
 
@@ -19,6 +23,12 @@ export default async function MesFacturesPage() {
   const factures = rows<Facture>(fa);
   const paiements = rows<Paiement>(pa);
   const auj = isoJour();
+  // Paiement en ligne : seulement si la plateforme est configurée ET le précollecteur vérifié.
+  let enLigne = false;
+  if (client && paiementEnLigneDisponible()) {
+    const { data: e } = await supabase.from('entreprises').select('paiement_statut').eq('id', client.entreprise_id).maybeSingle();
+    enLigne = row<{ paiement_statut: string }>(e)?.paiement_statut === 'actif';
+  }
 
   return (
     <PortalShell portalKey="citoyen" currentPath="/citoyen/factures" titre={client?.nom}>
@@ -35,6 +45,8 @@ export default async function MesFacturesPage() {
           {factures.map((f) => {
             const pf = paiements.filter((p) => p.facture_id === f.id);
             const recu = pf.filter((p) => (p.statut ?? 'valide') === 'valide').reduce((s, p) => s + p.montant_fcfa, 0);
+            const enAttente = pf.filter((p) => p.statut === 'a_valider').reduce((s, p) => s + p.montant_fcfa, 0);
+            const aPayer = Math.max(0, f.montant_fcfa - recu - enAttente);
             return (
               <li key={f.id} className="card-soft p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -66,6 +78,21 @@ export default async function MesFacturesPage() {
                       </li>
                     ))}
                   </ul>
+                )}
+                {enLigne && f.statut === 'emise' && aPayer > 0 && (
+                  <Volet
+                    className="mt-3 rounded-lg border border-border"
+                    classeTitre="flex cursor-pointer list-none items-center justify-center gap-2 px-4 py-3 font-semibold text-brand-blue"
+                    titre={<><Smartphone size={16} /> Payer par Mobile Money</>}
+                  >
+                    <div className="px-4 pb-4">
+                      <PaiementMobile
+                        montant={aPayer}
+                        telephoneParDefaut={client?.telephone}
+                        demander={payerFactureAction.bind(null, f.id)}
+                      />
+                    </div>
+                  </Volet>
                 )}
               </li>
             );

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { CalendarCheck, CheckCircle2, FileText, MapPin, Pencil, Printer, Receipt, UserCheck } from 'lucide-react';
+import { CalendarCheck, CheckCircle2, FileText, Link2, MapPin, MessageCircle, Pencil, Printer, Receipt, UserCheck } from 'lucide-react';
 import { PrecoShell } from '@/components/precollecteur/shell';
 import { PageHeader, Section } from '@/components/ui/blocks';
 import { ActionForm, SubmitButton } from '@/components/ui/action-form';
@@ -15,7 +15,9 @@ import {
   emettreFactureAction,
   majClientAction,
 } from '@/lib/precollecteur/actions';
-import { row, rows } from '@/lib/server';
+import { origineDemande, row, rows } from '@/lib/server';
+import { creerLienPaiementAction } from '@/lib/paiement/actions';
+import { paiementEnLigneDisponible } from '@/lib/paiement/service';
 import { qrSvg } from '@/lib/qr';
 import { urlsPreuves } from '@/lib/preuves';
 import {
@@ -32,6 +34,7 @@ import {
   STATUT_COLLECTE,
   STATUT_INCIDENT,
   statutAbonnement,
+  telInternational,
   telLisible,
 } from '@/lib/format';
 import type { ClientStatut, Collecte, Facture, Incident, Paiement, Plan, Zone } from '@/lib/types';
@@ -43,10 +46,10 @@ export default async function FicheClientPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ cree?: string; pris?: string }>;
+  searchParams: Promise<{ cree?: string; pris?: string; lien?: string; facture?: string; erreur?: string }>;
 }) {
   const { id } = await params;
-  const { cree, pris } = await searchParams;
+  const { cree, pris, lien, facture: factureLien, erreur } = await searchParams;
   const { supabase, entreprise } = await requireEntreprise();
 
   const { data: c } = await supabase
@@ -57,6 +60,9 @@ export default async function FicheClientPage({
     .maybeSingle();
   const client = row<ClientStatut>(c);
   if (!client) notFound();
+  // Lien de paiement Mobile Money : plateforme configurée ET précollecteur vérifié chez Notch Pay.
+  const enLigne = paiementEnLigneDisponible() && entreprise.paiement_statut === 'actif';
+  const urlLien = lien ? `${await origineDemande()}/payer/${lien}` : null;
 
   const [fa, pa, co, inc, re, em, pl, za] = await Promise.all([
     supabase.from('factures').select('*').eq('client_id', id).order('periode_debut', { ascending: false }),
@@ -111,6 +117,9 @@ export default async function FicheClientPage({
         <p className="mb-5 flex items-center gap-2 rounded-lg border border-terrain-ok/25 bg-terrain-ok/5 px-4 py-3 text-body-sm font-medium text-terrain-ok">
           <CheckCircle2 size={18} /> Client enregistré. Imprimez son QR code pour le coller à son portail.
         </p>
+      )}
+      {erreur && (
+        <p role="alert" className="mb-5 rounded-lg border border-terrain-stop/25 bg-terrain-stop/5 px-4 py-3 text-body-sm text-terrain-stop">{erreur}</p>
       )}
 
       {client.statut === 'demande' && (
@@ -263,8 +272,31 @@ export default async function FicheClientPage({
                               derniere={relances[0] ? `${relances[0].canal} · ${dateHeureFr(relances[0].created_at)}` : null}
                             />
                           )}
+                          {urlLien && factureLien === f.id && (
+                            <div className="rounded-lg border border-brand-green/25 bg-brand-green/5 p-3 text-body-sm">
+                              <p className="font-semibold text-brand-ink">Lien de paiement prêt</p>
+                              <p className="mt-1 break-all text-small text-muted-foreground">{urlLien}</p>
+                              <a
+                                href={`https://wa.me/${telInternational(client.telephone) ?? ''}?text=${encodeURIComponent(
+                                  `Bonjour ${client.nom}, voici le lien pour régler votre facture ${f.numero} (${fcfa(reste)}) à ${entreprise.nom} par MTN Mobile Money ou Orange Money : ${urlLien}`,
+                                )}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="btn-secondary mt-2"
+                              >
+                                <MessageCircle size={16} /> Envoyer par WhatsApp
+                              </a>
+                            </div>
+                          )}
                           <div className="flex flex-wrap items-start gap-2">
                             <PaiementForm factureId={f.id} resteDu={reste} employes={employes} compact />
+                            {enLigne && (
+                              <form action={creerLienPaiementAction}>
+                                <input type="hidden" name="facture_id" value={f.id} />
+                                <input type="hidden" name="client_id" value={client.id} />
+                                <SubmitButton variant="outline" pendingLabel="…"><Link2 size={16} /> Lien de paiement</SubmitButton>
+                              </form>
+                            )}
                             <Link href={`/precollecteur/facturation/${f.id}`} className="btn-outline">
                               <Printer size={16} /> Facture
                             </Link>
