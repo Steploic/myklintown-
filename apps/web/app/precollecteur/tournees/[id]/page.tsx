@@ -20,7 +20,9 @@ export default async function TourneePage({ params }: { params: Promise<{ id: st
   const { supabase, entreprise } = await requireEntreprise();
   const { data } = await supabase
     .from('tournees_precollecte')
-    .select('*, employes(nom), tricycles(nom), zones(nom)')
+    // `employes!employe_id` : le responsable de la tournée. Le lien est nommé pour
+    // rester sans ambiguïté quand une table d'équipe relie aussi tournées et employés.
+    .select('*, employes!employe_id(nom), tricycles(nom), zones(nom)')
     .eq('id', id)
     .eq('entreprise_id', entreprise.id)
     .maybeSingle();
