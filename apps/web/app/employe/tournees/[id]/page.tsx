@@ -9,6 +9,7 @@ import { SubmitButton } from '@/components/ui/action-form';
 import { TourneeRunner, type Passage } from '@/components/precollecteur/tournee-runner';
 import { PositionLive } from '@/components/employe/position-live';
 import { RafraichissementAuto } from '@/components/ui/rafraichissement-auto';
+import { paiementEnLigneDisponible } from '@/lib/paiement/service';
 import { requireEmploye } from '@/lib/employe/context';
 import { statutTourneeAction } from '@/lib/terrain-actions';
 import { row, rows } from '@/lib/server';
@@ -55,7 +56,7 @@ export default async function TourneeEmploye({
   const { data: cl } = ids.length
     ? await supabase
         .from('v_clients_statut')
-        .select('id, nom, code, quartier, adresse, statut_abonnement, lat, lng, montant_impaye')
+        .select('id, nom, code, quartier, adresse, statut_abonnement, lat, lng, montant_impaye, telephone')
         .in('id', ids)
     : { data: [] };
 
@@ -75,6 +76,12 @@ export default async function TourneeEmploye({
     .map((c) => ({ id: c.id, statut: c.statut, motif: c.motif, client: clients.get(c.client_id)! }));
   const totalAttente = [...enAttente.entries()].filter(([cid]) => clients.has(cid)).reduce((s, [, m]) => s + m, 0);
 
+  // Mobile Money sur le téléphone du ménage : précollecteur vérifié chez Notch Pay.
+  let enLigne = false;
+  if (paiementEnLigneDisponible()) {
+    const { data: e } = await supabase.from('entreprises').select('paiement_statut').eq('id', entreprise.id).maybeSingle();
+    enLigne = row<{ paiement_statut: string }>(e)?.paiement_statut === 'actif';
+  }
   const s = STATUT_TOURNEE[t.statut] ?? STATUT_TOURNEE.planifiee!;
   const modifiable = t.statut === 'planifiee' || t.statut === 'en_cours';
 
@@ -151,6 +158,7 @@ export default async function TourneeEmploye({
         espace="employe"
         scanAuDepart={scan === '1'}
         encaissement={modifiable}
+        paiementEnLigne={modifiable && enLigne}
       />
 
       <Volet

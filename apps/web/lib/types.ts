@@ -21,6 +21,9 @@ export interface Entreprise {
   siege: string | null;
   commune_id: string | null;
   statut: 'essai' | 'actif' | 'suspendu';
+  /** Paiement en ligne (compte connecté Notch Pay) : « actif » une fois la vérification faite. */
+  paiement_statut?: 'inactif' | 'en_verification' | 'actif' | 'refuse';
+  paiement_compte_id?: string | null;
   created_at: string;
 }
 

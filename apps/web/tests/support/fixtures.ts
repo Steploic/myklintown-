@@ -55,6 +55,18 @@ export function identifiants(): Identifiants {
 
 export const emailDe = (cle: string) => `mkt.test.${cle}.${identifiants().suffixe}@gmail.com`;
 
+/**
+ * Clé service (SUPABASE_SERVICE_ROLE_KEY) si elle figure dans .env.local :
+ * certains tests préparent ou nettoient ce qu'aucun compte ne peut écrire
+ * (paiement en ligne). Absente : ces tests sont ignorés, avec la consigne.
+ */
+export const CLE_SERVICE: string | undefined = ENV.SUPABASE_SERVICE_ROLE_KEY || undefined;
+
+export function clientServiceTest(): SupabaseClient {
+  if (!CLE_SERVICE) throw new Error('SUPABASE_SERVICE_ROLE_KEY absente de apps/web/.env.local');
+  return createClient(SUPABASE_URL, CLE_SERVICE, { auth: { persistSession: false, autoRefreshToken: false } });
+}
+
 export function clientAnonyme(): SupabaseClient {
   return createClient(SUPABASE_URL, SUPABASE_ANON, { auth: { persistSession: false, autoRefreshToken: false } });
 }
