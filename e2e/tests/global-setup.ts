@@ -62,6 +62,8 @@ export default async function globalSetup() {
   const S = await compte('souscripteur', 'citoyen');
   const acces = await compte('acces', 'citoyen');
   await compte('deconnexion', 'citoyen');
+  const ADM = await compte('admin', 'citoyen');
+  const adminPromu = ADM.role === 'admin';
   const M = await mairie();
 
   // Migration 20261004000006 (liste d'attente, accès Mairie) jouée ? Sinon
@@ -77,10 +79,13 @@ export default async function globalSetup() {
   genererVideoQr(CODE_SCAN, path.resolve(__dirname, '..', '.media', 'qr.y4m'));
   fs.writeFileSync(
     FICHIER_ETAT,
-    JSON.stringify({ precoA: A.entrepriseId, precoB: B.entrepriseId, clientScan: scan.id, clientLien: lien.id, mairiePromue: M.promue, mairieEmail: M.email, migration0006 }, null, 2),
+    JSON.stringify({ precoA: A.entrepriseId, precoB: B.entrepriseId, clientScan: scan.id, clientLien: lien.id, mairiePromue: M.promue, mairieEmail: M.email, migration0006, adminPromu, adminEmail: ADM.email }, null, 2),
   );
   if (!migration0006) {
     console.warn('\n⚠️  Tests « liste d’attente » et « accès Mairie » ignorés : exécuter supabase/migrations/20261004000006_retours_tests_equipe.sql\n');
+  }
+  if (!adminPromu) {
+    console.warn(`\n⚠️  Tests « Changer d’espace » (administrateur) ignorés : select public.promouvoir_utilisateur('${ADM.email}', 'admin');\n`);
   }
   if (!M.promue) {
     console.warn(`\n⚠️  Tests Mairie ignorés : select public.promouvoir_utilisateur('${M.email}', 'mairie');\n`);
