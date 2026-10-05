@@ -15,6 +15,7 @@ export const etat = () =>
     mairiePromue: boolean;
     mairieEmail: string;
     migration0006: boolean;
+    migration0007: boolean;
     adminPromu: boolean;
     adminEmail: string;
   };
