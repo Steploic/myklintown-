@@ -45,6 +45,7 @@ export interface Employe {
   telephone: string | null;
   fonction: string;
   actif: boolean;
+  user_id?: string | null;
 }
 
 export interface Tricycle {
@@ -108,6 +109,8 @@ export interface Paiement {
   methode: string;
   reference: string | null;
   encaisse_par: string | null;
+  /** Espèces reçues par un employé : « a_valider » jusqu'à la validation du gérant. */
+  statut?: 'valide' | 'a_valider' | 'rejete';
   created_at: string;
 }
 

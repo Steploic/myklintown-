@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Banknote, CalendarClock, CheckCircle2, FileText, Receipt, Wand2 } from 'lucide-react';
+import { Banknote, CalendarClock, Check, CheckCircle2, FileText, Hourglass, Receipt, Wand2, X } from 'lucide-react';
 import { cn } from '@myklintown/ui';
 import { PrecoShell } from '@/components/precollecteur/shell';
 import { EmptyState, Kpi, PageHeader } from '@/components/ui/blocks';
@@ -7,7 +7,7 @@ import { ActionForm, SubmitButton } from '@/components/ui/action-form';
 import { RelanceButtons } from '@/components/precollecteur/relance-buttons';
 import { PaiementForm } from '@/components/precollecteur/facture-bits';
 import { requireEntreprise } from '@/lib/precollecteur/context';
-import { genererFacturesAction } from '@/lib/precollecteur/actions';
+import { genererFacturesAction, validerPaiementAction } from '@/lib/precollecteur/actions';
 import { parametre, rows } from '@/lib/server';
 import {
   dateFr,
@@ -69,7 +69,7 @@ export default async function FacturationPage({
       .select('id, nom, telephone, plan_prix, couverture_fin, statut_abonnement, statut, nb_impayees')
       .eq('entreprise_id', entreprise.id)
       .eq('statut', 'actif'),
-    supabase.from('employes').select('id, nom').eq('entreprise_id', entreprise.id).eq('actif', true),
+    supabase.from('employes').select('id, nom, actif').eq('entreprise_id', entreprise.id),
     parametre(supabase, 'commission_taux', 0.1),
   ]);
 
@@ -77,11 +77,16 @@ export default async function FacturationPage({
   const paiements = rows<Paiement & { clients: { nom: string } | null; factures: { numero: string } | null }>(pa.data);
   const relances = rows<{ facture_id: string | null; client_id: string; canal: string; niveau: number; created_at: string }>(re.data);
   const clients = rows<Pick<ClientStatut, 'id' | 'nom' | 'telephone' | 'plan_prix' | 'couverture_fin' | 'statut_abonnement' | 'statut' | 'nb_impayees'>>(cl.data);
-  const employes = rows<{ id: string; nom: string }>(em.data);
+  const tousEmployes = rows<{ id: string; nom: string; actif: boolean }>(em.data);
+  const employes = tousEmployes.filter((e) => e.actif);
+  const nomEmploye = new Map(tousEmployes.map((e) => [e.id, e.nom]));
+  // Espèces reçues sur le terrain par un employé : à valider avant de compter.
+  const aValider = paiements.filter((p) => p.statut === 'a_valider');
+  const valides = paiements.filter((p) => (p.statut ?? 'valide') === 'valide');
 
   const factureIds = factures.map((f) => f.id);
   const { data: pf } = factureIds.length
-    ? await supabase.from('paiements_clients').select('facture_id, montant_fcfa').in('facture_id', factureIds)
+    ? await supabase.from('paiements_clients').select('facture_id, montant_fcfa').in('facture_id', factureIds).eq('statut', 'valide')
     : { data: [] };
   const deja = new Map<string, number>();
   for (const p of rows<{ facture_id: string; montant_fcfa: number }>(pf)) {
@@ -95,7 +100,7 @@ export default async function FacturationPage({
   const aEcheance = clients.filter(
     (c) => c.statut_abonnement === 'echeance_proche' || c.statut_abonnement === 'expire' || c.statut_abonnement === 'sans_facture',
   );
-  const encaisseMois = paiements.filter((p) => p.created_at.slice(0, 10) >= debutMois).reduce((s, p) => s + p.montant_fcfa, 0);
+  const encaisseMois = valides.filter((p) => p.created_at.slice(0, 10) >= debutMois).reduce((s, p) => s + p.montant_fcfa, 0);
   const derniereRelance = (fid: string) => relances.find((r) => r.facture_id === fid);
 
   return (
@@ -111,6 +116,42 @@ export default async function FacturationPage({
           </ActionForm>
         }
       />
+
+      {aValider.length > 0 && (
+        <section className="mb-6 rounded-2xl border border-terrain-relance/30 bg-terrain-relance/5 p-4 sm:p-5" aria-labelledby="especes-a-valider">
+          <h2 id="especes-a-valider" className="flex items-center gap-2 text-h2-sm font-semibold text-brand-ink">
+            <Hourglass size={18} className="text-terrain-relance" /> Espèces à valider ({aValider.length})
+          </h2>
+          <p className="mt-1 text-body-sm text-muted-foreground">
+            Reçues sur le terrain par votre équipe. Elles ne règlent la facture qu’une fois validées, quand vous avez l’argent en main.
+          </p>
+          <ul className="mt-3 space-y-2">
+            {aValider.map((p) => (
+              <li key={p.id} className="card-soft flex flex-wrap items-center justify-between gap-3 p-3.5">
+                <span className="min-w-0">
+                  <Link href={`/precollecteur/clients/${p.client_id}`} className="block truncate font-semibold text-brand-ink">{p.clients?.nom ?? '—'}</Link>
+                  <span className="block text-small text-muted-foreground">
+                    {dateHeureFr(p.created_at)} · reçu par {(p.encaisse_par && nomEmploye.get(p.encaisse_par)) || 'un employé'} · facture {p.factures?.numero ?? '—'}
+                  </span>
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="num font-semibold">{fcfa(p.montant_fcfa)}</span>
+                  <form action={validerPaiementAction}>
+                    <input type="hidden" name="paiement_id" value={p.id} />
+                    <input type="hidden" name="decision" value="rejeter" />
+                    <SubmitButton variant="outline" pendingLabel="…"><X size={16} /> Rejeter</SubmitButton>
+                  </form>
+                  <form action={validerPaiementAction}>
+                    <input type="hidden" name="paiement_id" value={p.id} />
+                    <input type="hidden" name="decision" value="valider" />
+                    <SubmitButton pendingLabel="…"><Check size={16} /> Valider</SubmitButton>
+                  </form>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi label="En retard" valeur={nombre(enRetard.length)} detail={fcfa(totalRetard)} ton="stop" icon={Receipt} />
@@ -296,7 +337,11 @@ export default async function FacturationPage({
                       {p.reference && <> · réf. {p.reference}</>}
                     </span>
                   </span>
-                  <span className="num shrink-0 font-semibold text-terrain-ok">{fcfa(p.montant_fcfa)}</span>
+                  <span className="flex shrink-0 flex-col items-end gap-1">
+                    <span className={`num font-semibold ${(p.statut ?? 'valide') === 'valide' ? 'text-terrain-ok' : 'text-muted-foreground line-through'}`}>{fcfa(p.montant_fcfa)}</span>
+                    {p.statut === 'a_valider' && <span className="chip-relance">À valider</span>}
+                    {p.statut === 'rejete' && <span className="chip-stop">Rejeté</span>}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -325,7 +370,11 @@ export default async function FacturationPage({
                         {METHODES_PAIEMENT[p.methode] ?? p.methode}
                         {p.reference && <span className="block text-small text-muted-foreground">réf. {p.reference}</span>}
                       </td>
-                      <td className="num text-right font-semibold text-terrain-ok">{fcfa(p.montant_fcfa)}</td>
+                      <td className="num text-right">
+                        <span className={`font-semibold ${(p.statut ?? 'valide') === 'valide' ? 'text-terrain-ok' : 'text-muted-foreground line-through'}`}>{fcfa(p.montant_fcfa)}</span>
+                        {p.statut === 'a_valider' && <span className="chip-relance ml-2">À valider</span>}
+                        {p.statut === 'rejete' && <span className="chip-stop ml-2">Rejeté</span>}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

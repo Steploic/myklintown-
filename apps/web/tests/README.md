@@ -47,6 +47,12 @@ select public.promouvoir_utilisateur('mkt.test.mairie.<suffixe>@gmail.com', 'mai
 sont ignorés, avec la consigne, tant que `supabase/migrations/20261004000006_retours_tests_equipe.sql`
 n'est pas exécutée. Les demandes de test sont déposées **en mer** et retirées en fin de test.
 
+**Espace employé** (`20261005000007_espace_employe.sql`) : le compte de test `mkt.test.employe.…`
+rejoint l'entreprise A par une vraie invitation, puis perd son accès en fin de parcours. La remise à
+zéro de l'entreprise A supprime ses fiches employé, ce qui libère le compte (déclencheur en base) :
+chaque exécution repart d'un compte ménage ordinaire. Tests ignorés, avec la consigne, tant que la
+migration n'est pas exécutée.
+
 **Nettoyage** : `supabase/NETTOYAGE_TESTS.sql` supprime tous les comptes `mkt.test.…` et leurs
 données (y compris la promotion Mairie, à refaire ensuite).
 

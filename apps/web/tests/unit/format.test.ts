@@ -186,3 +186,16 @@ describe('fetch borné des appels serveur à Supabase', () => {
     }
   });
 });
+
+describe('heures affichées à l’heure de Douala', () => {
+  it('même sur un serveur en UTC (Vercel)', async () => {
+    const { dateHeureFr, heureFr, dateFr } = await import('@/lib/format');
+    // 08:30 UTC = 09:30 à Douala (UTC+1, pas d'heure d'été).
+    expect(heureFr('2026-10-05T08:30:00Z')).toBe('09:30');
+    expect(dateHeureFr('2026-10-05T08:30:00Z')).toContain('09:30');
+    // 23:30 UTC le 4 = 00:30 le 5 à Douala : la date suit Douala.
+    expect(dateFr('2026-10-04T23:30:00Z', { day: 'numeric', month: 'long' })).toBe('5 octobre');
+    // Une date seule reste ce jour-là, quel que soit le fuseau.
+    expect(dateFr('2026-10-05', { day: 'numeric', month: 'long' })).toBe('5 octobre');
+  });
+});

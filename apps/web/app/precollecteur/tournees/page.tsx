@@ -13,13 +13,15 @@ export const metadata = { title: 'Tournées' };
 
 export default async function TourneesPage() {
   const { supabase, entreprise } = await requireEntreprise();
-  const [to, em, tr, za, co] = await Promise.all([
+  const [to, em, tr, za, co, eqp] = await Promise.all([
     supabase.from('tournees_precollecte').select('*').eq('entreprise_id', entreprise.id).order('date', { ascending: false }).order('created_at', { ascending: false }).limit(60),
     supabase.from('employes').select('*').eq('entreprise_id', entreprise.id).eq('actif', true).order('nom'),
     supabase.from('tricycles').select('*').eq('entreprise_id', entreprise.id).order('nom'),
     supabase.from('zone_affectations').select('zones(id, nom)').eq('entreprise_id', entreprise.id),
     supabase.from('collectes').select('tournee_id, statut').eq('entreprise_id', entreprise.id).not('tournee_id', 'is', null).limit(5000),
+    supabase.from('tournee_equipe').select('tournee_id, employe_id').eq('entreprise_id', entreprise.id),
   ]);
+  const equipes = rows<{ tournee_id: string; employe_id: string }>(eqp.data);
   const tournees = rows<Tournee>(to.data);
   const employes = rows<Employe>(em.data);
   const tricycles = rows<Tricycle>(tr.data);
@@ -60,15 +62,26 @@ export default async function TourneesPage() {
                 ))}
               </select>
             </div>
-            <div>
-              <label className="field-label" htmlFor="employe_id">Responsable</label>
-              <select id="employe_id" name="employe_id" className="field" defaultValue="">
-                <option value="">—</option>
-                {employes.map((e) => (
-                  <option key={e.id} value={e.id}>{e.nom}</option>
-                ))}
-              </select>
-            </div>
+            <fieldset>
+              <legend className="field-label">Équipe</legend>
+              {employes.length === 0 ? (
+                <p className="field-hint">Ajoutez vos employés dans « Flotte & équipe ».</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {employes.map((e) => (
+                    <label key={e.id} className="flex items-center gap-2 text-body-sm">
+                      <input type="checkbox" name="equipe" value={e.id} className="h-4 w-4 accent-brand-green" />
+                      {e.nom}
+                      {e.user_id && <span className="text-small text-muted-foreground">· a son compte</span>}
+                    </label>
+                  ))}
+                </div>
+              )}
+              <p className="field-hint">
+                Chauffeur, ramasseur… Ils voient la tournée dans leur espace employé et partagent scans et passages. Personne
+                de coché : l’équipage du tricycle choisi.
+              </p>
+            </fieldset>
             <SubmitButton className="w-full" pendingLabel="Planification…">
               <CalendarPlus size={16} /> Planifier
             </SubmitButton>
@@ -94,7 +107,7 @@ export default async function TourneesPage() {
                           {t.date === auj && <span className="chip-info ml-2">Aujourd’hui</span>}
                         </p>
                         <p className="truncate text-small text-muted-foreground">
-                          {[t.zone_id ? nomZ.get(t.zone_id) : 'Tous clients', t.employe_id && nomE.get(t.employe_id), t.tricycle_id && nomT.get(t.tricycle_id)].filter(Boolean).join(' · ')}
+                          {[t.zone_id ? nomZ.get(t.zone_id) : 'Tous clients', equipes.filter((q) => q.tournee_id === t.id).map((q) => nomE.get(q.employe_id)).filter(Boolean).join(', ') || (t.employe_id && nomE.get(t.employe_id)), t.tricycle_id && nomT.get(t.tricycle_id)].filter(Boolean).join(' · ')}
                         </p>
                       </div>
                       <div className="flex items-center gap-3">

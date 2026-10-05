@@ -6,6 +6,7 @@ import {
   CalendarClock,
   CheckCircle2,
   FlaskConical,
+  Hourglass,
   Inbox,
   Receipt,
   Route,
@@ -55,6 +56,7 @@ export default async function PrecollecteurDashboard({
       .from('paiements_clients')
       .select('montant_fcfa, created_at')
       .eq('entreprise_id', entreprise.id)
+      .eq('statut', 'valide')
       .gte('created_at', il12sem),
     supabase.from('employes').select('id, nom').eq('entreprise_id', entreprise.id),
     supabase.from('tricycles').select('id, nom, statut').eq('entreprise_id', entreprise.id),
@@ -66,6 +68,11 @@ export default async function PrecollecteurDashboard({
     parametre(supabase, 'commission_taux', 0.1),
   ]);
   const { data: ouvertes } = await rpc(supabase, 'demandes_ouvertes');
+  const { count: nbEspecesAValider } = await supabase
+    .from('paiements_clients')
+    .select('id', { count: 'exact', head: true })
+    .eq('entreprise_id', entreprise.id)
+    .eq('statut', 'a_valider');
   const nbDemandesOuvertes = rows(ouvertes).length;
 
   const clients = rows<{
@@ -199,6 +206,18 @@ export default async function PrecollecteurDashboard({
             </SubmitButton>
           </ActionForm>
         </div>
+      )}
+
+      {!!nbEspecesAValider && (
+        <Link
+          href="/precollecteur/facturation"
+          className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-terrain-relance/30 bg-terrain-relance/5 px-4 py-3 text-body-sm font-semibold text-terrain-relance"
+        >
+          <span className="flex items-center gap-2">
+            <Hourglass size={18} /> {nbEspecesAValider} paiement{nbEspecesAValider > 1 ? 's' : ''} en espèces reçu{nbEspecesAValider > 1 ? 's' : ''} par votre équipe à valider
+          </span>
+          <span aria-hidden>→</span>
+        </Link>
       )}
 
       {nbDemandesOuvertes > 0 && (

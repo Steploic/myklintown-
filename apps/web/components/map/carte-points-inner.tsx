@@ -6,8 +6,8 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { GeoPolygon } from '@/lib/types';
 
-export type Ton = 'ok' | 'relance' | 'stop' | 'neutre' | 'info';
-export type Picto = 'maison' | 'collecte' | 'a_collecter' | 'non_collecte' | 'demande';
+export type Ton = 'ok' | 'relance' | 'stop' | 'neutre' | 'info' | 'direct';
+export type Picto = 'maison' | 'collecte' | 'a_collecter' | 'non_collecte' | 'demande' | 'tricycle';
 
 export interface PointCarte {
   id: string;
@@ -33,6 +33,7 @@ const COULEURS: Record<Ton, string> = {
   stop: '#C8372D',
   neutre: '#5B6673',
   info: '#2B6CB0',
+  direct: '#2E7F8E',
 };
 
 // Pictogrammes (tracés type Lucide) dessinés en blanc dans le repère.
@@ -42,6 +43,7 @@ const SVG: Record<Picto, string> = {
   a_collecter: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="#fff" stroke-width="2.2" stroke-linejoin="round"/>',
   non_collecte: '<path d="M6 6l12 12M18 6L6 18" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>',
   demande: '<path d="M12 7v6M12 17h.01" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>',
+  tricycle: '<circle cx="6" cy="16" r="3" fill="none" stroke="#fff" stroke-width="2"/><circle cx="18" cy="16" r="3" fill="none" stroke="#fff" stroke-width="2"/><path d="M6 16l4-7h5l3 7M8 6h3" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
 };
 
 const cacheIcones = new Map<string, L.DivIcon>();

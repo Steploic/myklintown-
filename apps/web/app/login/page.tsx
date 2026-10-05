@@ -31,6 +31,12 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
               Créer un compte
             </Link>
           </p>
+          <p className="mt-2 text-center text-body-sm text-muted-foreground">
+            Employé d’un précollecteur ?{' '}
+            <Link href="/rejoindre" className="font-semibold text-brand-blue hover:underline">
+              Rejoindre mon équipe
+            </Link>
+          </p>
         </div>
       </div>
     </div>

@@ -34,7 +34,7 @@ export default async function MesFacturesPage() {
         <ul className="space-y-3">
           {factures.map((f) => {
             const pf = paiements.filter((p) => p.facture_id === f.id);
-            const recu = pf.reduce((s, p) => s + p.montant_fcfa, 0);
+            const recu = pf.filter((p) => (p.statut ?? 'valide') === 'valide').reduce((s, p) => s + p.montant_fcfa, 0);
             return (
               <li key={f.id} className="card-soft p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -58,7 +58,11 @@ export default async function MesFacturesPage() {
                     {pf.map((p) => (
                       <li key={p.id} className="flex justify-between gap-2">
                         <span>{dateHeureFr(p.created_at)} · {METHODES_PAIEMENT[p.methode] ?? p.methode}</span>
-                        <span className="num font-semibold text-terrain-ok">{fcfa(p.montant_fcfa)}</span>
+                        <span className="num font-semibold text-terrain-ok">
+                          {fcfa(p.montant_fcfa)}
+                          {p.statut === 'a_valider' && <span className="chip-relance ml-1">En attente de validation</span>}
+                          {p.statut === 'rejete' && <span className="chip-stop ml-1">Non validé</span>}
+                        </span>
                       </li>
                     ))}
                   </ul>

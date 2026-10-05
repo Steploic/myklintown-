@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 import { getSupabase, parametre, row, rows, rpc, type Supa } from '@/lib/server';
 import { requireEntreprise } from './context';
 import { ajouterJours, ajouterMois, dateFr, estErreurReseau, isoJour, MESSAGE_RESEAU } from '@/lib/format';
-import { cheminInterne, extraireCodeClient, normaliserNom, periodeFacture } from '@/lib/metier';
+import { cheminInterne, normaliserNom, periodeFacture } from '@/lib/metier';
 import type { ActionState, ClientStatut, Plan } from '@/lib/types';
 
 const txt = (fd: FormData, k: string) => {
@@ -21,6 +21,7 @@ const num = (fd: FormData, k: string) => {
 
 function rafraichir() {
   revalidatePath('/precollecteur', 'layout');
+  revalidatePath('/employe', 'layout');
 }
 
 function erreurLisible(message: string | undefined): string {
@@ -220,6 +221,16 @@ export async function enregistrerPaiementAction(_p: ActionState, fd: FormData): 
   return { ok: 'Paiement enregistré. Le statut de la facture est mis à jour automatiquement.' };
 }
 
+/** Espèces reçues par un employé : le gérant les valide (la facture se règle) ou les rejette. */
+export async function validerPaiementAction(fd: FormData) {
+  const { supabase } = await requireEntreprise();
+  await rpc(supabase, 'valider_paiement', {
+    p_paiement: String(fd.get('paiement_id')),
+    p_valider: fd.get('decision') === 'valider',
+  });
+  rafraichir();
+}
+
 export async function enregistrerRelanceAction(input: {
   factureId: string | null;
   clientId: string;
@@ -363,6 +374,25 @@ export async function basculerEmployeAction(fd: FormData) {
   rafraichir();
 }
 
+/**
+ * Invitation d'un employé à créer son compte (espace employé). Un nouveau code
+ * remplace le précédent ; il est valable 7 jours, une seule fois.
+ */
+export async function inviterEmployeAction(fd: FormData) {
+  const { supabase } = await requireEntreprise();
+  const employeId = String(fd.get('employe_id'));
+  const { error } = await rpc(supabase, 'creer_invitation_employe', { p_employe: employeId });
+  rafraichir();
+  redirect(`/precollecteur/flotte?${error ? `erreur=${encodeURIComponent(erreurLisible(error.message))}` : `invite=${employeId}`}#employe-${employeId}`);
+}
+
+/** Départ d'un employé : son compte perd l'accès, sa fiche et son historique restent. */
+export async function retirerAccesEmployeAction(fd: FormData) {
+  const { supabase } = await requireEntreprise();
+  await rpc(supabase, 'retirer_acces_employe', { p_employe: String(fd.get('employe_id')) });
+  rafraichir();
+}
+
 export async function creerTricycleAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   const { supabase, entreprise } = await requireEntreprise();
   const nom = txt(fd, 'nom');
@@ -425,7 +455,14 @@ export async function planifierTourneeAction(_p: ActionState, fd: FormData): Pro
   const { supabase, entreprise } = await requireEntreprise();
   const date = txt(fd, 'date') ?? isoJour();
   const zoneId = txt(fd, 'zone_id');
-  const employeId = txt(fd, 'employe_id');
+  const tricycleId = txt(fd, 'tricycle_id');
+  // Équipe (chauffeur, ramasseur…) définie à l'avance ; à défaut, l'équipage du tricycle.
+  let equipe = fd.getAll('equipe').map(String).filter(Boolean);
+  if (equipe.length === 0 && tricycleId) {
+    const { data: eq } = await supabase.from('tricycle_employes').select('employe_id').eq('tricycle_id', tricycleId);
+    equipe = rows<{ employe_id: string }>(eq).map((e) => e.employe_id);
+  }
+  const employeId = equipe[0] ?? null;
 
   const { data: t, error } = await supabase
     .from('tournees_precollecte')
@@ -433,7 +470,7 @@ export async function planifierTourneeAction(_p: ActionState, fd: FormData): Pro
       entreprise_id: entreprise.id,
       date,
       zone_id: zoneId,
-      tricycle_id: txt(fd, 'tricycle_id'),
+      tricycle_id: tricycleId,
       employe_id: employeId,
       notes: txt(fd, 'notes'),
     })
@@ -441,6 +478,12 @@ export async function planifierTourneeAction(_p: ActionState, fd: FormData): Pro
     .single();
   if (error) return { error: erreurLisible(error.message) };
   const tourneeId = row<{ id: string }>(t)!.id;
+  if (equipe.length) {
+    const { error: e2 } = await supabase
+      .from('tournee_equipe')
+      .insert(equipe.map((id) => ({ tournee_id: tourneeId, employe_id: id, entreprise_id: entreprise.id })));
+    if (e2) return { error: erreurLisible(e2.message) };
+  }
 
   // Les passages prévus = tous les clients actifs de la zone (ou de l'entreprise).
   let q = supabase.from('clients').select('id').eq('entreprise_id', entreprise.id).eq('statut', 'actif');
@@ -460,108 +503,6 @@ export async function planifierTourneeAction(_p: ActionState, fd: FormData): Pro
   }
   rafraichir();
   redirect(`/precollecteur/tournees/${tourneeId}`);
-}
-
-export async function statutTourneeAction(fd: FormData) {
-  const { supabase, entreprise } = await requireEntreprise();
-  const id = String(fd.get('tournee_id'));
-  const statut = String(fd.get('statut'));
-  const maj: Record<string, unknown> = { statut };
-  if (statut === 'en_cours') {
-    // Démarrage, ou réouverture d'une tournée terminée (on efface l'heure de retour).
-    maj.fin_at = null;
-    const { data: t } = await supabase.from('tournees_precollecte').select('debut_at').eq('id', id).single();
-    if (!(t as { debut_at: string | null } | null)?.debut_at) maj.debut_at = new Date().toISOString();
-  }
-  if (statut === 'terminee') {
-    maj.fin_at = new Date().toISOString();
-    // Fin de tournée : ce qui n'a pas été visité est tracé comme non réalisé.
-    await supabase
-      .from('collectes')
-      .update({ statut: 'non_realisee', motif: 'Non visité en fin de tournée' })
-      .eq('tournee_id', id)
-      .eq('statut', 'prevue');
-  }
-  await supabase.from('tournees_precollecte').update(maj).eq('id', id).eq('entreprise_id', entreprise.id);
-  rafraichir();
-}
-
-export async function marquerCollecteAction(input: {
-  collecteId: string;
-  statut: 'realisee' | 'non_realisee' | 'prevue';
-  motif?: string | null;
-}): Promise<ActionState> {
-  const { supabase, entreprise } = await requireEntreprise();
-  const { error } = await supabase
-    .from('collectes')
-    .update({
-      statut: input.statut,
-      motif: input.statut === 'non_realisee' ? input.motif ?? 'Autre' : null,
-      realisee_at: input.statut === 'prevue' ? null : new Date().toISOString(),
-    })
-    .eq('id', input.collecteId)
-    .eq('entreprise_id', entreprise.id);
-  if (error) return { error: erreurLisible(error.message) };
-  revalidatePath('/precollecteur', 'layout');
-  return { ok: 'Enregistré.' };
-}
-
-export interface ResultatScan {
-  error?: string;
-  client?: { nom: string; code: string; statut_abonnement: string; quartier: string | null };
-  horsPlanning?: boolean;
-  dejaFait?: boolean;
-}
-
-/** Scan du QR d'un client pendant la tournée : trace le passage en base, immédiatement. */
-export async function scannerClientAction(tourneeId: string, codeLu: string): Promise<ResultatScan> {
-  const { supabase, entreprise } = await requireEntreprise();
-  const code = extraireCodeClient(codeLu);
-
-  const { data: c } = await supabase
-    .from('v_clients_statut')
-    .select('id, nom, code, statut_abonnement, quartier')
-    .eq('entreprise_id', entreprise.id)
-    .eq('code', code)
-    .maybeSingle();
-  const client = row<{ id: string; nom: string; code: string; statut_abonnement: string; quartier: string | null }>(c);
-  if (!client) return { error: `Code ${code} inconnu : ce ménage n’est pas un de vos clients.` };
-
-  const { data: t } = await supabase
-    .from('tournees_precollecte')
-    .select('date, employe_id')
-    .eq('id', tourneeId)
-    .single();
-  const tournee = row<{ date: string; employe_id: string | null }>(t);
-
-  const { data: co } = await supabase
-    .from('collectes')
-    .select('id, statut')
-    .eq('tournee_id', tourneeId)
-    .eq('client_id', client.id)
-    .maybeSingle();
-  const collecte = row<{ id: string; statut: string }>(co);
-  const maintenant = new Date().toISOString();
-
-  if (collecte) {
-    if (collecte.statut === 'realisee') return { client, dejaFait: true };
-    await supabase
-      .from('collectes')
-      .update({ statut: 'realisee', motif: null, realisee_at: maintenant })
-      .eq('id', collecte.id);
-  } else {
-    await supabase.from('collectes').insert({
-      entreprise_id: entreprise.id,
-      tournee_id: tourneeId,
-      client_id: client.id,
-      date_prevue: tournee?.date ?? isoJour(),
-      employe_id: tournee?.employe_id ?? null,
-      statut: 'realisee',
-      realisee_at: maintenant,
-    });
-  }
-  revalidatePath(`/precollecteur/tournees/${tourneeId}`);
-  return { client, horsPlanning: !collecte };
 }
 
 // =============================================================================
@@ -743,6 +684,10 @@ export async function chargerDemoAction(_p: ActionState, _fd: FormData): Promise
       .single();
     const tid = row<{ id: string }>(t)?.id;
     if (!tid) continue;
+    // Équipe de démonstration : chauffeur et ramasseur du tricycle.
+    await supabase.from('tournee_equipe').insert(
+      employes.slice(0, 2).map((e) => ({ tournee_id: tid, employe_id: e.id, entreprise_id: entreprise.id })),
+    );
     await supabase.from('collectes').insert(
       clients.slice(0, 17).map((c, i) => {
         const rate = (i + j) % 9 === 0;

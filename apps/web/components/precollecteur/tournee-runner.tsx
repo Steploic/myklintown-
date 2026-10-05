@@ -3,11 +3,12 @@
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Check, Loader2, MapPin, QrCode, RotateCcw, ShieldAlert, ShieldCheck, TriangleAlert, X } from 'lucide-react';
+import { Banknote, Check, Loader2, MapPin, QrCode, RotateCcw, ShieldAlert, ShieldCheck, TriangleAlert, X } from 'lucide-react';
 import { cn } from '@myklintown/ui';
 import { QrScanner } from '@/components/qr-scanner';
-import { marquerCollecteAction, scannerClientAction, type ResultatScan } from '@/lib/precollecteur/actions';
-import { MOTIFS_NON_REALISEE, statutAbonnement } from '@/lib/format';
+import { encaisserEspecesAction, marquerCollecteAction, scannerClientAction, type ResultatScan } from '@/lib/terrain-actions';
+import { fcfa, MOTIFS_NON_REALISEE, statutAbonnement } from '@/lib/format';
+import { ActionForm, SubmitButton } from '@/components/ui/action-form';
 
 export interface Passage {
   id: string;
@@ -22,6 +23,8 @@ export interface Passage {
     statut_abonnement: string;
     lat: number | null;
     lng: number | null;
+    /** Reste dû (paiements validés déduits) : propose l'encaissement en espèces. */
+    montant_impaye?: number;
   };
 }
 
@@ -32,7 +35,24 @@ const TERRAIN = {
   neutre: { classe: 'bg-brand-ink', icone: ShieldCheck, consigne: 'À vérifier' },
 } as const;
 
-export function TourneeRunner({ tourneeId, passages, modifiable }: { tourneeId: string; passages: Passage[]; modifiable: boolean }) {
+export function TourneeRunner({
+  tourneeId,
+  passages,
+  modifiable,
+  espace = 'precollecteur',
+  scanAuDepart = false,
+  encaissement = false,
+}: {
+  tourneeId: string;
+  passages: Passage[];
+  modifiable: boolean;
+  /** Espace qui affiche la tournée : liens vers la fiche client et la déclaration d'incident. */
+  espace?: 'precollecteur' | 'employe';
+  /** Ouvre directement la caméra (raccourci « Scanner » de l'employé). */
+  scanAuDepart?: boolean;
+  /** Bouton « Encaisser » sur les foyers qui doivent de l'argent. */
+  encaissement?: boolean;
+}) {
   const router = useRouter();
   const [etat, setEtat] = useState(() => new Map(passages.map((p) => [p.id, { statut: p.statut, motif: p.motif }])));
   // Le serveur fait foi : quand il renvoie de nouvelles données (fin de tournée,
@@ -44,7 +64,8 @@ export function TourneeRunner({ tourneeId, passages, modifiable }: { tourneeId: 
   }, [empreinte]);
   const [enCours, setEnCours] = useState<string | null>(null);
   const [motifPour, setMotifPour] = useState<string | null>(null);
-  const [scan, setScan] = useState(false);
+  const [scan, setScan] = useState(modifiable && scanAuDepart);
+  const [encaissePour, setEncaissePour] = useState<string | null>(null);
   const [resultat, setResultat] = useState<ResultatScan | null>(null);
   const [, startTransition] = useTransition();
 
@@ -148,7 +169,11 @@ export function TourneeRunner({ tourneeId, passages, modifiable }: { tourneeId: 
                 <span className={cn('w-1.5 shrink-0', bande)} aria-hidden />
                 <div className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-3 p-3.5">
                   <div className="min-w-0">
-                    <Link href={`/precollecteur/clients/${p.client.id}`} className="block truncate font-semibold text-brand-ink">{p.client.nom}</Link>
+                    {espace === 'precollecteur' ? (
+                      <Link href={`/precollecteur/clients/${p.client.id}`} className="block truncate font-semibold text-brand-ink">{p.client.nom}</Link>
+                    ) : (
+                      <p className="truncate font-semibold text-brand-ink">{p.client.nom}</p>
+                    )}
                     <p className="truncate text-small text-muted-foreground">
                       {[p.client.quartier, p.client.adresse].filter(Boolean).join(' · ') || p.client.code}
                     </p>
@@ -156,6 +181,15 @@ export function TourneeRunner({ tourneeId, passages, modifiable }: { tourneeId: 
                       <span className={s.chip}>{s.label}</span>
                       {e.statut === 'realisee' && <span className="chip-ok"><Check size={12} /> Collecté</span>}
                       {e.statut === 'non_realisee' && <span className="chip-stop">Non fait{e.motif ? ` · ${e.motif}` : ''}</span>}
+                      {encaissement && Number(p.client.montant_impaye) > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setEncaissePour(encaissePour === p.id ? null : p.id)}
+                          className="chip-relance gap-1 hover:opacity-80"
+                        >
+                          <Banknote size={12} /> Encaisser · {fcfa(p.client.montant_impaye!)} dus
+                        </button>
+                      )}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -206,6 +240,25 @@ export function TourneeRunner({ tourneeId, passages, modifiable }: { tourneeId: 
                   </div>
                 </div>
               </div>
+              {encaissePour === p.id && (
+                <ActionForm action={encaisserEspecesAction} className="flex flex-wrap items-end gap-2 border-t border-border bg-muted/40 p-3">
+                  <input type="hidden" name="client_id" value={p.client.id} />
+                  <div className="min-w-[9rem] flex-1">
+                    <label className="field-label" htmlFor={`montant-${p.id}`}>Espèces reçues (FCFA)</label>
+                    <input
+                      id={`montant-${p.id}`}
+                      name="montant"
+                      type="number"
+                      inputMode="numeric"
+                      min={1}
+                      defaultValue={p.client.montant_impaye}
+                      className="field"
+                      required
+                    />
+                  </div>
+                  <SubmitButton pendingLabel="Enregistrement…"><Banknote size={16} /> Enregistrer</SubmitButton>
+                </ActionForm>
+              )}
               {motifPour === p.id && (
                 <div className="flex flex-wrap gap-2 border-t border-border bg-muted/40 p-3">
                   <span className="w-full text-small font-semibold text-muted-foreground">Pourquoi pas collecté ?</span>
@@ -215,7 +268,7 @@ export function TourneeRunner({ tourneeId, passages, modifiable }: { tourneeId: 
                     </button>
                   ))}
                   <Link
-                    href={`/precollecteur/incidents/nouveau?collecte=${p.id}&client=${p.client.id}&tournee=${tourneeId}`}
+                    href={`/${espace}/incidents/nouveau?collecte=${p.id}&client=${p.client.id}&tournee=${tourneeId}`}
                     className="rounded-full bg-brand-ink px-3 py-1.5 text-body-sm font-semibold text-white"
                   >
                     Documenter un incident (photo / vidéo)

@@ -15,10 +15,22 @@ export function pct(part: number, total: number): string {
   return `${Math.round((part / total) * 100)} %`;
 }
 
+/**
+ * Fuseau de l'application. Les serveurs (Vercel) sont en UTC : sans fuseau
+ * explicite, une heure calculée côté serveur s'affichait avec une heure de
+ * retard sur Douala.
+ */
+export const FUSEAU = 'Africa/Douala';
+
 export function dateFr(d: string | Date | null | undefined, opts?: Intl.DateTimeFormatOptions): string {
   if (!d) return '—';
-  const date = typeof d === 'string' ? new Date(d.length === 10 ? d + 'T12:00:00' : d) : d;
-  return date.toLocaleDateString('fr-FR', opts ?? { day: 'numeric', month: 'short', year: 'numeric' });
+  // Une date seule (AAAA-MM-JJ) est un jour du calendrier, pas un instant : pas de fuseau.
+  const jourSeul = typeof d === 'string' && d.length === 10;
+  const date = typeof d === 'string' ? new Date(jourSeul ? d + 'T12:00:00' : d) : d;
+  return date.toLocaleDateString('fr-FR', {
+    ...(opts ?? { day: 'numeric', month: 'short', year: 'numeric' }),
+    ...(jourSeul ? {} : { timeZone: FUSEAU }),
+  });
 }
 
 export function dateHeureFr(d: string | Date | null | undefined): string {
@@ -29,7 +41,15 @@ export function dateHeureFr(d: string | Date | null | undefined): string {
     month: 'short',
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: FUSEAU,
   });
+}
+
+/** « 14:05 », heure de Douala. */
+export function heureFr(d: string | Date | null | undefined): string {
+  if (!d) return '—';
+  const date = typeof d === 'string' ? new Date(d) : d;
+  return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: FUSEAU });
 }
 
 /** AAAA-MM-JJ en heure locale (le serveur Vercel est en UTC, Yaoundé en UTC+1 : l'écart ne change pas la date en journée). */

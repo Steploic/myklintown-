@@ -78,6 +78,10 @@ export function SignupForm({ defaut }: { defaut: 'precollecteur' | 'citoyen' }) 
         <Link href="/acces-mairie" className="font-semibold text-brand-blue hover:underline">
           Demandez votre accès
         </Link>
+        . Employé d’un précollecteur ?{' '}
+        <Link href="/rejoindre" className="font-semibold text-brand-blue hover:underline">
+          Rejoignez votre équipe
+        </Link>
         .
       </p>
     </form>
