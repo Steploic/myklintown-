@@ -21,6 +21,9 @@ const ENTETES_SECURITE = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Les tests navigateur construisent l'appli branchée sur la base de TEST dans
+  // un dossier à part : le build habituel (.next) n'est jamais écrasé.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
   // Ne pas annoncer « Next.js » dans chaque réponse.
   poweredByHeader: false,
   // Le lint ne doit pas bloquer le déploiement (Vercel installe sans build scripts).

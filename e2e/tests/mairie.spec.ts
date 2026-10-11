@@ -36,8 +36,9 @@ test('dessiner une zone, vérifier, enregistrer, affecter, supprimer', async ({ 
   await carte.click({ position: { x: 300, y: 320 } });
   await page.getByLabel('Nom').fill('Zone test UI');
   await page.getByRole('button', { name: 'Vérifier les chevauchements' }).click();
-  await expect(page.getByText(/Aucun chevauchement|Chevauche/)).toBeVisible();
-  if (await page.getByText('Chevauche').isVisible()) await page.getByLabel('Chevauchement autorisé').check();
+  // « Aucun chevauchement. » ou « Chevauche : » (et non « chevauchements » du bouton ou du sous-titre).
+  await expect(page.getByText(/Aucun chevauchement\.|Chevauche :/)).toBeVisible();
+  if (await page.getByText('Chevauche :', { exact: true }).isVisible()) await page.getByLabel('Chevauchement autorisé').check();
   await page.getByRole('button', { name: 'Enregistrer' }).click();
   await expect(page.getByText('Zone créée.')).toBeVisible();
 

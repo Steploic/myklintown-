@@ -204,7 +204,7 @@ test.describe('nouveau ménage : souscription en ligne', () => {
       await ctx.close();
 
       await page.goto('/citoyen');
-      await expect(page.getByText(/première période à régler|À régler/)).toBeVisible();
+      await expect(page.getByText(/première période à régler|À régler/).first()).toBeVisible();
     } finally {
       await A.sb.from('clients').delete().eq('entreprise_id', etat().precoA).eq('nom', 'Test Souscripteur');
       await M.sb.from('zones').delete().eq('id', z.data!.id);
