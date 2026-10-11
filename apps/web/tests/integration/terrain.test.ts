@@ -102,3 +102,45 @@ describe('incidents et preuves', () => {
     expect((await A.sb.from('incidents_precollecte').update({ statut: 'oublié' }).eq('id', i.data!.id)).error).toBeTruthy();
   });
 });
+
+// Gestes faits hors ligne, envoyés plus tard (migration 20261012000010) : la
+// base garde l'heure du terrain si elle est plausible, et note à part l'heure
+// de réception. Ignoré tant que la migration n'est pas jouée sur la base.
+describe('tournée hors ligne : l’heure du terrain', () => {
+  const ilYA = (heures: number) => new Date(Date.now() - heures * 3_600_000).toISOString();
+
+  it('pointé il y a 2 h, envoyé maintenant : l’heure du geste est gardée', async ({ skip }) => {
+    const [mensuel] = await plans(A.sb);
+    const c = await A.sb.from('clients').insert({ entreprise_id: A.entrepriseId, nom: 'Terrain hors ligne', plan_id: mensuel!.id }).select('id, code').single();
+    const t = await A.sb.from('tournees_precollecte').insert({ entreprise_id: A.entrepriseId }).select('id').single();
+    const co = await A.sb.from('collectes').insert({ entreprise_id: A.entrepriseId, tournee_id: t.data!.id, client_id: c.data!.id }).select('id').single();
+    const r = await A.sb.rpc('pointer_passage', { p_collecte: co.data!.id, p_statut: 'realisee', p_motif: null, p_horodatage: ilYA(2) });
+    if (r.error?.code === 'PGRST202') skip();
+    expect(r.error).toBeNull();
+    const { data } = await A.sb.from('collectes').select('realisee_at, enregistre_at').eq('id', co.data!.id).single();
+    const age = (Date.now() - new Date(data!.realisee_at as string).getTime()) / 1000;
+    expect(Math.abs(age - 7200)).toBeLessThan(180);
+    expect(Math.abs(Date.now() - new Date(data!.enregistre_at as string).getTime()) / 1000).toBeLessThan(180);
+  });
+
+  it('une heure invraisemblable (3 jours avant, ou demain) est remplacée par celle du serveur', async ({ skip }) => {
+    const [mensuel] = await plans(A.sb);
+    const t = await A.sb.from('tournees_precollecte').insert({ entreprise_id: A.entrepriseId }).select('id').single();
+    for (const horodatage of [ilYA(72), ilYA(-24)]) {
+      const c = await A.sb.from('clients').insert({ entreprise_id: A.entrepriseId, nom: 'Terrain antidaté', plan_id: mensuel!.id }).select('code').single();
+      const r = await A.sb.rpc('scanner_passage', { p_tournee: t.data!.id, p_code: c.data!.code, p_horodatage: horodatage });
+      if (r.error?.code === 'PGRST202') skip();
+      expect(r.error).toBeNull();
+      const { data } = await A.sb.from('collectes').select('realisee_at, clients!inner(code)').eq('tournee_id', t.data!.id).eq('clients.code', c.data!.code).single();
+      expect(Math.abs(Date.now() - new Date(data!.realisee_at as string).getTime()) / 1000).toBeLessThan(180);
+    }
+  });
+
+  it('l’ancien appel, sans heure, fonctionne toujours', async () => {
+    const [mensuel] = await plans(A.sb);
+    const c = await A.sb.from('clients').insert({ entreprise_id: A.entrepriseId, nom: 'Terrain sans heure', plan_id: mensuel!.id }).select('code').single();
+    const t = await A.sb.from('tournees_precollecte').insert({ entreprise_id: A.entrepriseId }).select('id').single();
+    const r = await A.sb.rpc('scanner_passage', { p_tournee: t.data!.id, p_code: c.data!.code });
+    expect(r.error).toBeNull();
+  });
+});

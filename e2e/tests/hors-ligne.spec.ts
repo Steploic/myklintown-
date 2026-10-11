@@ -3,9 +3,17 @@ import { expect, session, test } from './base';
 /**
  * Tournée sans réseau : le navigateur est VRAIMENT coupé (setOffline), comme
  * un téléphone qui perd le signal au milieu d'un quartier.
+ *
+ * « Foyer Lien » n'est volontairement pas touché : c'est le foyer du test
+ * ménage, qui compte ses passages à confirmer.
  */
 test.describe('tournée hors ligne', () => {
-  test.use({ storageState: session('precoA') });
+  test.use({
+    storageState: session('precoA'),
+    // Coupé du réseau, le navigateur le signale dans la console : ressources
+    // injoignables, et Next.js qui ne peut plus précharger les pages du menu.
+    erreursAttendues: /ERR_INTERNET_DISCONNECTED|Failed to fetch RSC payload/,
+  });
 
   test('pointer et scanner sans réseau, tout part au retour du réseau', async ({ page, context }) => {
     await page.goto('/precollecteur/tournees');
@@ -19,11 +27,6 @@ test.describe('tournée hors ligne', () => {
     // --- Le signal tombe -----------------------------------------------------
     await context.setOffline(true);
     await expect(etat).toContainText('Hors ligne');
-
-    const lien = page.locator('li', { hasText: 'Foyer Lien' });
-    await lien.getByRole('button', { name: 'Collecté', exact: true }).click();
-    await expect(lien.getByText('Collecté', { exact: true })).toBeVisible();
-    await expect(lien.getByText('En attente d’envoi')).toBeVisible();
 
     const retard = page.locator('li', { hasText: 'Famille Retard' });
     await retard.getByRole('button', { name: 'Non collecté' }).click();
@@ -39,29 +42,30 @@ test.describe('tournée hors ligne', () => {
     await expect(bandeau).toContainText('Servir');
     await expect(bandeau).toContainText('hors ligne : passage gardé');
     await page.getByRole('button', { name: 'Fermer le scan' }).click();
-    await expect(etat).toContainText('3 gestes en attente d’envoi');
+    const scan = page.locator('li', { hasText: 'Famille Scan' });
+    await expect(scan.getByText('Collecté', { exact: true })).toBeVisible();
+    await expect(scan.getByText('En attente d’envoi')).toBeVisible();
+    await expect(etat).toContainText('2 gestes en attente d’envoi');
 
     // Terminer maintenant compterait ces foyers « non visités » : refusé, expliqué.
     await page.getByRole('button', { name: 'Terminer la tournée' }).click();
     await expect(page.getByRole('alert').filter({ hasText: 'attendent encore d’être envoyés' })).toBeVisible();
     await expect(page.getByText('En cours').first()).toBeVisible();
 
-    // Le téléphone est rechargé hors ligne… impossible sans réseau ; mais la file,
-    // elle, est sur le téléphone : on vérifie qu'elle y est bien écrite.
+    // La file est écrite sur le téléphone (elle survivrait à un rechargement).
     const enAttente = await page.evaluate(() => JSON.parse(localStorage.getItem('mkt:file-terrain:v1') ?? '[]').length);
-    expect(enAttente).toBe(3);
+    expect(enAttente).toBe(2);
 
     // --- Le réseau revient : tout part tout seul ------------------------------
     await context.setOffline(false);
     await expect(etat).toBeHidden({ timeout: 60_000 });
     await expect(page.locator('li').getByText('En attente d’envoi')).toHaveCount(0);
 
-    // C'est bien en base : un rechargement retrouve les trois gestes.
+    // C'est bien en base : un rechargement retrouve les deux gestes.
     await page.goto(url);
-    await expect(page.getByText(/2 faits/)).toBeVisible();
+    await expect(page.getByText(/1 faits/)).toBeVisible();
     await expect(page.getByText(/1 non faits/)).toBeVisible();
-    await page.getByRole('button', { name: 'Terminer la tournée' }).click();
-    await expect(page.getByText('Terminée').first()).toBeVisible();
+    await expect(page.locator('li', { hasText: 'Famille Retard' }).getByText('Non fait · Client absent')).toBeVisible();
   });
 
   test('sans réseau, l’encaissement et le démarrage le disent au lieu de planter', async ({ page, context }) => {
