@@ -3,10 +3,11 @@
 import { useEffect, useState } from 'react';
 import { MapPin, MapPinOff } from 'lucide-react';
 import { envoyerPositionAction } from '@/lib/terrain-actions';
+import { estPanneReseau } from '@/lib/format';
 
 const INTERVALLE_MS = 30_000;
 
-type Etat = 'attente' | 'ok' | 'bloque' | 'indisponible' | 'erreur';
+type Etat = 'attente' | 'ok' | 'bloque' | 'indisponible' | 'erreur' | 'hors_ligne';
 
 /**
  * Pendant une tournée en cours, la position du téléphone part toutes les
@@ -27,12 +28,20 @@ export function PositionLive({ tourneeId }: { tourneeId: string }) {
     const envoyer = () =>
       navigator.geolocation.getCurrentPosition(
         async (pos) => {
-          const r = await envoyerPositionAction(tourneeId, pos.coords.latitude, pos.coords.longitude, Math.round(pos.coords.accuracy));
-          if (r.error) {
-            setEtat('erreur');
-          } else {
-            setEtat('ok');
-            setDernier(new Date());
+          // Sans réseau, rien ne part : on le dit, sans planter la page (une
+          // position de plus de 30 s n'a plus d'intérêt, on ne la garde pas).
+          if (!navigator.onLine) return setEtat('hors_ligne');
+          try {
+            const r = await envoyerPositionAction(tourneeId, pos.coords.latitude, pos.coords.longitude, Math.round(pos.coords.accuracy));
+            if (r.reseau) setEtat('hors_ligne');
+            else if (r.error) setEtat('erreur');
+            else {
+              setEtat('ok');
+              setDernier(new Date());
+            }
+          } catch (e) {
+            if (!estPanneReseau(e)) throw e;
+            setEtat('hors_ligne');
           }
         },
         (err) => setEtat(err.code === 1 ? 'bloque' : 'indisponible'),
@@ -45,7 +54,7 @@ export function PositionLive({ tourneeId }: { tourneeId: string }) {
     return () => clearInterval(t);
   }, [tourneeId]);
 
-  const probleme = etat === 'bloque' || etat === 'indisponible' || etat === 'erreur';
+  const probleme = etat === 'bloque' || etat === 'indisponible' || etat === 'erreur' || etat === 'hors_ligne';
   return (
     <p
       role="status"
@@ -65,7 +74,8 @@ export function PositionLive({ tourneeId }: { tourneeId: string }) {
         {etat === 'bloque' &&
           'Position bloquée : autorisez la localisation pour ce site (icône à gauche de l’adresse, puis « Autorisations »). Le gérant ne voit pas où vous êtes.'}
         {etat === 'indisponible' && 'Position indisponible : activez le GPS du téléphone. Le gérant ne voit pas où vous êtes.'}
-        {etat === 'erreur' && 'La position n’a pas pu être envoyée (réseau ?). Nouvel essai dans 30 s.'}
+        {etat === 'erreur' && 'La position n’a pas pu être envoyée. Nouvel essai dans 30 s.'}
+        {etat === 'hors_ligne' && 'Pas de réseau : la position reprendra au retour du réseau. Vos scans, eux, sont gardés.'}
       </span>
     </p>
   );

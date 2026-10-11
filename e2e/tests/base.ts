@@ -47,13 +47,18 @@ const IGNORES = [/tile\.openstreetmap|arcgisonline/i, /favicon/i, /Download the 
 // reste bloquante.
 const CONNUES = [/Minified React error #418/];
 
-export const test = base.extend<{ erreurs: string[] }>({
+export const test = base.extend<{ erreurs: string[]; erreursAttendues: RegExp | null }>({
+  // Messages console qu'UN test provoque exprès (ex. coupure réseau simulée) :
+  // déclarés par ce test seul (`test.use`), jamais tolérés ailleurs. Un seul
+  // motif (et non une liste : Playwright lit une liste comme « valeur + réglages »).
+  erreursAttendues: [null, { option: true }],
   erreurs: [
-    async ({ page }, use, testInfo) => {
+    async ({ page, erreursAttendues }, use, testInfo) => {
       const erreurs: string[] = [];
+      const ignorer = erreursAttendues ? [...IGNORES, erreursAttendues] : IGNORES;
       page.on('pageerror', (e) => erreurs.push(`pageerror: ${e.message}`));
       page.on('console', (m) => {
-        if (m.type() === 'error' && !IGNORES.some((r) => r.test(m.text()))) erreurs.push(`console: ${m.text()}`);
+        if (m.type() === 'error' && !ignorer.some((r) => r.test(m.text()))) erreurs.push(`console: ${m.text()}`);
       });
       await use(erreurs);
       const connues = erreurs.filter((e) => CONNUES.some((r) => r.test(e)));

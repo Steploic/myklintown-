@@ -1,9 +1,10 @@
 'use client';
 
-import { createContext, startTransition, useActionState, useContext, useEffect, useRef } from 'react';
+import { createContext, startTransition, useActionState, useCallback, useContext, useEffect, useRef } from 'react';
 import { useFormStatus } from 'react-dom';
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { cn } from '@myklintown/ui';
+import { estPanneReseau, MESSAGE_HORS_LIGNE, MESSAGE_RESEAU } from '@/lib/format';
 import type { ActionState } from '@/lib/types';
 
 type Action = (prev: ActionState, fd: FormData) => Promise<ActionState>;
@@ -43,7 +44,21 @@ interface ActionFormProps extends Omit<React.FormHTMLAttributes<HTMLFormElement>
  * chaque soumission affiche soit une confirmation, soit la raison du refus.
  */
 export function ActionForm({ action, resetOnSuccess, children, className, ...rest }: ActionFormProps) {
-  const [state, onSubmit, pending] = useSoumission(action, {} as ActionState);
+  // Sans réseau, l'envoi échouait en exception et faisait planter la page :
+  // on répond par un message, et la saisie reste en place pour réessayer.
+  const actionSure = useCallback<Action>(
+    async (prev, fd) => {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) return { error: MESSAGE_HORS_LIGNE, reseau: true };
+      try {
+        return await action(prev, fd);
+      } catch (e) {
+        if (estPanneReseau(e)) return { error: MESSAGE_RESEAU, reseau: true };
+        throw e;
+      }
+    },
+    [action],
+  );
+  const [state, onSubmit, pending] = useSoumission(actionSure, {} as ActionState);
   const ref = useRef<HTMLFormElement>(null);
 
   useEffect(() => {

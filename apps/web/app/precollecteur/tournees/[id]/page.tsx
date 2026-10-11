@@ -1,15 +1,14 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Camera, Flag, Lock, Map as MapIcon, Play, RotateCcw, Users } from 'lucide-react';
+import { Camera, Flag, Lock, Map as MapIcon, Users } from 'lucide-react';
 import { Volet } from '@/components/ui/volet';
 import { CartePoints, type PointCarte, type Ton } from '@/components/map/carte-points';
 import { PrecoShell } from '@/components/precollecteur/shell';
 import { EmptyState, PageHeader } from '@/components/ui/blocks';
-import { SubmitButton } from '@/components/ui/action-form';
 import { TourneeRunner, type Passage } from '@/components/precollecteur/tournee-runner';
 import { RafraichissementAuto } from '@/components/ui/rafraichissement-auto';
 import { requireEntreprise } from '@/lib/precollecteur/context';
-import { statutTourneeAction } from '@/lib/terrain-actions';
+import { BoutonStatutTournee } from '@/components/precollecteur/bouton-statut-tournee';
 import { row, rows } from '@/lib/server';
 import { dateFr, dateHeureFr, heureFr, STATUT_TOURNEE, statutAbonnement } from '@/lib/format';
 import type { Tournee } from '@/lib/types';
@@ -95,25 +94,13 @@ export default async function TourneePage({ params }: { params: Promise<{ id: st
               <Camera size={16} /> Incident
             </Link>
             {t.statut === 'planifiee' && (
-              <form action={statutTourneeAction}>
-                <input type="hidden" name="tournee_id" value={t.id} />
-                <input type="hidden" name="statut" value="en_cours" />
-                <SubmitButton pendingLabel="Départ…"><Play size={16} /> Démarrer</SubmitButton>
-              </form>
+              <BoutonStatutTournee tourneeId={t.id} action="demarrer" />
             )}
             {t.statut === 'terminee' && (
-              <form action={statutTourneeAction}>
-                <input type="hidden" name="tournee_id" value={t.id} />
-                <input type="hidden" name="statut" value="en_cours" />
-                <SubmitButton variant="outline" pendingLabel="Réouverture…"><RotateCcw size={16} /> Rouvrir la tournée</SubmitButton>
-              </form>
+              <BoutonStatutTournee tourneeId={t.id} action="rouvrir" />
             )}
             {t.statut === 'en_cours' && (
-              <form action={statutTourneeAction}>
-                <input type="hidden" name="tournee_id" value={t.id} />
-                <input type="hidden" name="statut" value="terminee" />
-                <SubmitButton variant="secondary" pendingLabel="Clôture…"><Flag size={16} /> Terminer la tournée</SubmitButton>
-              </form>
+              <BoutonStatutTournee tourneeId={t.id} action="terminer" />
             )}
           </>
         }
