@@ -9,11 +9,14 @@ test.describe('ménage déjà servi : rattachement puis suivi', () => {
   test.use({ storageState: session('menage') });
 
   // Chaque tentative (y compris une reprise) repart d'une fiche non rattachée,
-  // avec deux passages ni confirmés ni contestés.
+  // avec deux passages ni confirmés ni contestés. Ces colonnes (compte
+  // rattaché, réponse du ménage) ne se changent plus par l'API qu'en
+  // administrateur (audit du 11/10/2026) : la remise à zéro passe par le
+  // compte de test admin.
   test.beforeAll(async () => {
-    const A = await compte('precoA', 'precollecteur');
-    const { data } = await A.sb.from('clients').update({ user_id: null }).eq('code', CODE_LIEN).select('id').single();
-    await A.sb.from('collectes').update({ confirmation_client: null, confirmation_at: null }).eq('client_id', data!.id);
+    const ADM = await compte('admin', 'citoyen');
+    const { data } = await ADM.sb.from('clients').update({ user_id: null }).eq('code', CODE_LIEN).select('id').single();
+    await ADM.sb.from('collectes').update({ confirmation_client: null, confirmation_at: null }).eq('client_id', data!.id);
   });
 
   test('code incorrect : refus clair', async ({ page }) => {

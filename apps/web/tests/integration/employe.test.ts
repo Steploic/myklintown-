@@ -59,7 +59,8 @@ describe('invitation et compte employé', () => {
     const { data, error } = await A.sb.rpc('creer_invitation_employe', { p_employe: employeId });
     expect(error).toBeNull();
     code = data as string;
-    expect(code).toMatch(/^[0-9A-F]{8}$/);
+    // 10 caractères de l'alphabet de Crockford (ni I, L, O, U) : ≈ 50 bits (audit du 11/10/2026).
+    expect(code).toMatch(/^[0-9A-HJKMNP-TV-Z]{10}$/);
   });
 
   it('un nouveau code remplace le précédent', async ({ skip }) => {

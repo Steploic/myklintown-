@@ -67,8 +67,8 @@ test.describe('espace employé : de l’invitation à la validation des espèces
     await ligne.getByRole('button', { name: /Inviter/ }).click();
     const bloc = page.locator('li', { hasText: EMPLOYE }).filter({ hasText: 'Code d’invitation' });
     await expect(bloc).toBeVisible();
-    code = (await bloc.getByText(/^[0-9A-F]{8}$/).innerText()).trim();
-    expect(code).toMatch(/^[0-9A-F]{8}$/);
+    code = (await bloc.getByText(/^[0-9A-HJKMNP-TV-Z]{10}$/).innerText()).trim();
+    expect(code).toMatch(/^[0-9A-HJKMNP-TV-Z]{10}$/);
     await expect(bloc.getByRole('link', { name: 'Envoyer par WhatsApp' })).toHaveAttribute('href', /wa\.me\/.*rejoindre%3Fcode%3D/);
     await ctx.close();
   });

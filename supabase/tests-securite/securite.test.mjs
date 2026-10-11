@@ -60,7 +60,9 @@ describe('Invariants (valables pour toute future migration)', () => {
     const r = await lignes(`
       select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
        where n.nspname = 'public' and p.prosecdef
-         and not exists (select 1 from unnest(coalesce(p.proconfig, '{}')) c where c like 'search_path=%')`);
+         and not exists (select 1 from unnest(coalesce(p.proconfig, '{}')) c where c like 'search_path=%')
+         -- hors fonctions d'extension (la version de PostGIS de Supabase en a : st_estimatedextent)
+         and not exists (select 1 from pg_depend d where d.classid = 'pg_proc'::regclass and d.objid = p.oid and d.deptype = 'e')`);
     assert.deepEqual(r.map((x) => x.proname), []);
   });
 

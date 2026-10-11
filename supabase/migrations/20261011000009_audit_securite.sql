@@ -484,6 +484,8 @@ from (
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public' and p.prosecdef
      and not exists (select 1 from unnest(coalesce(p.proconfig, '{}')) c where c like 'search_path=%')
+     -- les fonctions des extensions (PostGIS : st_estimatedextent…) ne sont pas à nous
+     and not exists (select 1 from pg_depend d where d.classid = 'pg_proc'::regclass and d.objid = p.oid and d.deptype = 'e')
   union all
   select 5, 'Fonctions ouvertes au visiteur anonyme (attendu : apercu_invitation, est_admin)',
          count(*) filter (where p.proname not in ('apercu_invitation', 'est_admin')) = 0,
