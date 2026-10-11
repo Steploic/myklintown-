@@ -75,5 +75,13 @@ export default defineConfig({
   ],
   webServer: process.env.E2E_BASE_URL
     ? undefined
-    : { command: `pnpm start -p ${PORT}`, cwd: path.resolve(__dirname, '..', 'apps', 'web'), url: BASE_URL, reuseExistingServer: false, timeout: 180_000 },
+    : {
+        command: `pnpm start -p ${PORT}`,
+        cwd: path.resolve(__dirname, '..', 'apps', 'web'),
+        url: BASE_URL,
+        reuseExistingServer: false,
+        timeout: 180_000,
+        // Paiement en ligne en mode SIMULATION (aucun argent réel) pour les tests locaux.
+        env: { PAIEMENT_SIMULATION: '1' },
+      },
 });

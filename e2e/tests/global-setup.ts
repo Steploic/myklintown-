@@ -73,6 +73,8 @@ export default async function globalSetup() {
   const migration0006 = !sonde.error;
   // Migration 20261005000007 (espace employé) jouée ?
   const migration0007 = !(await A.sb.rpc('mes_statistiques_employe', { p_jours: 1 })).error;
+  // Migration 20261006000008 (paiement en ligne) jouée ?
+  const migration0008 = !(await A.sb.from('entreprises').select('paiement_statut').eq('id', A.entrepriseId).single()).error;
   if (migration0006) {
     // Rien ne reste « en attente » d'un essai précédent.
     await S.sb.from('demandes_abonnement').update({ statut: 'annulee' }).eq('statut', 'en_attente');
@@ -82,7 +84,7 @@ export default async function globalSetup() {
   genererVideoQr(CODE_SCAN, path.resolve(__dirname, '..', '.media', 'qr.y4m'));
   fs.writeFileSync(
     FICHIER_ETAT,
-    JSON.stringify({ precoA: A.entrepriseId, precoB: B.entrepriseId, clientScan: scan.id, clientLien: lien.id, mairiePromue: M.promue, mairieEmail: M.email, migration0006, migration0007, adminPromu, adminEmail: ADM.email }, null, 2),
+    JSON.stringify({ precoA: A.entrepriseId, precoB: B.entrepriseId, clientScan: scan.id, clientLien: lien.id, mairiePromue: M.promue, mairieEmail: M.email, migration0006, migration0007, migration0008, adminPromu, adminEmail: ADM.email }, null, 2),
   );
   if (!migration0006) {
     console.warn('\n⚠️  Tests « liste d’attente » et « accès Mairie » ignorés : exécuter supabase/migrations/20261004000006_retours_tests_equipe.sql\n');
