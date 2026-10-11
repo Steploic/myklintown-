@@ -65,8 +65,8 @@ export function SignupForm({ defaut }: { defaut: 'precollecteur' | 'citoyen' }) 
         </div>
         <div>
           <label htmlFor="password" className="field-label">Mot de passe</label>
-          <input id="password" name="password" type="password" required minLength={6} autoComplete="new-password" className="field" />
-          <p className="field-hint">6 caractères minimum.</p>
+          <input id="password" name="password" type="password" required minLength={8} autoComplete="new-password" className="field" />
+          <p className="field-hint">8 caractères minimum.</p>
         </div>
       </div>
 

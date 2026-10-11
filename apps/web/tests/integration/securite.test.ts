@@ -4,7 +4,7 @@
  * avec la clé anon publique) : on l'attaque directement, comme le ferait un curieux.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { clientAnonyme, compte, JPEG_1PX, plans, precollecteur, type Compte, type Precollecteur } from '../support/fixtures';
+import { clientAnonyme, compte, JPEG_1PX, mairie, plans, precollecteur, type Compte, type Precollecteur } from '../support/fixtures';
 
 const TABLES_PRIVEES = [
   'entreprises',
@@ -178,5 +178,66 @@ describe('inscription : rôle forgé', () => {
   });
   it('précollecteur est bien auto-attribuable', () => {
     expect(A.role).toBe('precollecteur');
+  });
+});
+
+// -----------------------------------------------------------------------------
+// Audit de sécurité du 11/10/2026 (migration 20261011000009) : chaque faille
+// trouvée, rejouée contre la VRAIE base. Le banc hors ligne
+// (supabase/tests-securite) les couvre aussi, avec le « avant / après ».
+// -----------------------------------------------------------------------------
+describe('audit du 11/10/2026', () => {
+  const nouvelleFacture = async (clientId: string) => {
+    const f = await A.sb
+      .from('factures')
+      .insert({ entreprise_id: A.entrepriseId, client_id: clientId, periode_debut: '2026-10-01', periode_fin: '2026-10-31', montant_fcfa: 3500, echeance: '2026-10-08' })
+      .select('id')
+      .single();
+    if (f.error) throw f.error;
+    return f.data.id as string;
+  };
+
+  it('spatial_ref_sys (PostGIS) est en lecture seule pour le visiteur anonyme', async () => {
+    // Filtre qui ne vise aucune ligne : seul le verrou (déclencheur « par requête ») peut refuser.
+    const r = await clientAnonyme().from('spatial_ref_sys').update({ auth_name: 'x' }).eq('srid', -999999);
+    expect(r.error?.message).toMatch(/lecture seule/);
+  });
+  it('le visiteur anonyme n’appelle pas les fonctions internes', async () => {
+    expect((await clientAnonyme().rpc('mon_entreprise')).error).toBeTruthy();
+  });
+  it('B ne rattache pas SON paiement à la facture de A (elle resterait « payée »)', async () => {
+    const f = await nouvelleFacture(clientA.id);
+    const r = await B.sb.from('paiements_clients').insert({ facture_id: f, entreprise_id: B.entrepriseId, client_id: clientA.id, montant_fcfa: 3500 });
+    expect(r.error?.message).toMatch(/Référence refusée/);
+    const { data } = await A.sb.from('factures').select('statut').eq('id', f).single();
+    expect(data?.statut).toBe('emise');
+  });
+  it('B ne facture pas le client de A', async () => {
+    const r = await B.sb.from('factures').insert({ entreprise_id: B.entrepriseId, client_id: clientA.id, periode_debut: '2026-10-01', periode_fin: '2026-10-31', montant_fcfa: 99000, echeance: '2026-10-02' });
+    expect(r.error?.message).toMatch(/Référence refusée/);
+  });
+  it('B n’invente pas de passage chez le client de A', async () => {
+    const r = await B.sb.from('collectes').insert({ entreprise_id: B.entrepriseId, client_id: clientA.id, statut: 'realisee' });
+    expect(r.error?.message).toMatch(/Référence refusée/);
+  });
+  it('A ne marque pas une facture « payée » à la main, mais peut l’annuler', async () => {
+    const f = await nouvelleFacture(clientA.id);
+    expect((await A.sb.from('factures').update({ statut: 'payee' }).eq('id', f)).error?.message).toMatch(/se déduit des encaissements/);
+    expect((await A.sb.from('factures').update({ statut: 'annulee' }).eq('id', f)).error).toBeNull();
+  });
+  it('A ne change pas le statut de son entreprise (suspension = administrateur)', async () => {
+    expect((await A.sb.from('entreprises').update({ statut: 'actif' }).eq('id', A.entrepriseId)).error?.message).toMatch(/Modification refusée/);
+  });
+  it('A ne rattache pas le compte d’un inconnu à sa fiche client', async () => {
+    expect((await A.sb.from('clients').update({ user_id: menage.id }).eq('id', clientA.id)).error?.message).toMatch(/Modification refusée/);
+  });
+  it('un compte ne change pas l’e-mail de son profil', async () => {
+    expect((await menage.sb.from('profiles').update({ email: 'maire@yaounde3.cm' }).eq('id', menage.id)).error?.message).toMatch(/Modification refusée/);
+  });
+  it('la Mairie ne lit que son propre profil', async ({ skip }) => {
+    const M = await mairie();
+    if (!M.promue) skip();
+    const { data } = await M.sb.from('profiles').select('id');
+    expect((data ?? []).map((p) => p.id)).toEqual([M.id]);
   });
 });

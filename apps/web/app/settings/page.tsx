@@ -92,11 +92,11 @@ export default async function SettingsPage() {
           <ActionForm action={changerMotDePasseAction} resetOnSuccess className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="field-label" htmlFor="m-1">Nouveau mot de passe</label>
-              <input id="m-1" name="password" type="password" minLength={6} required autoComplete="new-password" className="field" />
+              <input id="m-1" name="password" type="password" minLength={8} required autoComplete="new-password" className="field" />
             </div>
             <div>
               <label className="field-label" htmlFor="m-2">Confirmation</label>
-              <input id="m-2" name="confirmation" type="password" minLength={6} required autoComplete="new-password" className="field" />
+              <input id="m-2" name="confirmation" type="password" minLength={8} required autoComplete="new-password" className="field" />
             </div>
             <div className="sm:col-span-2">
               <SubmitButton variant="secondary">Changer le mot de passe</SubmitButton>

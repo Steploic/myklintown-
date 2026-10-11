@@ -1,0 +1,20 @@
+# Alertes et correctifs de sécurité des dépendances : une PR par mise à jour,
+# chaque semaine. Les PR de sécurité arrivent dès qu'une faille est publiée.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      next-react:
+        patterns: ['next', 'eslint-config-next', 'react', 'react-dom', '@types/react*']
+  - package-ecosystem: npm
+    directory: /supabase/tests-securite
+    schedule:
+      interval: monthly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

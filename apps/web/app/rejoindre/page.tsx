@@ -116,7 +116,7 @@ export default async function RejoindrePage({ searchParams }: { searchParams: Pr
                       </div>
                       <div>
                         <label className="field-label" htmlFor="rj-mdp">Mot de passe *</label>
-                        <input id="rj-mdp" name="password" type="password" required minLength={6} autoComplete="new-password" className="field" />
+                        <input id="rj-mdp" name="password" type="password" required minLength={8} autoComplete="new-password" className="field" />
                       </div>
                       <div className="sm:col-span-2">
                         <label className="field-label" htmlFor="rj-tel">Téléphone</label>

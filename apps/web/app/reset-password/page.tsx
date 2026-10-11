@@ -48,11 +48,11 @@ export default function ResetPasswordPage() {
               type="password"
               autoComplete="new-password"
               required
-              minLength={6}
+              minLength={8}
               placeholder="••••••••"
               className="w-full rounded-md border border-border bg-surface px-3 py-2 text-body-sm placeholder:text-muted-foreground focus:border-brand-blue focus:outline-none focus:ring-2 focus:ring-brand-blue/20"
             />
-            <p className="text-small text-muted-foreground">6 caractères au minimum.</p>
+            <p className="text-small text-muted-foreground">8 caractères au minimum.</p>
           </div>
 
           <div className="space-y-1">
@@ -65,7 +65,7 @@ export default function ResetPasswordPage() {
               type="password"
               autoComplete="new-password"
               required
-              minLength={6}
+              minLength={8}
               placeholder="••••••••"
               className="w-full rounded-md border border-border bg-surface px-3 py-2 text-body-sm placeholder:text-muted-foreground focus:border-brand-blue focus:outline-none focus:ring-2 focus:ring-brand-blue/20"
             />

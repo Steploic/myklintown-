@@ -233,8 +233,8 @@ test.describe('précollecteur : exploitation', () => {
     await page.getByLabel('Téléphone').first().fill('690000321');
     await page.getByRole('button', { name: 'Enregistrer' }).first().click();
     await expect(page.getByText('Profil mis à jour.')).toBeVisible();
-    await page.getByLabel('Nouveau mot de passe').fill('abcdef');
-    await page.getByLabel('Confirmation').fill('abcdeg');
+    await page.getByLabel('Nouveau mot de passe').fill('abcdefgh');
+    await page.getByLabel('Confirmation').fill('abcdefgi');
     await page.getByRole('button', { name: 'Changer le mot de passe' }).click();
     await expect(page.getByText('Les deux mots de passe ne sont pas identiques.')).toBeVisible();
   });
