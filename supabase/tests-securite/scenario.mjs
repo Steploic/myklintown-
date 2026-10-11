@@ -259,6 +259,20 @@ export const ATTAQUES = [
     },
   },
   {
+    id: 'passage-antidate',
+    titre: 'Un passage « fait hors ligne » antidaté de 3 jours (fausse preuve de service)',
+    async jouer(db, s) {
+      if (!(await valeur(db, `select to_regprocedure('public.scanner_passage(uuid, text, timestamptz)') is not null`))) return false;
+      const code = await comme(db, s.gerantA, async (tx) => {
+        const c = await valeur(tx, `insert into public.clients (entreprise_id, nom, plan_id) values ($1, 'Foyer antidaté', $2) returning id`, [s.entA, s.plan]);
+        return valeur(tx, `select code from public.clients where id = $1`, [c]);
+      });
+      await comme(db, s.employe, (tx) => tx.query(`select public.scanner_passage($1, $2, now() - interval '3 days')`, [s.tourneeA, code]));
+      const quand = await valeur(db, `select extract(epoch from now() - co.realisee_at)::int from public.collectes co join public.clients c on c.id = co.client_id where c.code = $1`, [code]);
+      return quand > 47 * 3600;
+    },
+  },
+  {
     id: 'fonction-anon',
     titre: 'Un visiteur anonyme exécute des fonctions internes (ex. mon_entreprise, role_courant)',
     async jouer(db) {
@@ -414,6 +428,35 @@ export const PARCOURS = [
           values ($1, $2, $3, current_date - 3, $4, 'realisee', now())`, [s.entA, t, s.clientA, s.employeA]);
         await tx.query(`insert into public.tricycle_employes (tricycle_id, employe_id) values ($1, $2)`, [s.tricycleA, s.employeA]);
       });
+    },
+  },
+  {
+    titre: 'Gestes faits hors ligne puis envoyés : l’heure du terrain est gardée, l’heure de réception notée à part',
+    async jouer(db, s) {
+      if (!(await valeur(db, `select to_regprocedure('public.pointer_passage(uuid, text, text, timestamptz)') is not null`))) return;
+      const ids = await comme(db, s.gerantA, async (tx) => {
+        const t = await valeur(tx, `insert into public.tournees_precollecte (entreprise_id, date) values ($1, current_date) returning id`, [s.entA]);
+        await tx.query(`insert into public.tournee_equipe (tournee_id, employe_id, entreprise_id) values ($1, $2, $3)`, [t, s.employeA, s.entA]);
+        const c1 = await valeur(tx, `insert into public.clients (entreprise_id, nom, plan_id) values ($1, 'Foyer hors ligne 1', $2) returning id`, [s.entA, s.plan]);
+        const c2 = await valeur(tx, `insert into public.clients (entreprise_id, nom, plan_id) values ($1, 'Foyer hors ligne 2', $2) returning id`, [s.entA, s.plan]);
+        const co = await valeur(tx, `insert into public.collectes (entreprise_id, tournee_id, client_id) values ($1, $2, $3) returning id`, [s.entA, t, c1]);
+        const code2 = await valeur(tx, `select code from public.clients where id = $1`, [c2]);
+        return { t, co, code2 };
+      });
+      await comme(db, s.employe, async (tx) => {
+        // Pointé il y a 2 h (hors ligne), envoyé maintenant.
+        await tx.query(`select public.pointer_passage($1, 'realisee', null, now() - interval '2 hours')`, [ids.co]);
+        // Heure absurde (demain) : remplacée par l'heure du serveur. Rejoué deux fois : un seul passage.
+        await tx.query(`select public.scanner_passage($1, $2, now() + interval '1 day')`, [ids.t, ids.code2]);
+        const r = await valeur(tx, `select public.scanner_passage($1, $2, now() - interval '1 hour')`, [ids.t, ids.code2]);
+        if (!r.deja_fait) throw new Error('scan rejoué : « déjà fait » attendu');
+      });
+      const p = (await db.query(
+        `select extract(epoch from now() - realisee_at)::int as age, enregistre_at is not null as recu from public.collectes where id = $1`, [ids.co])).rows[0];
+      if (Math.abs(p.age - 7200) > 120 || !p.recu) throw new Error(`pointage : âge ${p.age} s, reçu ${p.recu}`);
+      const q = (await db.query(
+        `select count(*)::int n, max(abs(extract(epoch from now() - co.realisee_at)))::int ecart from public.collectes co join public.clients c on c.id = co.client_id where c.code = $1`, [ids.code2])).rows[0];
+      if (q.n !== 1 || q.ecart > 60) throw new Error(`scan : ${q.n} passage(s), écart ${q.ecart} s`);
     },
   },
   {

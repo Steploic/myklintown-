@@ -18,6 +18,21 @@ function rafraichir() {
   revalidatePath('/employe', 'layout');
 }
 
+/**
+ * Le geste a pu être fait hors ligne, puis envoyé plus tard : on transmet
+ * l'HEURE DU TERRAIN (`p_horodatage`, migration 20261012000010). Tant que
+ * cette migration n'est pas jouée, la base ne connaît pas ce paramètre : on
+ * rappelle alors la fonction sans lui (l'heure enregistrée est celle de l'envoi).
+ */
+async function rpcHorodatee(supabase: Awaited<ReturnType<typeof getSupabase>>, fn: string, args: Record<string, unknown>, horodatage?: string) {
+  if (horodatage) {
+    const r = await rpc(supabase, fn, { ...args, p_horodatage: horodatage });
+    const e = r.error as { code?: string; message: string } | null;
+    if (!e || !(e.code === 'PGRST202' || /Could not find the function/i.test(e.message))) return r;
+  }
+  return rpc(supabase, fn, args);
+}
+
 function erreurLisible(message: string | undefined): string {
   if (!message) return 'Une erreur est survenue.';
   if (estErreurReseau({ message })) return MESSAGE_RESEAU;
@@ -29,33 +44,40 @@ export async function marquerCollecteAction(input: {
   collecteId: string;
   statut: 'realisee' | 'non_realisee' | 'prevue';
   motif?: string | null;
+  /** Heure du geste sur le téléphone (gestes faits hors ligne). */
+  horodatage?: string;
 }): Promise<ActionState> {
   const supabase = await getSupabase();
-  const { error } = await rpc(supabase, 'pointer_passage', {
-    p_collecte: input.collecteId,
-    p_statut: input.statut,
-    p_motif: input.motif ?? null,
-  });
-  if (error) return { error: erreurLisible(error.message) };
+  const { error } = await rpcHorodatee(
+    supabase,
+    'pointer_passage',
+    { p_collecte: input.collecteId, p_statut: input.statut, p_motif: input.motif ?? null },
+    input.horodatage,
+  );
+  if (error) return { error: erreurLisible(error.message), reseau: estErreurReseau(error) || undefined };
   rafraichir();
   return { ok: 'Enregistré.' };
 }
 
 export interface ResultatScan {
   error?: string;
+  /** Échec dû au réseau (à retenter), pas un refus. */
+  reseau?: boolean;
   client?: { nom: string; code: string; statut_abonnement: string; quartier: string | null };
   horsPlanning?: boolean;
   dejaFait?: boolean;
 }
 
 /** Scan du QR d'un client pendant la tournée : le passage est tracé en base, immédiatement. */
-export async function scannerClientAction(tourneeId: string, codeLu: string): Promise<ResultatScan> {
+export async function scannerClientAction(tourneeId: string, codeLu: string, horodatage?: string): Promise<ResultatScan> {
   const supabase = await getSupabase();
-  const { data, error } = await rpc(supabase, 'scanner_passage', {
-    p_tournee: tourneeId,
-    p_code: extraireCodeClient(codeLu),
-  });
-  if (error) return { error: erreurLisible(error.message) };
+  const { data, error } = await rpcHorodatee(
+    supabase,
+    'scanner_passage',
+    { p_tournee: tourneeId, p_code: extraireCodeClient(codeLu) },
+    horodatage,
+  );
+  if (error) return { error: erreurLisible(error.message), reseau: estErreurReseau(error) || undefined };
   const r = row<{ nom: string; code: string; statut_abonnement: string; quartier: string | null; hors_planning: boolean; deja_fait: boolean }>(data)!;
   if (!r.deja_fait) rafraichir();
   return {
@@ -66,13 +88,15 @@ export async function scannerClientAction(tourneeId: string, codeLu: string): Pr
 }
 
 /** Démarrer, terminer — et, pour le gérant seulement, rouvrir ou annuler. */
-export async function statutTourneeAction(fd: FormData) {
+export async function statutTourneeAction(fd: FormData): Promise<ActionState> {
   const supabase = await getSupabase();
-  await rpc(supabase, 'changer_statut_tournee', {
+  const { error } = await rpc(supabase, 'changer_statut_tournee', {
     p_tournee: String(fd.get('tournee_id')),
     p_statut: String(fd.get('statut')),
   });
+  if (error) return { error: erreurLisible(error.message), reseau: estErreurReseau(error) || undefined };
   rafraichir();
+  return { ok: 'Tournée mise à jour.' };
 }
 
 /** Position du téléphone pendant une tournée en cours (appli ouverte). */
@@ -84,7 +108,7 @@ export async function envoyerPositionAction(tourneeId: string, lat: number, lng:
     p_lng: lng,
     p_precision: precision,
   });
-  if (error) return { error: erreurLisible(error.message) };
+  if (error) return { error: erreurLisible(error.message), reseau: estErreurReseau(error) || undefined };
   return { ok: 'Position envoyée.' };
 }
 

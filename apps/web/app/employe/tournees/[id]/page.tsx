@@ -1,16 +1,15 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Camera, Flag, Lock, Map as MapIcon, Play, Users } from 'lucide-react';
+import { Camera, Flag, Lock, Map as MapIcon, Users } from 'lucide-react';
 import { PortalShell } from '@/components/portal-shell';
 import { Volet } from '@/components/ui/volet';
 import { CartePoints, type Ton } from '@/components/map/carte-points';
 import { EmptyState, PageHeader } from '@/components/ui/blocks';
-import { SubmitButton } from '@/components/ui/action-form';
 import { TourneeRunner, type Passage } from '@/components/precollecteur/tournee-runner';
 import { PositionLive } from '@/components/employe/position-live';
 import { RafraichissementAuto } from '@/components/ui/rafraichissement-auto';
 import { requireEmploye } from '@/lib/employe/context';
-import { statutTourneeAction } from '@/lib/terrain-actions';
+import { BoutonStatutTournee } from '@/components/precollecteur/bouton-statut-tournee';
 import { row, rows } from '@/lib/server';
 import { dateFr, dateHeureFr, fcfa, STATUT_TOURNEE, statutAbonnement } from '@/lib/format';
 
@@ -97,18 +96,10 @@ export default async function TourneeEmploye({
               <Camera size={16} /> Incident
             </Link>
             {t.statut === 'planifiee' && (
-              <form action={statutTourneeAction}>
-                <input type="hidden" name="tournee_id" value={t.id} />
-                <input type="hidden" name="statut" value="en_cours" />
-                <SubmitButton pendingLabel="Départ…"><Play size={16} /> Démarrer</SubmitButton>
-              </form>
+              <BoutonStatutTournee tourneeId={t.id} action="demarrer" />
             )}
             {t.statut === 'en_cours' && (
-              <form action={statutTourneeAction}>
-                <input type="hidden" name="tournee_id" value={t.id} />
-                <input type="hidden" name="statut" value="terminee" />
-                <SubmitButton variant="secondary" pendingLabel="Clôture…"><Flag size={16} /> Terminer la tournée</SubmitButton>
-              </form>
+              <BoutonStatutTournee tourneeId={t.id} action="terminer" />
             )}
           </>
         }

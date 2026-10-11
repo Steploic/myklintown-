@@ -164,4 +164,6 @@ export interface Incident {
 export interface ActionState {
   error?: string;
   ok?: string;
+  /** L'échec vient du réseau (à retenter), pas d'un refus. */
+  reseau?: boolean;
 }
