@@ -86,13 +86,17 @@ describe('choix du fournisseur', () => {
     vi.stubEnv('PAIEMENT_SIMULATION', '');
     expect(fournisseurActif()).toBeNull();
   });
-  it('simulation en développement, jamais sur la production Vercel', () => {
+  it('simulation sur le poste local, jamais sur Vercel (production NI préversion)', () => {
     vi.stubEnv('NOTCHPAY_PUBLIC_KEY', '');
     vi.stubEnv('PAIEMENT_SIMULATION', '1');
-    vi.stubEnv('VERCEL_ENV', '');
+    vi.stubEnv('VERCEL', '');
     expect(fournisseurActif()?.nom).toBe('simulation');
-    vi.stubEnv('VERCEL_ENV', 'production');
-    expect(fournisseurActif()).toBeNull();
+    // Une préversion partage la vraie base : de faux paiements y régleraient de vraies factures.
+    for (const env of ['production', 'preview', 'development']) {
+      vi.stubEnv('VERCEL', '1');
+      vi.stubEnv('VERCEL_ENV', env);
+      expect(fournisseurActif()).toBeNull();
+    }
   });
   it('Notch Pay dès que sa clé est là', () => {
     vi.stubEnv('NOTCHPAY_PUBLIC_KEY', 'pk_test_x');

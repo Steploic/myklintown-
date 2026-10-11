@@ -9,7 +9,7 @@ import { statutDepuisNotchPay, statutSimule, type Canal, type StatutPaiementEnLi
  *   NOTCHPAY_PUBLIC_KEY   clé publique (pk_…) — initialiser et suivre un paiement
  *   NOTCHPAY_PRIVATE_KEY  clé privée (sk_…) — comptes connectés (en-tête X-Grant)
  *   NOTCHPAY_WEBHOOK_HASH clé de signature des notifications
- *   PAIEMENT_SIMULATION=1 mode simulation (ignoré sur la production Vercel)
+ *   PAIEMENT_SIMULATION=1 mode simulation (poste local seulement, ignoré sur Vercel)
  *
  * Documentation suivie : developer.notchpay.co (paiement direct Mobile Money,
  * Sync pour les comptes connectés, notifications signées HMAC SHA-256).
@@ -158,9 +158,10 @@ export const simulation: Fournisseur = {
 /** Le fournisseur en service, ou null si le paiement en ligne n'est pas configuré. */
 export function fournisseurActif(): Fournisseur | null {
   if (process.env.NOTCHPAY_PUBLIC_KEY) return notchPay;
-  // La simulation ne s'allume jamais sur la production Vercel : de faux
-  // paiements y régleraient de vraies factures.
-  if (process.env.PAIEMENT_SIMULATION === '1' && process.env.VERCEL_ENV !== 'production') return simulation;
+  // La simulation ne s'allume jamais sur Vercel, ni en production NI sur une
+  // préversion : une préversion partage la vraie base, et de faux paiements y
+  // régleraient de vraies factures (audit du 11/10/2026). Poste local seulement.
+  if (process.env.PAIEMENT_SIMULATION === '1' && !process.env.VERCEL) return simulation;
   return null;
 }
 

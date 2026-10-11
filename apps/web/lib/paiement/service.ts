@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { clientService, cleServiceSupabase } from '@/lib/supabase-service';
 import { parametre, row, rows } from '@/lib/server';
 import { fournisseurActif } from './fournisseur';
@@ -93,7 +94,8 @@ export async function demarrerPaiement(input: {
 
   const taux = await parametre(admin, 'commission_taux', 0.1);
   const commission = commissionSur(reste, taux);
-  const reference = `MKT${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`.toUpperCase();
+  // Aléatoire cryptographique : la référence suffit à suivre le paiement (statutPaiementAction).
+  const reference = `MKT${randomUUID().replace(/-/g, '').slice(0, 20)}`.toUpperCase();
 
   const { error: e1 } = await admin.from('paiements_en_ligne').insert({
     entreprise_id: facture.entreprise_id,
