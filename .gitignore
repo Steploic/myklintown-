@@ -5,6 +5,7 @@ node_modules/
 
 # Build output
 .next/
+.next-tests/
 out/
 dist/
 build/
@@ -53,7 +54,7 @@ docs/reunions/
 docs/securite/
 
 # Tests : identifiants des comptes de test (locaux) et rapports
-apps/web/tests/.fixtures.local.json
+apps/web/tests/.fixtures*.json
 e2e/.auth/
 e2e/.media/
 e2e/playwright-report/

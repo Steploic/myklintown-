@@ -2,12 +2,16 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
+import { BASE, ENV_TESTS } from '../apps/web/tests/support/fixtures';
 
 /**
  * Tests de bout en bout dans un vrai navigateur.
  *
- *   cd e2e && pnpm test                         → contre le build local (apps/web : pnpm build d'abord)
- *   E2E_BASE_URL=https://… pnpm test            → contre un déploiement (preview, prod)
+ *   cd e2e && pnpm test        → l'appli est construite et lancée sur la BASE DE TEST
+ *                                (apps/web/.env.test.local), dans apps/web/.next-tests
+ *   E2E_SANS_BUILD=1 pnpm test → réutilise le dernier build de test (plus rapide)
+ *   TESTS_SUR_PROD=1 E2E_BASE_URL=https://myklintown-web.vercel.app pnpm test
+ *                              → contre le site en ligne et la vraie base (exprès)
  *
  * Dossier HORS de l'espace de travail pnpm : placé dans apps/web, Playwright
  * (pair optionnel de Next.js) forçait pnpm à dupliquer Next.js.
@@ -75,5 +79,25 @@ export default defineConfig({
   ],
   webServer: process.env.E2E_BASE_URL
     ? undefined
-    : { command: `pnpm start -p ${PORT}`, cwd: path.resolve(__dirname, '..', 'apps', 'web'), url: BASE_URL, reuseExistingServer: false, timeout: 180_000 },
+    : {
+        // Build dédié : les variables NEXT_PUBLIC_* (adresse de la base) sont
+        // figées à la construction, il faut donc un build par base.
+        command: process.env.E2E_SANS_BUILD === '1' ? `pnpm start -p ${PORT}` : `pnpm build && pnpm start -p ${PORT}`,
+        cwd: path.resolve(__dirname, '..', 'apps', 'web'),
+        env: {
+          NEXT_DIST_DIR: BASE === 'test' ? '.next-tests' : '.next',
+          NEXT_PUBLIC_SUPABASE_URL: ENV_TESTS.NEXT_PUBLIC_SUPABASE_URL!,
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ENV_TESTS.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          NEXT_PUBLIC_SITE_URL: BASE_URL,
+          ...(ENV_TESTS.SUPABASE_SECRET_KEY ? { SUPABASE_SECRET_KEY: ENV_TESTS.SUPABASE_SECRET_KEY } : {}),
+        },
+        url: BASE_URL,
+        reuseExistingServer: false,
+        timeout: 900_000,
+      },
 });
+
+// Le site en ligne parle à la vraie base : des comptes de la base de test n'y existent pas.
+if (process.env.E2E_BASE_URL && BASE !== 'production') {
+  throw new Error('E2E_BASE_URL vise un site déployé (vraie base) : ajouter TESTS_SUR_PROD=1, ou retirer E2E_BASE_URL pour tester sur la base de test.');
+}

@@ -5,9 +5,9 @@ Trois étages, du plus rapide au plus complet.
 | Commande (depuis `apps/web`) | Quoi | Durée | Touche la base ? |
 |---|---|---|---|
 | `pnpm test` | **Unitaires** : montants, dates, périodes de facture, relances, rôles, codes QR, zones, erreurs réseau | secondes | non |
-| `pnpm test:integration` | **Sécurité (RLS)** table par table et rôle par rôle, avec témoins positifs ; facturation ; terrain ; parcours entre acteurs | ~2 min | **oui** |
-| `pnpm test:e2e` | **Navigateur réel** : parcours complets, caméra simulée (scan QR, photo, vidéo), accès, téléphone | ~15–30 min | **oui** |
-| `pnpm test:tout` | Les trois + types + build | ~30 min | oui |
+| `pnpm test:integration` | **Sécurité (RLS)** table par table et rôle par rôle, avec témoins positifs ; facturation ; terrain ; parcours entre acteurs | ~3 min | **base de test** |
+| `pnpm test:e2e` | **Navigateur réel** : parcours complets, caméra simulée (scan QR, photo, vidéo), accès, téléphone | ~20–35 min (build compris) | **base de test** |
+| `pnpm test:tout` | Les trois + types + build | ~40 min | base de test |
 
 ## Première installation
 
@@ -19,29 +19,53 @@ cd ../../e2e && pnpm install --ignore-workspace
 Playwright vit dans `e2e/`, **hors** de l'espace de travail pnpm : placé dans `apps/web`, il est un
 « pair optionnel » de Next.js et forçait pnpm à dupliquer Next.js (≈100 Mo à retélécharger).
 
+## La base de test (depuis le 11/10/2026)
+
+Les tests ne touchent **plus la vraie base** : ils tournent sur un projet Supabase séparé,
+**`myklintown-tests`**, dont les clés sont dans `apps/web/.env.test.local` (ignoré par git) :
+
+```
+NEXT_PUBLIC_SUPABASE_URL=https://<projet-de-test>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_…
+SUPABASE_SECRET_KEY=sb_secret_…
+NEXT_PUBLIC_SITE_URL=http://localhost:3100
+```
+
+- **Sans ce fichier, les tests refusent de démarrer** ; un fichier qui pointerait sur la production
+  est refusé aussi.
+- La structure de la base de test = toutes les migrations de `supabase/migrations/`, collées dans
+  l'ordre dans le SQL Editor **du projet de test**. Une nouvelle migration se joue sur la base de
+  test **avant** la production.
+- Les comptes « admin » et « mairie » de test y sont **promus automatiquement** (clé secrète du
+  projet de test) : plus aucun test Mairie ignoré.
+- Plan gratuit : le projet de test se met **en pause après 7 jours sans activité**. Tests en échec
+  « fetch failed » → Supabase → projet `myklintown-tests` → *Resume project*.
+
+**Exceptionnellement sur la vraie base** (vérifier une migration qu'on vient d'y jouer) :
+`TESTS_SUR_PROD=1 pnpm test:integration` ; contre le site en ligne :
+`TESTS_SUR_PROD=1 E2E_BASE_URL=https://myklintown-web.vercel.app pnpm test:e2e`. Les comptes
+`mkt.test.…` sont alors recréés dans la vraie base, sans rôle admin ni Mairie : passer
+`supabase/NETTOYAGE_TESTS.sql` ensuite.
+
 ## Prérequis
 
-- `apps/web/.env.local` avec `NEXT_PUBLIC_SUPABASE_URL` et `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
-- `test:e2e` contre le build local : `pnpm build` d'abord ; le serveur est lancé sur le port **3100**
-  (jamais sur un serveur de développement déjà ouvert).
-- Contre un déploiement : `E2E_BASE_URL=https://myklintown-web.vercel.app pnpm test:e2e`.
+- `test:e2e` construit l'application branchée sur la base de test dans `apps/web/.next-tests`
+  (le build habituel `.next` n'est pas touché), puis la lance sur le port **3100** (jamais sur un
+  serveur de développement déjà ouvert). `E2E_SANS_BUILD=1` réutilise le dernier build de test.
 - Ne pas lancer `test:integration` et `test:e2e` **en même temps** : ils remettent à zéro les
   mêmes comptes de test.
 
 ## Comptes de test
 
 Créés automatiquement : `mkt.test.<clé>.<suffixe>@gmail.com`. Identifiants dans
-`apps/web/tests/.fixtures.local.json` (**ignoré par git**, le dépôt est public).
+`apps/web/tests/.fixtures.test.local.json` (base de test) ou `.fixtures.local.json` (vraie base,
+`TESTS_SUR_PROD=1`) — **ignorés par git**, le dépôt est public.
 Chaque exécution remet à zéro les deux entreprises de test (« Test Propreté A », « Test
 Concurrent B ») et clôt leurs anciens incidents. Les zones de test sont tracées **en mer, au large
 de Kribi** : aucun vrai ménage ne peut y tomber.
 
-**Mairie** : les tests Mairie sont ignorés (la commande est affichée) tant que le compte de test
-n'est pas promu :
-
-```sql
-select public.promouvoir_utilisateur('mkt.test.mairie.<suffixe>@gmail.com', 'mairie');
-```
+**Mairie et administrateur** : promus automatiquement sur la base de test. Sur la vraie base
+(`TESTS_SUR_PROD=1`), ces tests sont ignorés : on n'y crée plus de compte de test à rôle élevé.
 
 **Retours d'équipe** (liste d'attente des ménages hors zone, accès Mairie sur demande) : ces tests
 sont ignorés, avec la consigne, tant que `supabase/migrations/20261004000006_retours_tests_equipe.sql`
