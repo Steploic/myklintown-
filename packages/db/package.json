@@ -15,8 +15,8 @@
     "gen-types": "supabase gen types typescript --local > src/database.types.ts"
   },
   "dependencies": {
-    "@supabase/ssr": "^0.5.2",
-    "@supabase/supabase-js": "^2.47.10",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.117.3",
     "@myklintown/types": "workspace:*"
   },
   "devDependencies": {
