@@ -66,8 +66,8 @@ export async function signUpAction(_prev: AuthState, formData: FormData): Promis
   if (!nomComplet || !email || !password) {
     return { error: 'Nom, e-mail et mot de passe sont obligatoires.' };
   }
-  if (password.length < 6) {
-    return { error: 'Le mot de passe doit faire au moins 6 caractères.' };
+  if (password.length < 8) {
+    return { error: 'Le mot de passe doit faire au moins 8 caractères.' };
   }
 
   const supabase = createServerSupabase(await cookies());
@@ -160,8 +160,8 @@ export async function updatePasswordAction(
   const motDePasse = String(formData.get('password') ?? '');
   const confirmation = String(formData.get('confirmation') ?? '');
 
-  if (motDePasse.length < 6) {
-    return { error: 'Le mot de passe doit faire au moins 6 caractères.' };
+  if (motDePasse.length < 8) {
+    return { error: 'Le mot de passe doit faire au moins 8 caractères.' };
   }
   if (motDePasse !== confirmation) {
     return { error: 'Les deux mots de passe ne sont pas identiques.' };

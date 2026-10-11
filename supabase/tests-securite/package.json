@@ -1,0 +1,14 @@
+{
+  "name": "myklintown-tests-securite",
+  "private": true,
+  "description": "Tests de sécurité de la base, hors ligne : toutes les migrations rejouées sur une copie locale (PGlite + PostGIS), puis attaques et contrôles.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test --test-concurrency=1 securite.test.mjs",
+    "avant-apres": "node avant-apres.mjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
+    "@electric-sql/pglite-postgis": "0.2.8"
+  }
+}

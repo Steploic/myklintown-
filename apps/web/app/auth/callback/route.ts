@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerSupabase } from '@myklintown/db/server';
+import { cheminInterne } from '@/lib/metier';
 
 /**
  * Retour des liens envoyés par e-mail (réinitialisation de mot de passe,
@@ -21,7 +22,11 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get('code');
   const tokenHash = searchParams.get('token_hash');
   const type = searchParams.get('type');
-  const next = searchParams.get('next') ?? '/reset-password';
+  // `next` vient de l'URL : n'importe qui peut la fabriquer. Seul un chemin
+  // interne est suivi — sinon « ?next=.pirate.com » enverrait l'utilisateur,
+  // fraîchement connecté par son lien e-mail, sur un autre site.
+  const demande = searchParams.get('next');
+  const next = cheminInterne(demande) ? demande! : '/reset-password';
 
   const echec = (motif: string) =>
     NextResponse.redirect(`${origin}/forgot?motif=${encodeURIComponent(motif)}`);

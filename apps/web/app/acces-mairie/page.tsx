@@ -117,7 +117,7 @@ export default async function AccesMairiePage({ searchParams }: { searchParams: 
                     </div>
                     <div>
                       <label className="field-label" htmlFor="am-mdp">Mot de passe *</label>
-                      <input id="am-mdp" name="password" type="password" required minLength={6} autoComplete="new-password" className="field" />
+                      <input id="am-mdp" name="password" type="password" required minLength={8} autoComplete="new-password" className="field" />
                     </div>
                     <div>
                       <label className="field-label" htmlFor="am-tel-c">Téléphone</label>

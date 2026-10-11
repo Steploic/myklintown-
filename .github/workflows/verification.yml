@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+# Le jeton GitHub de la CI ne sert qu'à lire le dépôt.
+permissions:
+  contents: read
+
 jobs:
   verification:
     runs-on: ubuntu-latest
@@ -25,9 +29,32 @@ jobs:
       - name: Installation
         run: pnpm install --frozen-lockfile --ignore-scripts
         working-directory: .
+      - name: Failles connues des dépendances (bloquant si critique)
+        run: pnpm audit --prod --audit-level critical
+        working-directory: .
       - name: Types
         run: pnpm type-check
       - name: Tests unitaires
         run: pnpm test
       - name: Build
         run: pnpm build
+
+  # Toutes les migrations rejouées sur une copie locale de Postgres (PGlite +
+  # PostGIS), puis le catalogue d'attaques et les invariants de sécurité :
+  # une table sans RLS ou une fonction ouverte aux visiteurs fait échouer la CI.
+  securite-base:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: supabase/tests-securite
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: supabase/tests-securite/package-lock.json
+      - name: Installation
+        run: npm ci --ignore-scripts
+      - name: Tests de sécurité de la base
+        run: npm test
