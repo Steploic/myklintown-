@@ -29,8 +29,8 @@ export function TauxHebdoChart({ data }: { data: PointTaux[] }) {
             contentStyle={{ borderRadius: 10, border: '1px solid #DDE4E1', fontSize: 13 }}
           />
           <Legend iconType="plainline" wrapperStyle={{ fontSize: 12 }} />
-          <Line type="monotone" dataKey="paiement" name="Paiement effectif" stroke="#2B6CB0" strokeWidth={2} dot={{ r: 3 }} connectNulls />
-          <Line type="monotone" dataKey="execution" name="Exécution du service" stroke="#1F8A4C" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+          <Line type="monotone" dataKey="paiement" name="Paiement effectif" stroke="#2B6CB0" strokeWidth={2} dot={{ r: 3 }} connectNulls isAnimationActive={false} />
+          <Line type="monotone" dataKey="execution" name="Exécution du service" stroke="#1F8A4C" strokeWidth={2} dot={{ r: 3 }} connectNulls isAnimationActive={false} />
         </LineChart>
       </ResponsiveContainer>
     </div>

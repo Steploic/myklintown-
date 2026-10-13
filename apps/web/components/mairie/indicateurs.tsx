@@ -156,13 +156,13 @@ export function TableauMensuel({ t }: { t: TableauIndicateurs }) {
 }
 
 const COLONNES_HEBDO: { cle: Exclude<DefIndicateur['cle'], 'cout_par_menage'>; court: string }[] = [
-  { cle: 'abonnes_actifs', court: 'Abonnés actifs' },
+  { cle: 'abonnes_actifs', court: 'Abonnés' },
   { cle: 'taux_paiement', court: 'Paiement' },
   { cle: 'taux_execution', court: 'Exécution' },
   { cle: 'retention', court: 'Rétention' },
-  { cle: 'delai_signalement_h', court: 'Délai signal.' },
-  { cle: 'part_mobile_money', court: 'Mobile Money' },
-  { cle: 'incidents_1000', court: 'Incid. / 1 000' },
+  { cle: 'delai_signalement_h', court: 'Délai' },
+  { cle: 'part_mobile_money', court: 'MoMo' },
+  { cle: 'incidents_1000', court: 'Incidents ‰' },
 ];
 
 export function SuiviHebdo({ t }: { t: TableauIndicateurs }) {
@@ -199,12 +199,12 @@ export function SuiviHebdo({ t }: { t: TableauIndicateurs }) {
         </div>
       )}
       <div className="overflow-x-auto">
-        <table className="table-data min-w-[900px]" data-testid="tableau-hebdo">
+        <table className="table-data min-w-[820px]" data-testid="tableau-hebdo">
           <thead>
             <tr>
               <th>Semaine</th>
               {COLONNES_HEBDO.map((c) => (
-                <th key={c.cle} className="whitespace-nowrap text-right">{c.court}</th>
+                <th key={c.cle} className="whitespace-nowrap text-right" title={def(c.cle).label}>{c.court}</th>
               ))}
               <th className="text-right">Relevé</th>
             </tr>
@@ -227,7 +227,7 @@ export function SuiviHebdo({ t }: { t: TableauIndicateurs }) {
                   {l.enCours ? (
                     <span className="chip-info">en cours</span>
                   ) : l.rattrapage ? (
-                    <span className="chip-neutre" title="Relevé calculé plus d’un jour après la fin de la semaine">rattrapé le {l.releve}</span>
+                    <span className="chip-neutre" title="Relevé calculé plus d’un jour après la fin de la semaine">rattrapé {l.releve}</span>
                   ) : (
                     <span className="text-small text-muted-foreground">{l.releve}</span>
                   )}
