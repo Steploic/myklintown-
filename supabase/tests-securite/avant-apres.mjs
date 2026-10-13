@@ -37,7 +37,11 @@ async function jouer(etiquette, options) {
   return { etiquette, db, s, resultats };
 }
 
-const avant = await jouer('avant', { exclure: [AUDIT] });
+// « Avant » = la base telle qu'elle était juste avant l'audit : les migrations
+// suivantes s'appuient sur ses fonctions (garde des colonnes, codes Crockford)
+// et ne s'appliqueraient pas sans lui.
+const AVANT_AUDIT = String(BigInt(AUDIT) - 1n);
+const avant = await jouer('avant', { jusqua: AVANT_AUDIT });
 const apres = await jouer('après', {});
 
 console.log('\nATTAQUE'.padEnd(100) + 'AVANT        APRÈS');

@@ -16,6 +16,7 @@ npm run avant-apres   # chaque attaque jouée SANS puis AVEC la migration d'audi
 | `banc.mjs` | la base locale, l'habillage Supabase, `comme(db, qui, …)` pour jouer une requête en tant que visiteur anonyme, compte connecté ou clé service |
 | `scenario.mjs` | deux précollecteurs concurrents, la Mairie, un admin, des ménages, un employé ; le catalogue d'**attaques** (`true` = faille ouverte) et de **parcours** normaux |
 | `securite.test.mjs` | la suite lancée par la CI (job `securite-base`) |
+| `indicateurs.test.mjs` | les 8 indicateurs du pilote vérifiés **au chiffre près** sur un jeu de données construit à la main (un ménage par règle : délai de grâce, paiement après le jour de mesure, démo, résilié…), les relevés historisés et leurs droits |
 
 **Ajouter une migration** : rien à faire, elle est rejouée automatiquement. Si elle
 crée une table sans RLS, une fonction `security definer` sans `search_path` ou

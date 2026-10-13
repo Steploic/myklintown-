@@ -61,6 +61,7 @@ export const PRECOLLECTEUR_NAV: PortalNavItem[] = [
   { href: '/precollecteur/demandes', label: 'Demandes en attente', icon: Inbox, court: 'Demandes' },
   { href: '/precollecteur/flotte', label: 'Flotte & équipe', icon: Bike },
   { href: '/precollecteur/incidents', label: 'Incidents', icon: Camera },
+  { href: '/precollecteur/charges', label: 'Charges du mois', icon: Wallet, court: 'Charges' },
   { href: '/precollecteur/grille', label: 'Grille tarifaire', icon: Tags },
 ];
 
@@ -91,6 +92,7 @@ export const COLLECTEUR_NAV: PortalNavItem[] = [
 
 export const DASHBOARD_NAV: PortalNavItem[] = [
   { href: '/dashboard', label: 'Supervision', icon: LayoutDashboard },
+  { href: '/dashboard/indicateurs', label: 'Indicateurs du pilote', icon: BarChart3, court: 'Indicateurs' },
   { href: '/dashboard/zones', label: 'Zones de collecte', icon: Shapes, court: 'Zones' },
   { href: '/dashboard/precollecteurs', label: 'Précollecteurs', icon: Truck },
   { href: '/dashboard/incidents', label: 'Incidents', icon: AlertTriangle },

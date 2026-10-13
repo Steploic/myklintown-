@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { emailDe, identifiants } from '../../apps/web/tests/support/fixtures';
-import { expect, RUN, session, test } from './base';
+import { etat, expect, RUN, SANS_MIGRATION_0011, session, test } from './base';
 
 // Nom unique par exécution : une reprise ne tombe jamais sur le client d'un essai précédent.
 const NOM = `Famille Nouvelle ${Date.now().toString().slice(-8)}`;
@@ -218,6 +218,32 @@ test.describe('précollecteur : exploitation', () => {
     await expect(item.locator('video')).toHaveCount(1);
     await item.getByRole('button', { name: 'Résolu' }).click();
     await expect(page.locator('li', { hasText: `Chaîne cassée ${RUN}` })).toHaveCount(0);
+  });
+
+  test('charges du mois : saisie, refus d’un montant illisible, coût par ménage servi', async ({ page }) => {
+    test.skip(!etat().migration0011, SANS_MIGRATION_0011);
+    await page.goto('/precollecteur');
+    await page.getByRole('link', { name: 'Charges du mois' }).first().click();
+    await expect(page.getByRole('heading', { name: 'Charges du mois' })).toBeVisible();
+
+    await page.getByLabel('Carburant').fill('1,5');
+    await page.getByRole('button', { name: /Enregistrer les charges/ }).click();
+    await expect(page.getByText('Carburant : montant illisible (un nombre entier de FCFA).')).toBeVisible();
+
+    await page.getByLabel('Carburant').fill('30 000');
+    await page.getByLabel('Équipe', { exact: true }).fill('45000');
+    await page.getByRole('button', { name: /Enregistrer les charges/ }).click();
+    await expect(page.getByText(/enregistrées : 75\s000\sFCFA au total/)).toBeVisible();
+
+    // Relu depuis la base ; la tournée du test précédent a servi des ménages ce mois-ci.
+    await page.reload();
+    await expect(page.getByLabel('Carburant')).toHaveValue('30000');
+    await expect(page.getByTestId('cout-par-menage')).toContainText('FCFA');
+
+    // Un poste vidé est effacé.
+    await page.getByLabel('Équipe', { exact: true }).fill('');
+    await page.getByRole('button', { name: /Enregistrer les charges/ }).click();
+    await expect(page.getByText(/enregistrées : 30\s000\sFCFA au total/)).toBeVisible();
   });
 
   test('grille tarifaire en lecture seule', async ({ page }) => {
