@@ -70,11 +70,11 @@ function CarteIndicateur({
 
   return (
     <article className="card-soft flex flex-col p-4" data-testid={`kpi-${def.cle}`}>
-      <div className="flex items-start justify-between gap-2">
-        <h3 className="text-body-sm font-semibold text-brand-ink">{def.label}</h3>
-        <span className={cn(verdict.chip, 'shrink-0')}>{verdict.label}</span>
+      <h3 className="text-body-sm font-semibold text-brand-ink">{def.label}</h3>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+        <p className="num text-[1.75rem] font-bold leading-none text-brand-ink">{valeur == null ? '—' : def.format(valeur)}</p>
+        <span className={verdict.chip}>{verdict.label}</span>
       </div>
-      <p className="num mt-2 text-[1.75rem] font-bold leading-none text-brand-ink">{valeur == null ? '—' : def.format(valeur)}</p>
       <p className="mt-1.5 text-small text-muted-foreground">
         Cible fin {dateFr(mois.debut, { month: 'long' })} : <strong className="text-brand-ink">{libelleCible(t.cibles, def.cle, rang, ref)}</strong>
       </p>
@@ -204,7 +204,7 @@ export function SuiviHebdo({ t }: { t: TableauIndicateurs }) {
             <tr>
               <th>Semaine</th>
               {COLONNES_HEBDO.map((c) => (
-                <th key={c.cle} className="text-right">{c.court}</th>
+                <th key={c.cle} className="whitespace-nowrap text-right">{c.court}</th>
               ))}
               <th className="text-right">Relevé</th>
             </tr>
