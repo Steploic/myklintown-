@@ -94,9 +94,7 @@ export default async function globalSetup() {
     console.warn('\n⚠️  Tests « espace employé » ignorés : exécuter supabase/migrations/20261005000007_espace_employe.sql\n');
   }
   if (!migration0011) {
-    console.warn('
-⚠️  Tests « indicateurs du pilote » et « charges du mois » ignorés : exécuter supabase/migrations/20261013000011_indicateurs_pilote.sql
-');
+    console.warn('\n⚠️  Tests « indicateurs du pilote » et « charges du mois » ignorés : exécuter supabase/migrations/20261013000011_indicateurs_pilote.sql\n');
   }
   if (!adminPromu) {
     console.warn(`\n⚠️  Tests « Changer d’espace » (administrateur) ignorés : select public.promouvoir_utilisateur('${ADM.email}', 'admin');\n`);
