@@ -8,6 +8,7 @@ import { changerMotDePasseAction, majProfilAction } from '@/lib/compte-actions';
 import { majEntrepriseAction } from '@/lib/precollecteur/actions';
 import { getSupabase, row, utilisateurCourant } from '@/lib/server';
 import type { Entreprise } from '@/lib/types';
+import { ChampMotDePasse } from '@/components/ui/champ-mot-de-passe';
 
 export const metadata = { title: 'Paramètres' };
 
@@ -92,11 +93,11 @@ export default async function SettingsPage() {
           <ActionForm action={changerMotDePasseAction} resetOnSuccess className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="field-label" htmlFor="m-1">Nouveau mot de passe</label>
-              <input id="m-1" name="password" type="password" minLength={8} required autoComplete="new-password" className="field" />
+              <ChampMotDePasse id="m-1" name="password" minLength={8} required autoComplete="new-password" />
             </div>
             <div>
               <label className="field-label" htmlFor="m-2">Confirmation</label>
-              <input id="m-2" name="confirmation" type="password" minLength={8} required autoComplete="new-password" className="field" />
+              <ChampMotDePasse id="m-2" name="confirmation" minLength={8} required autoComplete="new-password" />
             </div>
             <div className="sm:col-span-2">
               <SubmitButton variant="secondary">Changer le mot de passe</SubmitButton>

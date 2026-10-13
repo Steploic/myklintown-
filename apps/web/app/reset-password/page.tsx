@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { AlertCircle, ArrowLeft, KeyRound, ShieldCheck } from 'lucide-react';
 import { Logo } from '@myklintown/ui';
 import { updatePasswordAction, type AuthState } from '@/lib/auth-actions';
+import { ChampMotDePasse } from '@/components/ui/champ-mot-de-passe';
 
 const INITIAL: AuthState = {};
 
@@ -42,16 +43,7 @@ export default function ResetPasswordPage() {
             <label htmlFor="password" className="text-body-sm font-medium">
               Nouveau mot de passe
             </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="new-password"
-              required
-              minLength={8}
-              placeholder="••••••••"
-              className="w-full rounded-md border border-border bg-surface px-3 py-2 text-body-sm placeholder:text-muted-foreground focus:border-brand-blue focus:outline-none focus:ring-2 focus:ring-brand-blue/20"
-            />
+            <ChampMotDePasse id="password" name="password" autoComplete="new-password" required minLength={8} placeholder="••••••••" />
             <p className="text-small text-muted-foreground">8 caractères au minimum.</p>
           </div>
 
@@ -59,16 +51,7 @@ export default function ResetPasswordPage() {
             <label htmlFor="confirmation" className="text-body-sm font-medium">
               Confirmez le mot de passe
             </label>
-            <input
-              id="confirmation"
-              name="confirmation"
-              type="password"
-              autoComplete="new-password"
-              required
-              minLength={8}
-              placeholder="••••••••"
-              className="w-full rounded-md border border-border bg-surface px-3 py-2 text-body-sm placeholder:text-muted-foreground focus:border-brand-blue focus:outline-none focus:ring-2 focus:ring-brand-blue/20"
-            />
+            <ChampMotDePasse id="confirmation" name="confirmation" autoComplete="new-password" required minLength={8} placeholder="••••••••" />
           </div>
 
           <button type="submit" disabled={pending} className="btn-primary w-full disabled:opacity-60">

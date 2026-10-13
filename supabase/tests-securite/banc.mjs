@@ -138,3 +138,15 @@ export async function creerCompte(db, email, role = 'citoyen', nom = email.split
 export async function promouvoir(db, email, role) {
   await db.query(`select public.promouvoir_utilisateur($1, $2::public.user_role)`, [email, role]);
 }
+
+/**
+ * Crée l'entreprise d'un gérant comme le fait l'application. Si la base exige
+ * un code d'agrément (migration 20261013000012), un code est d'abord délivré
+ * (comme par la Mairie), puis saisi à la création.
+ */
+export async function creerEntreprise(db, gerant, nom) {
+  const exige = await valeur(db, `select to_regprocedure('public.creer_code_agrement(text, text, uuid)') is not null`);
+  if (!exige) return comme(db, gerant, (tx) => valeur(tx, `select public.creer_mon_entreprise($1)`, [nom]));
+  const code = await valeur(db, `insert into public.codes_agrement (code, destinataire) values (public.nouveau_code_invitation(), $1) returning code`, [`Agrément de ${nom}`]);
+  return comme(db, gerant, (tx) => valeur(tx, `select public.creer_mon_entreprise($1, p_code => $2)`, [nom, code]));
+}

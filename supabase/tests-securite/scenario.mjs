@@ -4,7 +4,7 @@
 // Une attaque renvoie `true` si elle a RÉUSSI (faille présente), `false` si la
 // base l'a refusée. Un parcours lève une erreur s'il ne fonctionne plus.
 
-import { comme, creerCompte, promouvoir, valeur } from './banc.mjs';
+import { comme, creerCompte, creerEntreprise, promouvoir, valeur } from './banc.mjs';
 
 const CONTOUR_Z = {
   type: 'Polygon',
@@ -40,9 +40,9 @@ export async function preparer(db) {
   s.plan = await valeur(db, `select id from public.plans_tarifaires where code = 'MENSUEL'`);
 
   // Entreprises
-  s.entA = await comme(db, s.gerantA, (tx) => valeur(tx, `select public.creer_mon_entreprise('Entreprise A')`));
-  s.entB = await comme(db, s.gerantB, (tx) => valeur(tx, `select public.creer_mon_entreprise('Entreprise B')`));
-  s.entIntrus = await comme(db, s.intrus, (tx) => valeur(tx, `select public.creer_mon_entreprise('Intrus SARL')`));
+  s.entA = await creerEntreprise(db, s.gerantA, 'Entreprise A');
+  s.entB = await creerEntreprise(db, s.gerantB, 'Entreprise B');
+  s.entIntrus = await creerEntreprise(db, s.intrus, 'Intrus SARL');
 
   // Territoire (Mairie) : zone Z confiée à A
   s.zone = await comme(db, s.mairie, (tx) =>
@@ -289,6 +289,57 @@ export const ATTAQUES = [
       return ok;
     },
   },
+  {
+    id: 'espace-sans-agrement',
+    titre: 'Un compte précollecteur crée son espace sans code d’agrément de la Mairie',
+    async jouer(db) {
+      const u = await creerCompte(db, `sans.code.${Date.now()}@test.cm`, 'precollecteur');
+      return accepte(db, u, `select public.creer_mon_entreprise('Sans agrément')`);
+    },
+  },
+  {
+    id: 'agrement-reutilise',
+    titre: 'Un second précollecteur réutilise un code d’agrément déjà utilisé',
+    async jouer(db) {
+      const u = await creerCompte(db, `reutilise.${Date.now()}@test.cm`, 'precollecteur');
+      if (!(await valeur(db, `select to_regclass('public.codes_agrement') is not null`))) {
+        return accepte(db, u, `select public.creer_mon_entreprise('Code réutilisé')`);
+      }
+      const code = await valeur(db, `select code from public.codes_agrement where utilise_at is not null limit 1`);
+      return accepte(db, u, `select public.creer_mon_entreprise('Code réutilisé', p_code => $1)`, [code]);
+    },
+  },
+  {
+    id: 'agrement-expire-revoque',
+    titre: 'Un précollecteur utilise un code d’agrément expiré, puis un code révoqué',
+    async jouer(db) {
+      const u = await creerCompte(db, `expire.${Date.now()}@test.cm`, 'precollecteur');
+      if (!(await valeur(db, `select to_regclass('public.codes_agrement') is not null`))) {
+        return accepte(db, u, `select public.creer_mon_entreprise('Code expiré')`);
+      }
+      const expire = await valeur(db, `insert into public.codes_agrement (code, destinataire, expire_at)
+        values (public.nouveau_code_invitation(), 'Expiré', now() - interval '1 day') returning code`);
+      const revoque = await valeur(db, `insert into public.codes_agrement (code, destinataire, revoque_at)
+        values (public.nouveau_code_invitation(), 'Révoqué', now()) returning code`);
+      return (await accepte(db, u, `select public.creer_mon_entreprise('Code expiré', p_code => $1)`, [expire]))
+        || (await accepte(db, u, `select public.creer_mon_entreprise('Code révoqué', p_code => $1)`, [revoque]));
+    },
+  },
+  {
+    id: 'agrement-autodelivre',
+    titre: 'Un précollecteur se délivre lui-même un code d’agrément',
+    jouer: (db, s) => accepte(db, s.intrus, `select public.creer_code_agrement('Moi-même')`),
+  },
+  {
+    id: 'agrement-lecture',
+    titre: 'Un précollecteur lit les codes d’agrément en attente',
+    async jouer(db, s) {
+      if (!(await valeur(db, `select to_regclass('public.codes_agrement') is not null`))) return false;
+      await db.query(`insert into public.codes_agrement (code, destinataire) values (public.nouveau_code_invitation(), 'En attente')`);
+      const n = await comme(db, s.intrus, (tx) => valeur(tx, `select count(*)::int from public.codes_agrement`)).catch(() => 0);
+      return n > 0;
+    },
+  },
 ];
 
 // -----------------------------------------------------------------------------
@@ -473,6 +524,35 @@ export const PARCOURS = [
       });
       const st = await valeur(db, `select statut from public.factures where id = $1`, [s.factureA]);
       if (st !== 'payee') throw new Error(`facture ${st}`);
+    },
+  },
+  {
+    titre: 'Code d’agrément : la Mairie le délivre, le précollecteur le tape à sa façon, le code est consommé ; révocation',
+    async jouer(db, s) {
+      if (!(await valeur(db, `select to_regclass('public.codes_agrement') is not null`))) return;
+      const code = await comme(db, s.mairie, (tx) => valeur(tx, `select public.creer_code_agrement('Propreté Mvog-Ada', '690112233')`));
+      const u = await creerCompte(db, `agree.${Date.now()}@test.cm`, 'precollecteur');
+      const saisie = `${code.slice(0, 5).toLowerCase()} - ${code.slice(5)}`;
+      const ent = await comme(db, u, (tx) => valeur(tx, `select public.creer_mon_entreprise('Propreté Mvog-Ada', p_code => $1)`, [saisie]));
+      const c = (await comme(db, s.mairie, (tx) => tx.query(`select id, utilise_par, entreprise_id from public.codes_agrement where code = $1`, [code]))).rows[0];
+      if (c?.utilise_par !== u || c?.entreprise_id !== ent) throw new Error('code non consommé');
+
+      await comme(db, s.admin, (tx) => tx.query(`select public.creer_code_agrement('À révoquer')`));
+      const id = await comme(db, s.mairie, (tx) => valeur(tx, `select id from public.codes_agrement where destinataire = 'À révoquer'`));
+      await comme(db, s.mairie, (tx) => tx.query(`select public.revoquer_code_agrement($1)`, [id]));
+      const utilise = await comme(db, s.mairie, (tx) => tx.query(`select public.revoquer_code_agrement($1)`, [c.id])).then(() => true, () => false);
+      if (utilise) throw new Error('un code utilisé ne devrait pas se révoquer');
+    },
+  },
+  {
+    titre: 'Un administrateur crée un espace sans code (dépannage)',
+    async jouer(db) {
+      if (!(await valeur(db, `select to_regclass('public.codes_agrement') is not null`))) return;
+      const email = `admin.depannage.${Date.now()}@test.cm`;
+      const a = await creerCompte(db, email);
+      await promouvoir(db, email, 'admin');
+      const ent = await comme(db, a, (tx) => valeur(tx, `select public.creer_mon_entreprise('Démonstration MyKlinTown')`));
+      if (!ent) throw new Error('pas d’entreprise');
     },
   },
 ];

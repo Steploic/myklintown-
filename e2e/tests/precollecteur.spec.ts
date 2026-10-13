@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { emailDe, identifiants } from '../../apps/web/tests/support/fixtures';
+import { codeAgrementDeTest, emailDe, identifiants } from '../../apps/web/tests/support/fixtures';
 import { etat, expect, RUN, SANS_MIGRATION_0011, session, test } from './base';
 
 // Nom unique par exécution : une reprise ne tombe jamais sur le client d'un essai précédent.
@@ -16,6 +16,14 @@ test.describe('précollecteur : inscription et démarrage', () => {
     await page.getByRole('button', { name: 'Créer mon compte' }).click();
     await expect(page).toHaveURL(/\/precollecteur\/demarrage/, { timeout: 90_000 });
     await page.getByLabel('Nom de l’entreprise *').fill('Test Inscrit SARL');
+    if (etat().migration0012) {
+      // Sans code valide, pas d'espace ; avec le code tapé à sa façon, l'espace s'ouvre.
+      await page.getByLabel('Code d’agrément').fill('ABCDE-FGHJK');
+      await page.getByRole('button', { name: 'Créer mon espace' }).click();
+      await expect(page.getByText(/Code d.agrément invalide ou expiré/)).toBeVisible();
+      const code = await codeAgrementDeTest('Test Inscrit SARL');
+      await page.getByLabel('Code d’agrément').fill(`${code!.slice(0, 5).toLowerCase()} ${code!.slice(5)}`);
+    }
     await page.getByRole('button', { name: 'Créer mon espace' }).click();
     await expect(page).toHaveURL(/\/precollecteur\?bienvenue=1/);
     await expect(page.getByRole('heading', { name: /Bienvenue, Test Inscrit SARL/ })).toBeVisible();

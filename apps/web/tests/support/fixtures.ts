@@ -19,6 +19,7 @@
  * - Les zones de test sont tracées EN MER, au large de Kribi : aucun vrai
  *   ménage ne peut y tomber.
  */
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -171,13 +172,34 @@ export async function precollecteur(cle: string, nomEntreprise: string): Promise
   if (c.role !== 'precollecteur') throw new Error(`${cle} devrait être précollecteur, il est ${c.role}`);
   let { data } = await c.sb.from('entreprise_membres').select('entreprise_id').eq('user_id', c.id).maybeSingle();
   if (!data) {
-    const r = await c.sb.rpc('creer_mon_entreprise', { p_nom: nomEntreprise, p_telephone: '690000001', p_siege: 'Test' });
+    // Depuis la migration 20261013000012, un code d'agrément de la Mairie est exigé.
+    const code = await codeAgrementDeTest(nomEntreprise);
+    const r = await c.sb.rpc('creer_mon_entreprise', {
+      p_nom: nomEntreprise,
+      p_telephone: '690000001',
+      p_siege: 'Test',
+      ...(code ? { p_code: code } : {}),
+    });
     if (r.error) throw r.error;
     data = { entreprise_id: r.data as string };
   }
   const entrepriseId = (data as { entreprise_id: string }).entreprise_id;
   await reinitialiser(c.sb, entrepriseId);
   return { ...c, entrepriseId };
+}
+
+/**
+ * Code d'agrément délivré sur la base de TEST (clé secrète), comme le ferait la
+ * Mairie. null si la base ne connaît pas encore les codes, ou hors base de test.
+ */
+export async function codeAgrementDeTest(destinataire: string): Promise<string | null> {
+  if (BASE !== 'test' || !ENV_TESTS.SUPABASE_SECRET_KEY) return null;
+  const alphabet = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+  const code = Array.from(crypto.randomBytes(10), (o) => alphabet[o % 32]).join('');
+  const { error } = await serviceBaseDeTest()
+    .from('codes_agrement')
+    .insert({ code, destinataire: `Test ${destinataire}`.slice(0, 120) });
+  return error ? null : code;
 }
 
 /** Efface les données d'exploitation d'une entreprise de test (cascade SQL). */

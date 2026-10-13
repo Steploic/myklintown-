@@ -1,7 +1,9 @@
 import { Truck } from 'lucide-react';
 import { PortalShell } from '@/components/portal-shell';
 import { EmptyState, PageHeader } from '@/components/ui/blocks';
-import { getSupabase, rows, rpc } from '@/lib/server';
+import { CodesAgrement } from '@/components/mairie/codes-agrement';
+import { getSupabase, origineDemande, rows, rpc } from '@/lib/server';
+import type { CodeAgrement } from '@/lib/agrement';
 import { nombre, pct, telLisible } from '@/lib/format';
 
 export const metadata = { title: 'Précollecteurs' };
@@ -28,7 +30,16 @@ const STATUT: Record<string, { label: string; chip: string }> = {
 
 export default async function PrecollecteursPage() {
   const supabase = await getSupabase();
-  const { data } = await rpc(supabase, 'supervision_precollecteurs');
+  const [{ data }, co, cm, origine] = await Promise.all([
+    rpc(supabase, 'supervision_precollecteurs'),
+    supabase
+      .from('codes_agrement')
+      .select('id, code, destinataire, telephone, created_at, expire_at, revoque_at, utilise_at, communes(nom), entreprises(nom)')
+      .order('created_at', { ascending: false })
+      .limit(50),
+    supabase.from('communes').select('id, nom').order('nom'),
+    origineDemande(),
+  ]);
   const liste = rows<Ligne>(data);
 
   return (
@@ -36,7 +47,7 @@ export default async function PrecollecteursPage() {
       <PageHeader titre="Précollecteurs" sousTitre="Entreprises actives sur le territoire et leur performance sur 30 jours." />
       {liste.length === 0 ? (
         <div className="card-soft">
-          <EmptyState icon={Truck} titre="Aucun précollecteur inscrit" texte="Les entreprises créent leur espace depuis la page d’accueil MyKlinTown." />
+          <EmptyState icon={Truck} titre="Aucun précollecteur inscrit" texte="Un précollecteur crée son espace depuis la page d’accueil MyKlinTown, avec un code d’agrément délivré ci-dessous." />
         </div>
       ) : (
         <div className="card-soft overflow-x-auto">
@@ -76,6 +87,8 @@ export default async function PrecollecteursPage() {
           </table>
         </div>
       )}
+      {/* Sans la migration 20261013000012, la table n'existe pas : la section ne s'affiche pas. */}
+      {!co.error && <CodesAgrement codes={rows<CodeAgrement>(co.data)} communes={rows<{ id: string; nom: string }>(cm.data)} origine={origine} />}
     </PortalShell>
   );
 }
