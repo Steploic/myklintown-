@@ -16,6 +16,7 @@ export const etat = () =>
     mairieEmail: string;
     migration0006: boolean;
     migration0007: boolean;
+    migration0011: boolean;
     adminPromu: boolean;
     adminEmail: string;
   };
@@ -26,6 +27,7 @@ export const RUN = Date.now().toString(36).toUpperCase();
 export const session = (cle: string) => path.resolve(__dirname, '..', '.auth', `${cle}.json`);
 
 export const SANS_MIGRATION_0006 = 'Migration 20261004000006_retours_tests_equipe.sql non exécutée';
+export const SANS_MIGRATION_0011 = 'Migration 20261013000011_indicateurs_pilote.sql non exécutée';
 
 /** Connexion par le vrai formulaire (comptes dont la session ne doit pas être partagée). */
 export async function seConnecter(page: Page, email: string, motDePasse: string) {
