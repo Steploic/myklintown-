@@ -9,10 +9,10 @@ export default function LogoutPage() {
   return (
     <div className="grid min-h-screen place-items-center bg-brand-gradient-soft px-6">
       <div className="card-soft w-full max-w-md p-8 text-center">
-        <div className="inline-flex">
+        <div className="flex justify-center">
           <Logo size={48} />
         </div>
-        <div className="mt-6 inline-flex h-12 w-12 items-center justify-center rounded-full bg-brand-green/10 text-brand-green">
+        <div className="mx-auto mt-6 flex h-12 w-12 items-center justify-center rounded-full bg-brand-green/10 text-brand-green">
           <LogOut size={22} />
         </div>
         <h1 className="mt-4">À très bientôt 👋</h1>
