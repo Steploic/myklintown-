@@ -4,6 +4,7 @@ import { useSoumission } from '@/components/ui/action-form';
 import Link from 'next/link';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { signInAction, type AuthState } from '@/lib/auth-actions';
+import { ChampMotDePasse } from '@/components/ui/champ-mot-de-passe';
 
 const INITIAL: AuthState = {};
 
@@ -29,11 +30,14 @@ export function LoginForm({ suite }: { suite?: string }) {
             Oublié ?
           </Link>
         </div>
-        <input id="password" name="password" type="password" autoComplete="current-password" required placeholder="••••••••" className="field" />
+        <ChampMotDePasse id="password" name="password" autoComplete="current-password" required placeholder="••••••••" />
       </div>
       <button type="submit" disabled={pending} className="btn-secondary w-full">
         {pending && <Loader2 size={16} className="animate-spin" />} {pending ? 'Connexion…' : 'Se connecter'}
       </button>
+      <Link href="/" className="btn-outline w-full">
+        Annuler
+      </Link>
     </form>
   );
 }

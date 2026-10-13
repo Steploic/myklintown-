@@ -5,6 +5,7 @@ import { SiteFooter } from '@/components/site-footer';
 import { ActionForm, SubmitButton } from '@/components/ui/action-form';
 import { rejoindreEquipeAction } from '@/lib/employe/rejoindre-actions';
 import { getSupabase, row, rows, rpc, utilisateurCourant } from '@/lib/server';
+import { ChampMotDePasse } from '@/components/ui/champ-mot-de-passe';
 
 export const metadata = { title: 'Rejoindre mon équipe' };
 
@@ -116,7 +117,7 @@ export default async function RejoindrePage({ searchParams }: { searchParams: Pr
                       </div>
                       <div>
                         <label className="field-label" htmlFor="rj-mdp">Mot de passe *</label>
-                        <input id="rj-mdp" name="password" type="password" required minLength={8} autoComplete="new-password" className="field" />
+                        <ChampMotDePasse id="rj-mdp" name="password" required minLength={8} autoComplete="new-password" />
                       </div>
                       <div className="sm:col-span-2">
                         <label className="field-label" htmlFor="rj-tel">Téléphone</label>

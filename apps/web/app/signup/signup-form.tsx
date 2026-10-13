@@ -4,12 +4,13 @@ import Link from 'next/link';
 import { useSoumission } from '@/components/ui/action-form';
 import { AlertCircle, CheckCircle2, Home, Loader2, Truck } from 'lucide-react';
 import { signUpAction, type AuthState } from '@/lib/auth-actions';
+import { ChampMotDePasse } from '@/components/ui/champ-mot-de-passe';
 
 // Profils obtenables en ligne (voir SELF_SERVICE_ROLES) : le précollecteur ne voit
 // que les données de SA propre entreprise ; le ménage, les siennes. Les accès
 // Mairie sont ouverts par MyKlinTown, jamais demandés à l'inscription.
 const PROFILS = [
-  { value: 'precollecteur', label: 'Précollecteur', icon: Truck, desc: 'Je gère une activité de précollecte (clients, tricycles, tournées).' },
+  { value: 'precollecteur', label: 'Précollecteur', icon: Truck, desc: 'Je gère une activité de précollecte. Code d’agrément de la Mairie requis.' },
   { value: 'citoyen', label: 'Ménage', icon: Home, desc: 'Je veux faire collecter les déchets de mon foyer.' },
 ];
 
@@ -65,7 +66,7 @@ export function SignupForm({ defaut }: { defaut: 'precollecteur' | 'citoyen' }) 
         </div>
         <div>
           <label htmlFor="password" className="field-label">Mot de passe</label>
-          <input id="password" name="password" type="password" required minLength={8} autoComplete="new-password" className="field" />
+          <ChampMotDePasse id="password" name="password" required minLength={8} autoComplete="new-password" />
           <p className="field-hint">8 caractères minimum.</p>
         </div>
       </div>
@@ -73,6 +74,16 @@ export function SignupForm({ defaut }: { defaut: 'precollecteur' | 'citoyen' }) 
       <button type="submit" disabled={pending} className="btn-primary w-full">
         {pending && <Loader2 size={16} className="animate-spin" />} {pending ? 'Création…' : 'Créer mon compte'}
       </button>
+      <p className="text-center text-body-sm text-muted-foreground">
+        Vous avez déjà un compte ?{' '}
+        <Link href="/login" className="font-semibold text-brand-blue hover:underline">
+          Se connecter
+        </Link>
+        {' · '}
+        <Link href="/" className="font-semibold text-brand-blue hover:underline">
+          Annuler
+        </Link>
+      </p>
       <p className="text-center text-small text-muted-foreground">
         Vous représentez une Mairie ?{' '}
         <Link href="/acces-mairie" className="font-semibold text-brand-blue hover:underline">

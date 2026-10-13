@@ -57,6 +57,27 @@ test.describe('pages publiques', () => {
     erreurs.splice(0, erreurs.length, ...erreurs.filter((e) => !/404/.test(e)));
   });
 
+  test('connexion et inscription : Annuler, « déjà un compte ? », mot de passe visible', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('link', { name: /Créer mon espace précollecteur/ }).first().click();
+    await expect(page).toHaveURL(/\/signup/);
+    // Sous le bouton de création : on a déjà un compte, on va se connecter.
+    await page.getByRole('link', { name: 'Se connecter' }).last().click();
+    await expect(page).toHaveURL(/\/login$/);
+
+    const mdp = page.getByLabel('Mot de passe');
+    await mdp.fill('secret-123');
+    await expect(mdp).toHaveAttribute('type', 'password');
+    await page.getByRole('button', { name: 'Afficher la saisie' }).click();
+    await expect(mdp).toHaveAttribute('type', 'text');
+    await expect(mdp).toHaveValue('secret-123');
+    await page.getByRole('button', { name: 'Masquer la saisie' }).click();
+    await expect(mdp).toHaveAttribute('type', 'password');
+
+    await page.getByRole('link', { name: 'Annuler' }).click();
+    await expect(page).toHaveURL(/\/$/);
+  });
+
   test('formulaire de connexion : mauvais mot de passe', async ({ page }) => {
     await page.goto('/login');
     await page.getByLabel('E-mail').fill('personne.inexistante.mkt@gmail.com');

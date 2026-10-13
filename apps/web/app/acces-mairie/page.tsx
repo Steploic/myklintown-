@@ -7,6 +7,7 @@ import { ActionForm, SubmitButton } from '@/components/ui/action-form';
 import { annulerDemandeAccesAction, demanderAccesMairieAction } from '@/lib/acces-actions';
 import { getSupabase, row, rows, utilisateurCourant } from '@/lib/server';
 import { dateFr } from '@/lib/format';
+import { ChampMotDePasse } from '@/components/ui/champ-mot-de-passe';
 
 export const metadata = { title: 'Accès Mairie' };
 
@@ -117,7 +118,7 @@ export default async function AccesMairiePage({ searchParams }: { searchParams: 
                     </div>
                     <div>
                       <label className="field-label" htmlFor="am-mdp">Mot de passe *</label>
-                      <input id="am-mdp" name="password" type="password" required minLength={8} autoComplete="new-password" className="field" />
+                      <ChampMotDePasse id="am-mdp" name="password" required minLength={8} autoComplete="new-password" />
                     </div>
                     <div>
                       <label className="field-label" htmlFor="am-tel-c">Téléphone</label>
