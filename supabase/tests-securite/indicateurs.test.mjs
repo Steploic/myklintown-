@@ -10,7 +10,7 @@
 
 import { before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { comme, creerBase, creerCompte, promouvoir, valeur } from './banc.mjs';
+import { comme, creerBase, creerCompte, creerEntreprise, promouvoir, valeur } from './banc.mjs';
 
 let db;
 let T;
@@ -340,8 +340,8 @@ describe('Charges d’exploitation et heure de résolution', () => {
   test('le gérant saisit ses charges ; ni un autre gérant, ni son employé, ni la Mairie ne les voient', async () => {
     const gerantX = await creerCompte(db, 'gerant.x@test.cm', 'precollecteur');
     const gerantY = await creerCompte(db, 'gerant.y@test.cm', 'precollecteur');
-    const entX = await comme(db, gerantX, (tx) => valeur(tx, `select public.creer_mon_entreprise('X')`));
-    await comme(db, gerantY, (tx) => valeur(tx, `select public.creer_mon_entreprise('Y')`));
+    const entX = await creerEntreprise(db, gerantX, 'X');
+    await creerEntreprise(db, gerantY, 'Y');
     const mois = `${jour(0).slice(0, 7)}-01`;
 
     await comme(db, gerantX, (tx) =>
@@ -380,7 +380,7 @@ describe('Charges d’exploitation et heure de résolution', () => {
 
   test('« résolu » pose l’heure de résolution ; l’API ne peut ni l’écrire ni la garder à la réouverture', async () => {
     const gerant = await creerCompte(db, 'gerant.r@test.cm', 'precollecteur');
-    const ent = await comme(db, gerant, (tx) => valeur(tx, `select public.creer_mon_entreprise('R')`));
+    const ent = await creerEntreprise(db, gerant, 'R');
     const id = await comme(db, gerant, (tx) =>
       valeur(tx, `insert into public.incidents_precollecte (entreprise_id, source, categorie, resolu_at)
                   values ($1, 'precollecteur', 'autre', '2020-01-01') returning id`, [ent]),

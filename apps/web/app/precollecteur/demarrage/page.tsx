@@ -70,6 +70,25 @@ export default async function DemarragePage() {
             </div>
             <div className="space-y-4">
               <div>
+                <label htmlFor="code" className="field-label">
+                  Code d’agrément {estAdmin ? <span className="font-normal text-muted-foreground">(facultatif pour un administrateur)</span> : '*'}
+                </label>
+                <input
+                  id="code"
+                  name="code"
+                  required={!estAdmin}
+                  autoComplete="off"
+                  autoCapitalize="characters"
+                  spellCheck={false}
+                  className="field num uppercase tracking-widest"
+                  placeholder="ABCDE-FGHJK"
+                />
+                <p className="field-hint">
+                  Délivré par la Mairie de votre commune : exercer sur son territoire demande son autorisation. Vous n’en avez pas ?
+                  Demandez-le-lui.
+                </p>
+              </div>
+              <div>
                 <label htmlFor="nom" className="field-label">Nom de l’entreprise *</label>
                 <input id="nom" name="nom" required className="field" placeholder="ex. Propreté Nsam SARL" />
               </div>

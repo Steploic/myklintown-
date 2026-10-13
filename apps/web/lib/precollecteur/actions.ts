@@ -49,6 +49,7 @@ export async function creerEntrepriseAction(_p: ActionState, fd: FormData): Prom
     p_telephone: txt(fd, 'telephone'),
     p_siege: txt(fd, 'siege'),
     p_commune: txt(fd, 'commune_id'),
+    p_code: txt(fd, 'code'),
   });
   if (error) return { error: erreurLisible(error.message) };
   rafraichir();

@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { mairie } from '../../apps/web/tests/support/fixtures';
-import { expect, etat, SANS_MIGRATION_0011, session, test } from './base';
+import { expect, etat, SANS_MIGRATION_0011, SANS_MIGRATION_0012, session, test } from './base';
 
 test.describe.configure({ mode: 'serial' });
 test.use({ storageState: session('mairie') });
@@ -48,6 +48,25 @@ test('indicateurs du pilote : les 8 indicateurs, les périmètres, les exports',
   expect(csv).toContain('Taux de paiement effectif');
   const [semaines] = await Promise.all([page.waitForEvent('download'), page.getByRole('link', { name: /Relevés hebdomadaires \(CSV\)/ }).click()]);
   expect(fs.readFileSync((await semaines.path())!, 'utf8')).toContain('Début;Fin;Ménages inscrits');
+});
+
+test('codes d’agrément : délivrer, envoyer par WhatsApp, révoquer', async ({ page }) => {
+  test.skip(!etat().migration0012, SANS_MIGRATION_0012);
+  const nom = `Test Agrément ${Date.now().toString().slice(-6)}`;
+  await page.goto('/dashboard/precollecteurs');
+  await page.getByLabel('Précollecteur agréé *').fill(nom);
+  await page.getByLabel('Téléphone').fill('690112233');
+  await page.getByRole('button', { name: 'Délivrer un code' }).click();
+  await expect(page.getByText(new RegExp(`Code délivré à ${nom} : [0-9A-Z]{5}-[0-9A-Z]{5}`))).toBeVisible();
+
+  const ligne = page.getByTestId('codes-agrement').getByRole('listitem').filter({ hasText: nom });
+  await expect(ligne.getByText('À utiliser')).toBeVisible();
+  const whatsapp = await ligne.getByRole('link', { name: 'WhatsApp' }).getAttribute('href');
+  expect(whatsapp).toMatch(/^https:\/\/wa\.me\/237690112233\?text=/);
+  expect(decodeURIComponent(whatsapp!)).toContain('/signup?role=precollecteur');
+
+  await ligne.getByRole('button', { name: 'Révoquer' }).click();
+  await expect(ligne.getByText('Révoqué')).toBeVisible();
 });
 
 test('l’ancienne page « rapports » mène aux indicateurs', async ({ page }) => {

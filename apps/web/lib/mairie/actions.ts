@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { getSupabase, rpc } from '@/lib/server';
 import { contourDepuisPoints } from '@/lib/metier';
+import { formaterCode } from '@/lib/agrement';
 import type { ActionState } from '@/lib/types';
 
 function rafraichir() {
@@ -87,5 +88,29 @@ export async function statutIncidentMairieAction(fd: FormData) {
     .from('incidents_precollecte')
     .update({ statut: String(fd.get('statut')) })
     .eq('id', String(fd.get('incident_id')));
+  rafraichir();
+}
+
+// -----------------------------------------------------------------------------
+// Codes d'agrément des précollecteurs
+// -----------------------------------------------------------------------------
+
+export async function creerCodeAgrementAction(_p: ActionState, fd: FormData): Promise<ActionState> {
+  const destinataire = String(fd.get('destinataire') ?? '').trim();
+  if (destinataire.length < 2) return { error: 'Indiquez à qui ce code est destiné.' };
+  const supabase = await getSupabase();
+  const { data, error } = await rpc(supabase, 'creer_code_agrement', {
+    p_destinataire: destinataire,
+    p_telephone: String(fd.get('telephone') ?? '').trim() || null,
+    p_commune: String(fd.get('commune_id') ?? '') || null,
+  });
+  if (error) return { error: error.message };
+  rafraichir();
+  return { ok: `Code délivré à ${destinataire} : ${formaterCode(String(data))}. Envoyez-le-lui depuis la liste ci-dessous.` };
+}
+
+export async function revoquerCodeAgrementAction(fd: FormData) {
+  const supabase = await getSupabase();
+  await rpc(supabase, 'revoquer_code_agrement', { p_id: String(fd.get('id')) });
   rafraichir();
 }

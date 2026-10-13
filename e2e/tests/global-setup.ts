@@ -75,6 +75,8 @@ export default async function globalSetup() {
   const migration0007 = !(await A.sb.rpc('mes_statistiques_employe', { p_jours: 1 })).error;
   // Migration 20261013000011 (indicateurs du pilote, charges du mois) jouée ?
   const migration0011 = !(await A.sb.from('couts_exploitation').select('id').limit(1)).error;
+  // Migration 20261013000012 (code d'agrément des précollecteurs) jouée ?
+  const migration0012 = !(await A.sb.from('codes_agrement').select('id').limit(1)).error;
   if (migration0011) await A.sb.from('couts_exploitation').delete().eq('entreprise_id', A.entrepriseId);
   if (migration0006) {
     // Rien ne reste « en attente » d'un essai précédent.
@@ -85,7 +87,7 @@ export default async function globalSetup() {
   genererVideoQr(CODE_SCAN, path.resolve(__dirname, '..', '.media', 'qr.y4m'));
   fs.writeFileSync(
     FICHIER_ETAT,
-    JSON.stringify({ precoA: A.entrepriseId, precoB: B.entrepriseId, clientScan: scan.id, clientLien: lien.id, mairiePromue: M.promue, mairieEmail: M.email, migration0006, migration0007, migration0011, adminPromu, adminEmail: ADM.email }, null, 2),
+    JSON.stringify({ precoA: A.entrepriseId, precoB: B.entrepriseId, clientScan: scan.id, clientLien: lien.id, mairiePromue: M.promue, mairieEmail: M.email, migration0006, migration0007, migration0011, migration0012, adminPromu, adminEmail: ADM.email }, null, 2),
   );
   if (!migration0006) {
     console.warn('\n⚠️  Tests « liste d’attente » et « accès Mairie » ignorés : exécuter supabase/migrations/20261004000006_retours_tests_equipe.sql\n');
