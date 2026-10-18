@@ -21,6 +21,7 @@ import {
   niveauRelance,
   NIVEAUX_RELANCE,
   nombre,
+  STATUTS_A_FACTURER,
 } from '@/lib/format';
 import type { ClientStatut, Facture, Paiement } from '@/lib/types';
 
@@ -98,7 +99,7 @@ export default async function FacturationPage({
   const totalRetard = enRetard.reduce((s, f) => s + reste(f), 0);
   const totalAttente = factures.reduce((s, f) => s + reste(f), 0);
   const aEcheance = clients.filter(
-    (c) => c.statut_abonnement === 'echeance_proche' || c.statut_abonnement === 'expire' || c.statut_abonnement === 'sans_facture',
+    (c) => STATUTS_A_FACTURER.includes(c.statut_abonnement),
   );
   const encaisseMois = valides.filter((p) => p.created_at.slice(0, 10) >= debutMois).reduce((s, p) => s + p.montant_fcfa, 0);
   const derniereRelance = (fid: string) => relances.find((r) => r.facture_id === fid);

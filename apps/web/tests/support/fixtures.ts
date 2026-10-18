@@ -250,8 +250,9 @@ export function carreEnMer(decalage = 0, cote = 0.02) {
 }
 export const POINT_EN_MER = { lat: 2.51, lng: 9.31 };
 
+/** Jour de Yaoundé/Douala (UTC+1, sans heure d'été), décalé : le même que `jour_douala()` en base. */
 export const iso = (decalageJours = 0) => {
-  const d = new Date(Date.now() + decalageJours * 86_400_000);
+  const d = new Date(Date.now() + 3_600_000 + decalageJours * 86_400_000);
   return d.toISOString().slice(0, 10);
 };
 

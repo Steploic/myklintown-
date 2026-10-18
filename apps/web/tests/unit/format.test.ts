@@ -84,13 +84,15 @@ describe('téléphones camerounais', () => {
 
 describe('statuts d’abonnement', () => {
   it('chaque statut calculé en base a un libellé et une couleur terrain', () => {
-    for (const s of ['a_jour', 'echeance_proche', 'impaye', 'expire', 'sans_facture', 'demande', 'suspendu', 'resilie']) {
+    for (const s of ['a_jour', 'echeance_proche', 'grace', 'impaye', 'expire', 'sans_facture', 'demande', 'suspendu', 'resilie']) {
       expect(STATUT_ABONNEMENT[s as keyof typeof STATUT_ABONNEMENT]).toBeDefined();
     }
   });
   it('code couleur : à jour = servir, impayé = ne pas servir', () => {
     expect(statutAbonnement('a_jour').terrain).toBe('ok');
     expect(statutAbonnement('echeance_proche').terrain).toBe('relance');
+    // Délai de grâce : orange, c'est le dernier passage (livrable §3.2).
+    expect(statutAbonnement('grace').terrain).toBe('relance');
     expect(statutAbonnement('impaye').terrain).toBe('stop');
     expect(statutAbonnement('expire').terrain).toBe('stop');
   });

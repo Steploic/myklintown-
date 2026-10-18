@@ -8,7 +8,8 @@ import { cn } from '@myklintown/ui';
 import { QrScanner } from '@/components/qr-scanner';
 import { encaisserEspecesAction, marquerCollecteAction, scannerClientAction, type ResultatScan } from '@/lib/terrain-actions';
 import { estPanneReseau, fcfa, MOTIFS_NON_REALISEE, statutAbonnement } from '@/lib/format';
-import { extraireCodeClient } from '@/lib/metier';
+import { consigneTerrain, extraireCodeClient, motifTerrain } from '@/lib/metier';
+import type { ConsigneTerrain } from '@/lib/types';
 import { ajouter, oublierRefus, type OperationTerrain } from '@/lib/hors-ligne/file-terrain';
 import { useFileTerrain } from './use-file-terrain';
 import { ActionForm, SubmitButton } from '@/components/ui/action-form';
@@ -31,11 +32,16 @@ export interface Passage {
     /** Reste dû (paiements validés déduits) : propose l'encaissement en espèces. */
     montant_impaye?: number;
     telephone?: string | null;
+    /** Consigne calculée par la base (migration 20261019000013) et de quoi écrire son motif. */
+    consigne_terrain?: ConsigneTerrain;
+    couverture_fin?: string | null;
+    fin_grace?: string | null;
+    plus_ancienne_echeance?: string | null;
   };
 }
 
 /** Résultat affiché après un scan : celui du serveur, ou celui de la liste du jour (hors ligne). */
-type ResultatAffiche = ResultatScan & { horsLigne?: boolean; inconnu?: boolean; code?: string };
+type ResultatAffiche = ResultatScan & { horsLigne?: boolean; inconnu?: boolean; code?: string; motif?: string | null };
 
 const TERRAIN = {
   ok: { classe: 'bg-terrain-ok', icone: ShieldCheck, consigne: 'Servir' },
@@ -43,6 +49,19 @@ const TERRAIN = {
   stop: { classe: 'bg-terrain-stop', icone: ShieldAlert, consigne: 'Ne pas servir : impayé' },
   neutre: { classe: 'bg-brand-ink', icone: ShieldCheck, consigne: 'À vérifier' },
 } as const;
+
+const TERRAIN_DE: Record<ConsigneTerrain, keyof typeof TERRAIN> = {
+  servir: 'ok',
+  servir_rappeler: 'relance',
+  ne_pas_servir: 'stop',
+  verifier: 'neutre',
+};
+
+/** La consigne de la base fait foi ; avant la migration 20261019000013, on la déduit du statut. */
+const consigneDe = (c: Passage['client']): ConsigneTerrain => c.consigne_terrain ?? consigneTerrain(c.statut_abonnement);
+
+/** Motif d'un passage refusé par le blocage : celui que la base écrit elle-même. */
+const MOTIF_REFUS = 'Refus / impayé';
 
 export function TourneeRunner({
   tourneeId,
@@ -52,6 +71,7 @@ export function TourneeRunner({
   scanAuDepart = false,
   encaissement = false,
   paiementEnLigne = false,
+  blocage = false,
 }: {
   tourneeId: string;
   passages: Passage[];
@@ -64,6 +84,11 @@ export function TourneeRunner({
   encaissement?: boolean;
   /** Paiement Mobile Money sur le téléphone du ménage (précollecteur vérifié chez Notch Pay). */
   paiementEnLigne?: boolean;
+  /**
+   * Blocage au passage (`terrain_blocage_actif`) : un ménage à ne pas servir
+   * n'a pas de bouton « Collecté », et son scan note « Refus / impayé ».
+   */
+  blocage?: boolean;
 }) {
   const router = useRouter();
   const [etat, setEtat] = useState(() => new Map(passages.map((p) => [p.id, { statut: p.statut, motif: p.motif }])));
@@ -129,28 +154,37 @@ export function TourneeRunner({
     const code = extraireCodeClient(texte);
     // Hors ligne : la couleur vient de la liste du jour, déjà sur le téléphone.
     const garder = () => {
-      ajouter({ type: 'scan', tourneeId, code });
       const p = passages.find((x) => x.client.code === code);
-      if (p) {
-        setEtat((m) => new Map(m).set(p.id, { statut: 'realisee', motif: null }));
-        setResultat({
-          client: { nom: p.client.nom, code: p.client.code, statut_abonnement: p.client.statut_abonnement, quartier: p.client.quartier },
-          horsLigne: true,
-        });
-      } else {
+      if (!p) {
+        ajouter({ type: 'scan', tourneeId, code });
         setResultat({ horsLigne: true, inconnu: true, code });
+        return;
       }
+      const consigne = consigneDe(p.client);
+      const refuse = blocage && consigne === 'ne_pas_servir';
+      // Ménage à ne pas servir : on garde ce qui s'est vraiment passé (non servi),
+      // la base le notera « Refus / impayé » au retour du réseau.
+      if (refuse) ajouter({ type: 'pointage', tourneeId, collecteId: p.id, statut: 'non_realisee', motif: MOTIF_REFUS });
+      else ajouter({ type: 'scan', tourneeId, code });
+      setEtat((m) => new Map(m).set(p.id, refuse ? { statut: 'non_realisee', motif: MOTIF_REFUS } : { statut: 'realisee', motif: null }));
+      setResultat({
+        client: { nom: p.client.nom, code: p.client.code, statut_abonnement: p.client.statut_abonnement, quartier: p.client.quartier },
+        consigne,
+        refuse,
+        motif: motifTerrain({ ...p.client, consigne_terrain: consigne }),
+        horsLigne: true,
+      });
     };
     if (!navigator.onLine) return garder();
     startTransition(async () => {
       try {
         const r = await scannerClientAction(tourneeId, texte);
         if (r.reseau) return garder();
-        setResultat(r);
+        const p = r.client ? passages.find((x) => x.client.code === r.client!.code) : undefined;
+        setResultat({ ...r, motif: p ? motifTerrain({ ...p.client, statut_abonnement: r.client!.statut_abonnement, consigne_terrain: r.consigne ?? p.client.consigne_terrain }) : null });
         if (r.client && !r.error) {
-          const p = passages.find((x) => x.client.code === r.client!.code);
-          if (p) setEtat((m) => new Map(m).set(p.id, { statut: 'realisee', motif: null }));
-          if (r.horsPlanning) router.refresh();
+          if (p) setEtat((m) => new Map(m).set(p.id, r.refuse ? { statut: 'non_realisee', motif: MOTIF_REFUS } : { statut: 'realisee', motif: null }));
+          if (r.horsPlanning && !r.refuse) router.refresh();
         }
       } catch (e) {
         if (!estPanneReseau(e)) throw e;
@@ -176,7 +210,7 @@ export function TourneeRunner({
   });
 
   const rs = resultat?.client ? statutAbonnement(resultat.client.statut_abonnement) : null;
-  const t = rs ? TERRAIN[rs.terrain] : null;
+  const t = rs ? TERRAIN[resultat?.consigne ? TERRAIN_DE[resultat.consigne] : rs.terrain] : null;
 
   return (
     <div className="space-y-4">
@@ -275,17 +309,24 @@ export function TourneeRunner({
                   <>
                     <t.icone size={40} className="shrink-0" />
                     <div className="min-w-0">
-                      <p className="text-small font-semibold uppercase tracking-wider opacity-90">{t.consigne}</p>
+                      <p className="text-small font-semibold uppercase tracking-wider opacity-90">
+                        {resultat.consigne === 'ne_pas_servir' ? 'Ne pas servir' : t.consigne}
+                      </p>
                       <p className="truncate text-h2 font-bold">{resultat.client!.nom}</p>
+                      {resultat.motif && <p className="text-body-sm font-medium">{resultat.motif}</p>}
                       <p className="text-body-sm opacity-90">
                         {rs!.label} ·{' '}
-                        {resultat.horsLigne
-                          ? 'hors ligne : passage gardé, envoyé au retour du réseau'
-                          : resultat.dejaFait
-                            ? 'passage déjà enregistré'
-                            : resultat.horsPlanning
-                              ? 'passage ajouté (hors planning)'
-                              : 'passage enregistré ✓'}
+                        {resultat.refuse
+                          ? resultat.horsLigne
+                            ? 'non servi : gardé sur le téléphone, envoyé au retour du réseau'
+                            : `non servi : passage noté « ${MOTIF_REFUS} »`
+                          : resultat.horsLigne
+                            ? 'hors ligne : passage gardé, envoyé au retour du réseau'
+                            : resultat.dejaFait
+                              ? 'passage déjà enregistré'
+                              : resultat.horsPlanning
+                                ? 'passage ajouté (hors planning)'
+                                : 'passage enregistré ✓'}
                       </p>
                     </div>
                   </>
@@ -300,7 +341,10 @@ export function TourneeRunner({
         {ordonnes.map((p) => {
           const e = vue(p.id);
           const s = statutAbonnement(p.client.statut_abonnement);
-          const bande = { ok: 'bg-terrain-ok', relance: 'bg-terrain-relance', stop: 'bg-terrain-stop', neutre: 'bg-border' }[s.terrain];
+          const consigne = consigneDe(p.client);
+          const bande = { ok: 'bg-terrain-ok', relance: 'bg-terrain-relance', stop: 'bg-terrain-stop', neutre: 'bg-border' }[TERRAIN_DE[consigne]];
+          const bloque = blocage && consigne === 'ne_pas_servir';
+          const motif = e.statut === 'prevue' && consigne !== 'servir' ? motifTerrain({ ...p.client, consigne_terrain: consigne }) : null;
           return (
             <li key={p.id} className={cn('card-soft overflow-hidden', e.statut !== 'prevue' && 'opacity-80')}>
               <div className="flex items-stretch">
@@ -315,8 +359,10 @@ export function TourneeRunner({
                     <p className="truncate text-small text-muted-foreground">
                       {[p.client.quartier, p.client.adresse].filter(Boolean).join(' · ') || p.client.code}
                     </p>
+                    {motif && <p className="mt-0.5 text-small text-muted-foreground">{motif}</p>}
                     <p className="mt-1 flex flex-wrap items-center gap-1.5">
                       <span className={s.chip}>{s.label}</span>
+                      {bloque && e.statut === 'prevue' && <span className="chip-stop gap-1"><ShieldAlert size={12} /> Ne pas servir</span>}
                       {e.statut === 'realisee' && <span className="chip-ok"><Check size={12} /> Collecté</span>}
                       {e.statut === 'non_realisee' && <span className="chip-stop">Non fait{e.motif ? ` · ${e.motif}` : ''}</span>}
                       {enAttenteParPassage.has(p.id) && (
@@ -360,13 +406,16 @@ export function TourneeRunner({
                           >
                             <X size={20} />
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => marquer(p.id, 'realisee')}
-                            className="flex h-11 items-center gap-1.5 rounded-md bg-terrain-ok px-4 font-semibold text-white hover:bg-terrain-ok/90"
-                          >
-                            <Check size={20} /> Collecté
-                          </button>
+                          {/* Blocage au passage : pas de « Collecté » pour un ménage à ne pas servir. */}
+                          {!bloque && (
+                            <button
+                              type="button"
+                              onClick={() => marquer(p.id, 'realisee')}
+                              className="flex h-11 items-center gap-1.5 rounded-md bg-terrain-ok px-4 font-semibold text-white hover:bg-terrain-ok/90"
+                            >
+                              <Check size={20} /> Collecté
+                            </button>
+                          )}
                         </>
                       ) : (
                         <button

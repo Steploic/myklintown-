@@ -168,7 +168,9 @@ export default async function CitoyenAccueil({
             <p className="mt-1 opacity-90">
               {client.statut === 'demande'
                 ? `En attente de validation par ${entreprise?.nom ?? 'votre précollecteur'}.`
-                : client.couverture_fin
+                : client.statut_abonnement === 'grace' && client.fin_grace
+                  ? `Période payée terminée : réglez au plus tard le ${dateFr(client.fin_grace, { day: 'numeric', month: 'long' })} pour continuer à être collecté.`
+                  : client.couverture_fin
                   ? `Formule ${client.plan_nom} · couvert jusqu’au ${dateFr(client.couverture_fin, { day: 'numeric', month: 'long', year: 'numeric' })}`
                   : `Formule ${client.plan_nom} · première période à régler`}
             </p>

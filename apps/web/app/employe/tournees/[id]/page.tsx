@@ -10,6 +10,7 @@ import { PositionLive } from '@/components/employe/position-live';
 import { RafraichissementAuto } from '@/components/ui/rafraichissement-auto';
 import { paiementEnLigneDisponible } from '@/lib/paiement/service';
 import { requireEmploye } from '@/lib/employe/context';
+import { blocageAuPassage, clientsDeTournee } from '@/lib/clients-tournee';
 import { BoutonStatutTournee } from '@/components/precollecteur/bouton-statut-tournee';
 import { row, rows } from '@/lib/server';
 import { dateFr, dateHeureFr, fcfa, STATUT_TOURNEE, statutAbonnement } from '@/lib/format';
@@ -52,12 +53,7 @@ export default async function TourneeEmploye({
   const equipe = rows<{ employes: { nom: string } | null }>(eq.data).map((e) => e.employes?.nom).filter(Boolean).sort();
   const collectes = rows<{ id: string; statut: Passage['statut']; motif: string | null; client_id: string }>(co.data);
   const ids = collectes.map((c) => c.client_id);
-  const { data: cl } = ids.length
-    ? await supabase
-        .from('v_clients_statut')
-        .select('id, nom, code, quartier, adresse, statut_abonnement, lat, lng, montant_impaye, telephone')
-        .in('id', ids)
-    : { data: [] };
+  const [cl, blocage] = await Promise.all([clientsDeTournee(supabase, ids), blocageAuPassage(supabase)]);
 
   // Espèces déjà reçues mais pas encore validées : on ne les redemande pas.
   const enAttente = new Map<string, number>();
@@ -65,7 +61,7 @@ export default async function TourneeEmploye({
     enAttente.set(p.client_id, (enAttente.get(p.client_id) ?? 0) + p.montant_fcfa);
   }
   const clients = new Map(
-    rows<Passage['client']>(cl).map((c) => [
+    cl.map((c) => [
       c.id,
       { ...c, montant_impaye: Math.max(0, Number(c.montant_impaye ?? 0) - (enAttente.get(c.id) ?? 0)) },
     ]),
@@ -150,6 +146,7 @@ export default async function TourneeEmploye({
         scanAuDepart={scan === '1'}
         encaissement={modifiable}
         paiementEnLigne={modifiable && enLigne}
+        blocage={blocage}
       />
 
       <Volet
