@@ -5,8 +5,8 @@ Trois étages, du plus rapide au plus complet.
 | Commande (depuis `apps/web`) | Quoi | Durée | Touche la base ? |
 |---|---|---|---|
 | `pnpm test` | **Unitaires** : montants, dates, périodes de facture, relances, rôles, codes QR, zones, erreurs réseau | secondes | non |
-| `pnpm test:integration` | **Sécurité (RLS)** table par table et rôle par rôle, avec témoins positifs ; facturation ; terrain ; parcours entre acteurs | ~3 min | **base de test** (CI) |
-| `pnpm test:e2e` | **Navigateur réel** : parcours complets, caméra simulée (scan QR, photo, vidéo), accès, téléphone | ~20–35 min (build compris) | **base de test** (CI) |
+| `pnpm test:integration` | **Sécurité (RLS)** table par table et rôle par rôle, avec témoins positifs ; facturation ; terrain ; parcours entre acteurs | ~2 min en CI (tâche complète) | **base de test** (CI) |
+| `pnpm test:e2e` | **Navigateur réel** : parcours complets, caméra simulée (scan QR, photo, vidéo), accès, téléphone | ~7 min en CI, build compris (20–35 min sur le poste) | **base de test** (CI) |
 | `pnpm test:tout` | Les trois + types + build | ~40 min | base de test |
 
 ## Première installation
