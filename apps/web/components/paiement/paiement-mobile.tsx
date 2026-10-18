@@ -5,11 +5,17 @@ import { useRouter } from 'next/navigation';
 import { AlertCircle, CheckCircle2, Loader2, Smartphone } from 'lucide-react';
 import { cn } from '@myklintown/ui';
 import { CANAUX, operateurProbable, type Canal } from '@/lib/paiement/regles';
-import { statutPaiementAction, type ResultatDemande } from '@/lib/paiement/actions';
+import { rafraichirApresPaiementAction, statutPaiementAction, type ResultatDemande } from '@/lib/paiement/actions';
 import { estPanneReseau, fcfa, MESSAGE_HORS_LIGNE } from '@/lib/format';
 
 const INTERVALLE_MS = 3_000;
 const ATTENTE_MAX_MS = 4 * 60_000;
+/**
+ * Durée d'affichage de « Paiement reçu » avant la mise à jour de la page. La page
+ * mise à jour ne rend plus ce composant (facture « Payée », « Facture réglée ») :
+ * la redessiner tout de suite effaçait la confirmation avant qu'on la voie.
+ */
+const CONFIRMATION_MS = 5_000;
 
 type Etape = 'saisie' | 'attente' | 'reussi' | 'echec';
 
@@ -91,7 +97,6 @@ export function PaiementMobile({
       if (s?.statut === 'reussi') {
         fini = true;
         setEtape('reussi');
-        router.refresh();
       } else if (s && (s.statut === 'echoue' || s.statut === 'annule' || s.statut === 'expire')) {
         fini = true;
         setMessage(s.message ?? (s.statut === 'annule' ? 'Paiement annulé.' : s.statut === 'expire' ? 'Demande expirée.' : 'Le paiement a échoué.'));
@@ -106,7 +111,16 @@ export function PaiementMobile({
       fini = true;
       clearInterval(t);
     };
-  }, [etape, reference, router]);
+  }, [etape, reference]);
+
+  // Confirmation lue : les pages se mettent à jour (la courante comprise).
+  useEffect(() => {
+    if (etape !== 'reussi') return;
+    const t = setTimeout(() => {
+      rafraichirApresPaiementAction().catch(() => router.refresh());
+    }, CONFIRMATION_MS);
+    return () => clearTimeout(t);
+  }, [etape, router]);
 
   if (etape === 'reussi') {
     return (

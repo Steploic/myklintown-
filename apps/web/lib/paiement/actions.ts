@@ -63,15 +63,24 @@ export async function demanderPaiementTourneeAction(clientId: string, canal: Can
   return demarrerPaiement({ factureId: f.id, canal, telephone, origine: 'tournee', initiePar: user.id });
 }
 
-/** Où en est le paiement ? (la référence, aléatoire, n'est connue que de celui qui l'a lancé) */
+/**
+ * Où en est le paiement ? (la référence, aléatoire, n'est connue que de celui qui l'a lancé)
+ *
+ * Ne revalide rien : une revalidation redessine la page courante dans la réponse
+ * même, où la facture désormais payée n'a plus son bloc de paiement — la
+ * confirmation « Paiement reçu » disparaissait avant d'apparaître. La mise à
+ * jour passe par `rafraichirApresPaiementAction`, une fois la confirmation lue.
+ */
 export async function statutPaiementAction(reference: string): Promise<{ statut: StatutPaiementEnLigne; message: string | null }> {
   const r = await actualiserPaiement(reference);
-  if (r?.statut === 'reussi') {
-    revalidatePath('/citoyen', 'layout');
-    revalidatePath('/precollecteur', 'layout');
-    revalidatePath('/employe', 'layout');
-  }
   return r ?? { statut: 'echoue', message: 'Paiement introuvable.' };
+}
+
+/** Après un paiement réussi : espaces du ménage, du précollecteur et de l'employé à jour (page courante comprise). */
+export async function rafraichirApresPaiementAction() {
+  revalidatePath('/citoyen', 'layout');
+  revalidatePath('/precollecteur', 'layout');
+  revalidatePath('/employe', 'layout');
 }
 
 /** Le gérant (ou un employé) crée le lien de paiement d'une facture, à envoyer par WhatsApp. */
