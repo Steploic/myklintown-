@@ -1,0 +1,96 @@
+name: Tests sur base éphémère
+
+# Intégration (sécurité RLS, facturation, terrain, parcours) et navigateur
+# (Playwright) sur une base Supabase LOCALE, née pour l'exécution puis jetée :
+# la CLI y rejoue toutes les migrations de supabase/migrations/, dans l'ordre.
+# Aucun secret : les clés de cette pile locale sont celles, publiques, de la
+# CLI. La production ne peut pas être visée (rien ne la connaît ici).
+# Une base par suite : intégration et navigateur tournent en même temps sans
+# se marcher dessus.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branche ou commit à tester (vide = la branche choisie ci-dessus)
+        required: false
+
+# Le jeton GitHub de la CI ne sert qu'à lire le dépôt.
+permissions:
+  contents: read
+
+# Un nouveau push sur la même branche annule l'exécution précédente.
+concurrency:
+  group: tests-base-${{ github.event.pull_request.number || github.ref }}-${{ inputs.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: ${{ matrix.suite == 'e2e' && 'Navigateur (e2e)' || 'Intégration' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ matrix.suite == 'e2e' && 75 || 30 }}
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [integration, e2e]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Installation
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - uses: supabase/setup-cli@v3
+        with:
+          version: 2.119.0
+      - name: Base de test locale (toutes les migrations)
+        run: |
+          # Services inutiles aux tests écartés : démarrage plus court.
+          supabase start -x studio,postgres-meta,imgproxy,edge-runtime,logflare,vector
+          eval "$(supabase status -o env)"
+          test -n "$API_URL" && test -n "$ANON_KEY" && test -n "$SERVICE_ROLE_KEY"
+          # Le fichier que lisent tests/support/fixtures.ts et e2e/playwright.config.ts.
+          cat > apps/web/.env.test.local <<EOF
+          NEXT_PUBLIC_SUPABASE_URL=$API_URL
+          NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY
+          SUPABASE_SECRET_KEY=$SERVICE_ROLE_KEY
+          NEXT_PUBLIC_SITE_URL=http://localhost:3100
+          EOF
+
+      - name: Tests d'intégration
+        if: matrix.suite == 'integration'
+        run: pnpm test:integration
+        working-directory: apps/web
+
+      - name: Navigateur Chromium
+        if: matrix.suite == 'e2e'
+        run: |
+          pnpm install --ignore-workspace --frozen-lockfile
+          pnpm exec playwright install --with-deps --only-shell chromium
+        working-directory: e2e
+      - name: Tests navigateur (build de test compris)
+        if: matrix.suite == 'e2e'
+        run: pnpm test:e2e
+        working-directory: apps/web
+      - name: Rapport Playwright
+        if: matrix.suite == 'e2e' && !cancelled()
+        uses: actions/upload-artifact@v7
+        with:
+          name: rapport-playwright
+          path: e2e/playwright-report/
+          retention-days: 7
+
+      - name: Journaux de la base (en cas d'échec)
+        if: failure()
+        run: |
+          for c in $(docker ps -a --format '{{.Names}}' | grep -E '^supabase_(db|auth|rest|storage|kong)_'); do
+            echo "::group::$c"; docker logs --tail 150 "$c" 2>&1; echo "::endgroup::"
+          done

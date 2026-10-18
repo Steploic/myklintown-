@@ -187,20 +187,22 @@ sur le portail correspondant au rôle. Puis tenter un portail interdit (par exem
 `/dashboard` avec un compte citoyen) : la redirection doit ramener à son propre
 portail.
 
-## Étape 8 — Comptes de démo (pour montrer les 4 portails)
+## Étape 8 — Comptes de démo (pour montrer les espaces)
 
-> ⚠️ Depuis le correctif d'élévation de privilèges (étape 2 bis, section 10),
-> `/signup` n'accorde plus que les rôles **citoyen** et **enterprise**. Les rôles
-> `collecteur`, `mairie` et `admin` ne s'obtiennent **que** par promotion — et un
-> déclencheur en base refuse qu'un compte modifie son propre rôle.
+> ⚠️ `/signup` n'accorde que les rôles **ménage** (`citoyen`) et **précollecteur**
+> (code d'agrément de la Mairie requis). `mairie` et `admin` ne s'obtiennent
+> **que** par promotion — et un déclencheur en base refuse qu'un compte modifie
+> son propre rôle. `employe` s'obtient en rejoignant une équipe avec le code
+> d'invitation du gérant (`/rejoindre`).
+> Les portails de démonstration `/collecteur` et `/enterprise` ont été retirés le
+> 19/10/2026 (migration `20261019000015`) : leurs adresses ramènent à l'accueil.
 
 1. Sur le site, s'inscrire via `/signup` pour chaque compte de démo souhaité
-   (le rôle attribué sera `citoyen` ou `enterprise`).
+   (le rôle attribué sera `citoyen` ou `precollecteur`).
 2. Promouvoir ensuite depuis le **SQL Editor** :
 
    ```sql
    select public.promouvoir_utilisateur('demo.mairie@myklintown.cm', 'mairie');
-   select public.promouvoir_utilisateur('demo.collecteur@myklintown.cm', 'collecteur');
    ```
 
    La fonction vérifie que le profil existe et échoue proprement sinon. Elle est
@@ -209,15 +211,18 @@ portail.
 
 ## Étape 9 — Smoke-test avant tout rendez-vous
 
-- [ ] Inscription « Entreprise » → arrive bien sur `/enterprise`
+- [ ] Inscription « Précollecteur » (avec un code d'agrément) → arrive bien sur `/precollecteur`
+- [ ] Inscription « Ménage » → arrive bien sur `/citoyen`
 - [ ] Connexion / déconnexion OK
-- [ ] Les 4 portails s'ouvrent sans page cassée (`/citoyen`, `/collecteur`, `/dashboard`, `/enterprise`)
-- [ ] Un signalement créé côté citoyen apparaît côté mairie (chemin réel en base)
-- [ ] Testé sur mobile (les entreprises regarderont souvent sur téléphone)
+- [ ] Les espaces s'ouvrent sans page cassée (`/citoyen`, `/precollecteur`, `/employe`, `/dashboard`)
+- [ ] `/collecteur` et `/enterprise` (portails retirés) ramènent à l'accueil
+- [ ] Un passage enregistré en tournée par le précollecteur apparaît côté ménage,
+      dans « Mes collectes » (chemin réel en base)
+- [ ] Testé sur mobile (les précollecteurs et les ménages l'utilisent surtout sur téléphone)
 
 **Contrôles de sécurité** (à faire une fois, après l'étape 2 bis) :
 
-- [ ] `/signup` ne propose que **Citoyen** et **Recycleur / Entreprise**
+- [ ] `/signup` ne propose que **Précollecteur** et **Ménage**
 - [ ] Aucune table sans protection — la requête de contrôle en fin de
       `setup_rls.sql` renvoie **zéro ligne**
 - [ ] Un compte citoyen ne peut pas se promouvoir. Connecté en citoyen, depuis la
