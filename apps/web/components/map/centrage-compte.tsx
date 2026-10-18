@@ -23,9 +23,17 @@ export function CentrageCompte({ vide, zoomMax = 15 }: { vide: boolean; zoomMax?
 
   useEffect(() => {
     if (!centre || fait.current) return;
-    fait.current = true;
-    if (centre.emprise) map.fitBounds(centre.emprise, { padding: [30, 30], maxZoom: zoomMax });
-    else map.setView(centre.centre, centre.zoom ?? map.getZoom());
+    // Une image plus tard, taille remesurée : juste après sa création, la
+    // carte peut encore se croire large de 0 px, et le cadrage d'une emprise
+    // partirait alors au zoom maximal.
+    const image = requestAnimationFrame(() => {
+      if (fait.current) return;
+      fait.current = true;
+      map.invalidateSize({ pan: false });
+      if (centre.emprise) map.fitBounds(centre.emprise, { padding: [30, 30], maxZoom: zoomMax });
+      else map.setView(centre.centre, centre.zoom ?? map.getZoom());
+    });
+    return () => cancelAnimationFrame(image);
   }, [centre, map, zoomMax]);
 
   return null;
