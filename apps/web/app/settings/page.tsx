@@ -16,10 +16,8 @@ const PORTAIL: Record<string, PortalKey> = {
   citoyen: 'citoyen',
   precollecteur: 'precollecteur',
   employe: 'employe',
-  collecteur: 'collecteur',
   mairie: 'mairie',
   admin: 'mairie',
-  enterprise: 'enterprise',
 };
 
 /** Paramètres du compte connecté : profil, entreprise (précollecteur), mot de passe. */

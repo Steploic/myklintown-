@@ -113,9 +113,7 @@ export const config = {
     '/citoyen/:path*',
     '/precollecteur/:path*',
     '/employe/:path*',
-    '/collecteur/:path*',
     '/dashboard/:path*',
-    '/enterprise/:path*',
     '/settings/:path*',
   ],
 };

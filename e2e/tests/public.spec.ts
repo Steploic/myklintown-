@@ -142,6 +142,28 @@ test.describe('pages de maquette retirées', () => {
   }
 });
 
+// Portails Collecteur et Partenaire B2B (maquettes) retirés : un ancien lien
+// ou favori mène à l'accueil, connecté ou non (redirection de next.config).
+test.describe('portails de démonstration retirés', () => {
+  const ANCIENS = ['/collecteur', '/collecteur/scan', '/enterprise', '/enterprise/marketplace'];
+  for (const url of ANCIENS) {
+    test(`${url} → accueil`, async ({ page }) => {
+      await page.goto(url);
+      await expect(page).toHaveURL(/\/$/);
+      await expect(page.getByRole('heading', { level: 1 })).toContainText('La précollecte');
+    });
+  }
+  test.describe('connecté', () => {
+    test.use({ storageState: session('precoA') });
+    test('même chose pour un compte connecté', async ({ page }) => {
+      for (const url of ANCIENS) {
+        await page.goto(url);
+        await expect(page, url).toHaveURL(/\/$/);
+      }
+    });
+  });
+});
+
 test('page d’accueil sans débordement horizontal', async ({ page }) => {
   await page.goto('/');
   await pasDeDebordement(page);
