@@ -169,7 +169,9 @@ test.describe('précollecteur : exploitation', () => {
     const url = page.url();
 
     const retard = page.locator('li', { hasText: 'Famille Retard' });
-    await expect(retard.getByText('Impayé')).toBeVisible();
+    await expect(retard.getByText('Impayé', { exact: true })).toBeVisible();
+    // Motif sous la consigne (migration 20261019000013) : depuis quand, combien.
+    await expect(retard.getByText(/Facture impayée depuis le .+ · 3\s500/)).toBeVisible();
     await retard.getByRole('button', { name: 'Non collecté' }).click();
     await retard.getByRole('button', { name: 'Client absent' }).click();
     await expect(retard.getByText('Non fait · Client absent')).toBeVisible();
