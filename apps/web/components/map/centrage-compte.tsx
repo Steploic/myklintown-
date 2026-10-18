@@ -30,8 +30,11 @@ export function CentrageCompte({ vide, zoomMax = 15 }: { vide: boolean; zoomMax?
       if (fait.current) return;
       fait.current = true;
       map.invalidateSize({ pan: false });
-      if (centre.emprise) map.fitBounds(centre.emprise, { padding: [30, 30], maxZoom: zoomMax });
-      else map.setView(centre.centre, centre.zoom ?? map.getZoom());
+      // Sans animation : c'est le cadrage de départ, et une page redessinée
+      // pendant l'animation (redirection après une action) retirait la carte en
+      // plein zoom — Leaflet levait alors « reading '_leaflet_pos' ».
+      if (centre.emprise) map.fitBounds(centre.emprise, { padding: [30, 30], maxZoom: zoomMax, animate: false });
+      else map.setView(centre.centre, centre.zoom ?? map.getZoom(), { animate: false });
     });
     return () => cancelAnimationFrame(image);
   }, [centre, map, zoomMax]);
