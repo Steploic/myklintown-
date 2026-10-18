@@ -123,7 +123,8 @@ test('un chevauchement non autorisé est refusé à l’enregistrement', async (
 
 test('précollecteurs et incidents', async ({ page }) => {
   await page.goto('/dashboard/precollecteurs');
-  await expect(page.getByText('Test Propreté A')).toBeVisible();
+  // Sa ligne dans le tableau de supervision (les codes d'agrément, plus bas, citent aussi l'entreprise).
+  await expect(page.getByRole('row').filter({ hasText: 'Test Propreté A' })).toBeVisible();
   await page.goto('/dashboard/incidents');
   await expect(page.getByRole('heading', { name: 'Incidents signalés' })).toBeVisible();
 });

@@ -2,7 +2,7 @@
  * Terrain : flotte, tournées, passages, incidents et preuves (stockage privé).
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { JPEG_1PX, plans, precollecteur, type Precollecteur } from '../support/fixtures';
+import { JPEG_1PX, plans, precollecteur, SUPABASE_URL, type Precollecteur } from '../support/fixtures';
 
 let A: Precollecteur;
 let clientId: string;
@@ -71,7 +71,8 @@ describe('incidents et preuves', () => {
     const chemin = `${A.entrepriseId}/${A.id}/photo-${Date.now()}.jpg`;
     expect((await A.sb.storage.from('preuves').upload(chemin, JPEG_1PX, { contentType: 'image/jpeg' })).error).toBeNull();
     const { data } = await A.sb.storage.from('preuves').createSignedUrl(chemin, 60);
-    expect(data?.signedUrl).toMatch(/^https:\/\//);
+    // Adresse complète, sur la base visée (https en ligne, http://127.0.0.1 pour la base locale de la CI).
+    expect(data?.signedUrl.startsWith(`${SUPABASE_URL.replace(/\/$/, '')}/storage/v1/`)).toBe(true);
     const res = await fetch(data!.signedUrl);
     expect(res.status).toBe(200);
     const i = await A.sb.from('incidents_precollecte').insert({ entreprise_id: A.entrepriseId, source: 'precollecteur', categorie: 'depot_sauvage', client_id: clientId, media_path: chemin, media_type: 'photo' });
