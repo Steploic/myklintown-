@@ -80,6 +80,17 @@ export function identifiants(): Identifiants {
 
 export const emailDe = (cle: string) => `mkt.test.${cle}.${identifiants().suffixe}@gmail.com`;
 
+/**
+ * Clé secrète du projet de TEST (SUPABASE_SECRET_KEY de .env.test.local) :
+ * certains tests préparent ou nettoient ce qu'aucun compte ne peut écrire
+ * (paiement en ligne). Jamais celle de la production : sur la vraie base, ces
+ * tests sont ignorés, avec la consigne.
+ */
+export const CLE_SERVICE: string | undefined = BASE === 'test' ? ENV_TESTS.SUPABASE_SECRET_KEY || undefined : undefined;
+
+/** Client « service » du projet de test (refusé sur la production). */
+export const clientServiceTest = (): SupabaseClient => serviceBaseDeTest();
+
 export function clientAnonyme(): SupabaseClient {
   return createClient(SUPABASE_URL, SUPABASE_ANON, { auth: { persistSession: false, autoRefreshToken: false } });
 }

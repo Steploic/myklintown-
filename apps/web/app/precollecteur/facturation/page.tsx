@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Banknote, CalendarClock, Check, CheckCircle2, FileText, Hourglass, Receipt, Wand2, X } from 'lucide-react';
+import { Banknote, CalendarClock, Check, CheckCircle2, FileText, Hourglass, Receipt, Smartphone, Wand2, X } from 'lucide-react';
 import { cn } from '@myklintown/ui';
 import { PrecoShell } from '@/components/precollecteur/shell';
 import { EmptyState, Kpi, PageHeader } from '@/components/ui/blocks';
@@ -109,11 +109,17 @@ export default async function FacturationPage({
         titre="Factures & relances"
         sousTitre="Paiement avant service : un client impayé apparaît en rouge au scan."
         actions={
-          <ActionForm action={genererFacturesAction}>
-            <SubmitButton variant="secondary" pendingLabel="Facturation…">
-              <Wand2 size={16} /> Facturer les échéances
-            </SubmitButton>
-          </ActionForm>
+          <>
+            <Link href="/precollecteur/paiement-en-ligne" className="btn-outline">
+              <Smartphone size={16} /> Paiement en ligne
+              {entreprise.paiement_statut === 'actif' && <span className="chip-ok ml-1">actif</span>}
+            </Link>
+            <ActionForm action={genererFacturesAction}>
+              <SubmitButton variant="secondary" pendingLabel="Facturation…">
+                <Wand2 size={16} /> Facturer les échéances
+              </SubmitButton>
+            </ActionForm>
+          </>
         }
       />
 

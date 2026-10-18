@@ -73,6 +73,8 @@ export default async function globalSetup() {
   const migration0006 = !sonde.error;
   // Migration 20261005000007 (espace employé) jouée ?
   const migration0007 = !(await A.sb.rpc('mes_statistiques_employe', { p_jours: 1 })).error;
+  // Migration 20261006000008 (paiement en ligne) jouée ?
+  const migration0008 = !(await A.sb.from('entreprises').select('paiement_statut').eq('id', A.entrepriseId).single()).error;
   // Migration 20261013000011 (indicateurs du pilote, charges du mois) jouée ?
   const migration0011 = !(await A.sb.from('couts_exploitation').select('id').limit(1)).error;
   // Migration 20261013000012 (code d'agrément des précollecteurs) jouée ?
@@ -87,13 +89,16 @@ export default async function globalSetup() {
   genererVideoQr(CODE_SCAN, path.resolve(__dirname, '..', '.media', 'qr.y4m'));
   fs.writeFileSync(
     FICHIER_ETAT,
-    JSON.stringify({ precoA: A.entrepriseId, precoB: B.entrepriseId, clientScan: scan.id, clientLien: lien.id, mairiePromue: M.promue, mairieEmail: M.email, migration0006, migration0007, migration0011, migration0012, adminPromu, adminEmail: ADM.email }, null, 2),
+    JSON.stringify({ precoA: A.entrepriseId, precoB: B.entrepriseId, clientScan: scan.id, clientLien: lien.id, mairiePromue: M.promue, mairieEmail: M.email, migration0006, migration0007, migration0008, migration0011, migration0012, adminPromu, adminEmail: ADM.email }, null, 2),
   );
   if (!migration0006) {
     console.warn('\n⚠️  Tests « liste d’attente » et « accès Mairie » ignorés : exécuter supabase/migrations/20261004000006_retours_tests_equipe.sql\n');
   }
   if (!migration0007) {
     console.warn('\n⚠️  Tests « espace employé » ignorés : exécuter supabase/migrations/20261005000007_espace_employe.sql\n');
+  }
+  if (!migration0008) {
+    console.warn('\n⚠️  Tests « paiement en ligne » ignorés : exécuter supabase/migrations/20261006000008_paiement_en_ligne.sql\n');
   }
   if (!migration0011) {
     console.warn('\n⚠️  Tests « indicateurs du pilote » et « charges du mois » ignorés : exécuter supabase/migrations/20261013000011_indicateurs_pilote.sql\n');

@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { codeAgrementDeTest, emailDe, identifiants } from '../../apps/web/tests/support/fixtures';
+import { codeAgrementDeTest, compte, emailDe, identifiants } from '../../apps/web/tests/support/fixtures';
 import { etat, expect, RUN, SANS_MIGRATION_0011, session, test } from './base';
 
 // Nom unique par exécution : une reprise ne tombe jamais sur le client d'un essai précédent.
@@ -138,6 +138,10 @@ test.describe('précollecteur : exploitation', () => {
   });
 
   test('flotte : tricycle, employé, équipage, état', async ({ page }) => {
+    // Rejouable : une reprise ne doit pas tomber sur le tricycle d'un essai précédent.
+    const A = await compte('precoA', 'precollecteur');
+    await A.sb.from('tricycles').delete().eq('entreprise_id', etat().precoA).eq('nom', 'Tricycle UI');
+    await A.sb.from('employes').delete().eq('entreprise_id', etat().precoA).eq('nom', 'Agent Terrain');
     await page.goto('/precollecteur/flotte');
     const volet = page.locator('details', { hasText: 'Ajouter un employé' });
     if ((await volet.getAttribute('open')) === null) await volet.locator('summary').click();

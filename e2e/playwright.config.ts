@@ -90,6 +90,8 @@ export default defineConfig({
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ENV_TESTS.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
           NEXT_PUBLIC_SITE_URL: BASE_URL,
           ...(ENV_TESTS.SUPABASE_SECRET_KEY ? { SUPABASE_SECRET_KEY: ENV_TESTS.SUPABASE_SECRET_KEY } : {}),
+          // Paiement en ligne en mode SIMULATION (aucun argent réel) pour les tests locaux.
+          PAIEMENT_SIMULATION: '1',
         },
         url: BASE_URL,
         reuseExistingServer: false,

@@ -12,6 +12,8 @@ import { extraireCodeClient } from '@/lib/metier';
 import { ajouter, oublierRefus, type OperationTerrain } from '@/lib/hors-ligne/file-terrain';
 import { useFileTerrain } from './use-file-terrain';
 import { ActionForm, SubmitButton } from '@/components/ui/action-form';
+import { PaiementMobile } from '@/components/paiement/paiement-mobile';
+import { demanderPaiementTourneeAction } from '@/lib/paiement/actions';
 
 export interface Passage {
   id: string;
@@ -28,6 +30,7 @@ export interface Passage {
     lng: number | null;
     /** Reste dû (paiements validés déduits) : propose l'encaissement en espèces. */
     montant_impaye?: number;
+    telephone?: string | null;
   };
 }
 
@@ -48,6 +51,7 @@ export function TourneeRunner({
   espace = 'precollecteur',
   scanAuDepart = false,
   encaissement = false,
+  paiementEnLigne = false,
 }: {
   tourneeId: string;
   passages: Passage[];
@@ -58,6 +62,8 @@ export function TourneeRunner({
   scanAuDepart?: boolean;
   /** Bouton « Encaisser » sur les foyers qui doivent de l'argent. */
   encaissement?: boolean;
+  /** Paiement Mobile Money sur le téléphone du ménage (précollecteur vérifié chez Notch Pay). */
+  paiementEnLigne?: boolean;
 }) {
   const router = useRouter();
   const [etat, setEtat] = useState(() => new Map(passages.map((p) => [p.id, { statut: p.statut, motif: p.motif }])));
@@ -72,10 +78,13 @@ export function TourneeRunner({
   const [motifPour, setMotifPour] = useState<string | null>(null);
   const [scan, setScan] = useState(modifiable && scanAuDepart);
   const [encaissePour, setEncaissePour] = useState<string | null>(null);
+  const [moyen, setMoyen] = useState<'especes' | 'mobile'>('especes');
   const [resultat, setResultat] = useState<ResultatAffiche | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const file = useFileTerrain(tourneeId);
+  // Hors ligne, on revient aux espèces (le choix revient avec le réseau).
+  const moyenAffiche = file.enLigne ? moyen : 'especes';
 
   // Gestes qui attendent le réseau : ils priment sur ce que dit le serveur
   // (qui ne les a pas encore reçus), dans l'ordre où ils ont été faits.
@@ -375,7 +384,39 @@ export function TourneeRunner({
                 </div>
               </div>
               {encaissePour === p.id && (
-                <ActionForm action={encaisserEspecesAction} className="flex flex-wrap items-end gap-2 border-t border-border bg-muted/40 p-3">
+                <div className="border-t border-border bg-muted/40 p-3">
+                  {paiementEnLigne && (
+                    <div className="mb-3 grid grid-cols-2 gap-1 rounded-lg bg-surface p-1" role="tablist" aria-label="Moyen de paiement">
+                      {(['especes', 'mobile'] as const).map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          role="tab"
+                          aria-selected={moyenAffiche === m}
+                          // Le Mobile Money passe par l'opérateur : indisponible sans réseau.
+                          disabled={m === 'mobile' && !file.enLigne}
+                          title={m === 'mobile' && !file.enLigne ? 'Indisponible hors ligne' : undefined}
+                          onClick={() => setMoyen(m)}
+                          className={cn(
+                            'rounded-md px-3 py-2 text-body-sm font-semibold disabled:opacity-50',
+                            moyenAffiche === m ? 'bg-brand-green text-white' : 'text-muted-foreground',
+                          )}
+                        >
+                          {m === 'especes' ? 'Espèces' : file.enLigne ? 'Mobile Money' : 'Mobile Money (hors ligne)'}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {paiementEnLigne && moyenAffiche === 'mobile' ? (
+                    <PaiementMobile
+                      montant={p.client.montant_impaye ?? 0}
+                      telephoneParDefaut={p.client.telephone}
+                      demander={(canal, tel) => demanderPaiementTourneeAction(p.client.id, canal, tel)}
+                      libelle="Demander"
+                      pourAutrui
+                    />
+                  ) : (
+                <ActionForm action={encaisserEspecesAction} className="flex flex-wrap items-end gap-2">
                   <input type="hidden" name="client_id" value={p.client.id} />
                   <div className="min-w-[9rem] flex-1">
                     <label className="field-label" htmlFor={`montant-${p.id}`}>Espèces reçues (FCFA)</label>
@@ -392,6 +433,8 @@ export function TourneeRunner({
                   </div>
                   <SubmitButton pendingLabel="Enregistrement…"><Banknote size={16} /> Enregistrer</SubmitButton>
                 </ActionForm>
+                  )}
+                </div>
               )}
               {motifPour === p.id && (
                 <div className="flex flex-wrap gap-2 border-t border-border bg-muted/40 p-3">
