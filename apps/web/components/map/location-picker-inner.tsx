@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
-import { MapContainer, Marker, Polygon, TileLayer, Tooltip, useMapEvents } from 'react-leaflet';
+import { useEffect, useState } from 'react';
+import { MapContainer, Marker, Polygon, TileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { GeoPolygon } from '@/lib/types';
-
-export const YAOUNDE: [number, number] = [3.848, 11.502];
+import { CentrageCompte } from './centrage-compte';
+import { YAOUNDE, ZOOM_DEFAUT } from './use-centre-carte';
 
 export const pinIcon = L.divIcon({
   className: '',
@@ -17,6 +17,20 @@ export const pinIcon = L.divIcon({
 
 function Clic({ onPick }: { onPick: (lat: number, lng: number) => void }) {
   useMapEvents({ click: (e) => onPick(e.latlng.lat, e.latlng.lng) });
+  return null;
+}
+
+/** Vue demandée par le choix rapide « Yaoundé · Douala ». */
+export interface VueCarte {
+  centre: [number, number];
+  zoom: number;
+}
+
+function Vue({ vue }: { vue: VueCarte | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (vue) map.setView(vue.centre, vue.zoom);
+  }, [vue, map]);
   return null;
 }
 
@@ -32,17 +46,19 @@ export default function LocationPickerInner({
   onChange,
   zones = [],
   hauteur = 300,
+  vue = null,
 }: {
   valeur: [number, number] | null;
   onChange: (lat: number, lng: number) => void;
   zones?: ZoneAffichee[];
   hauteur?: number;
+  vue?: VueCarte | null;
 }) {
   const [centre] = useState<[number, number]>(valeur ?? YAOUNDE);
 
   return (
     <div style={{ height: hauteur }} className="overflow-hidden rounded-lg border border-input">
-      <MapContainer center={centre} zoom={valeur ? 16 : 13} style={{ height: '100%', width: '100%' }}>
+      <MapContainer center={centre} zoom={valeur ? 16 : ZOOM_DEFAUT} style={{ height: '100%', width: '100%' }}>
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -61,6 +77,9 @@ export default function LocationPickerInner({
             onChange(lat, lng);
           }}
         />
+        <Vue vue={vue} />
+        {/* Pas encore de domicile placé : le territoire du compte plutôt que Yaoundé. */}
+        <CentrageCompte vide={!valeur && !vue} zoomMax={16} />
         {valeur && (
           <Marker
             position={valeur}

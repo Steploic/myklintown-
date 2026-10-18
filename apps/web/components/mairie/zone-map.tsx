@@ -5,6 +5,8 @@ import { CircleMarker, MapContainer, Polygon, Polyline, TileLayer, Tooltip, useM
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { GeoPolygon } from '@/lib/types';
+import { CentrageCompte } from '@/components/map/centrage-compte';
+import { YAOUNDE, ZOOM_DEFAUT } from '@/components/map/use-centre-carte';
 
 export interface ZoneCarte {
   id: string;
@@ -14,8 +16,6 @@ export interface ZoneCarte {
   attribuee: boolean;
   etiquette?: string;
 }
-
-const CENTRE: [number, number] = [3.848, 11.502];
 
 function Clics({ actif, onPoint }: { actif: boolean; onPoint: (p: [number, number]) => void }) {
   useMapEvents({
@@ -58,7 +58,7 @@ export default function ZoneMap({
 }) {
   return (
     <div style={{ height: hauteur }} className={`overflow-hidden rounded-xl border border-border ${dessin ? 'cursor-crosshair [&_.leaflet-container]:cursor-crosshair' : ''}`}>
-      <MapContainer center={CENTRE} zoom={13} style={{ height: '100%', width: '100%' }}>
+      <MapContainer center={YAOUNDE} zoom={ZOOM_DEFAUT} style={{ height: '100%', width: '100%' }}>
         <LayersControl position="topright">
           <LayersControl.BaseLayer checked name="Plan">
             <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
@@ -68,6 +68,8 @@ export default function ZoneMap({
           </LayersControl.BaseLayer>
         </LayersControl>
         <Cadrage zones={zones} />
+        {/* Aucune zone encore : la commune de la Mairie plutôt que Yaoundé. */}
+        <CentrageCompte vide={zones.length === 0 && !points?.length} />
         <Clics actif={!!dessin} onPoint={(p) => onPoint?.(p)} />
         {zones.map((z) => {
           const sel = z.id === selection;

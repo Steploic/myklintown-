@@ -53,7 +53,7 @@ test.describe('précollecteur : exploitation', () => {
     const carte = page.locator('.leaflet-container');
     await expect(carte).toBeVisible();
     await carte.click({ position: { x: 200, y: 150 } });
-    await expect(page.getByText(/Position : 3\.\d+, 11\.\d+/)).toBeVisible();
+    await expect(page.getByText(/Position : -?\d+\.\d+, -?\d+\.\d+/)).toBeVisible();
     await page.getByRole('button', { name: 'Enregistrer le client' }).click();
     await expect(page).toHaveURL(/\/precollecteur\/clients\/[0-9a-f-]+\?cree=1/);
     await expect(page.getByText('Client enregistré.')).toBeVisible();
