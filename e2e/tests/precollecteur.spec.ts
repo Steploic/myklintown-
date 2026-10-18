@@ -1,6 +1,6 @@
 import fs from 'node:fs';
-import { compte, emailDe, identifiants } from '../../apps/web/tests/support/fixtures';
-import { etat, expect, RUN, session, test } from './base';
+import { codeAgrementDeTest, compte, emailDe, identifiants } from '../../apps/web/tests/support/fixtures';
+import { etat, expect, RUN, SANS_MIGRATION_0011, session, test } from './base';
 
 // Nom unique par exécution : une reprise ne tombe jamais sur le client d'un essai précédent.
 const NOM = `Famille Nouvelle ${Date.now().toString().slice(-8)}`;
@@ -16,6 +16,14 @@ test.describe('précollecteur : inscription et démarrage', () => {
     await page.getByRole('button', { name: 'Créer mon compte' }).click();
     await expect(page).toHaveURL(/\/precollecteur\/demarrage/, { timeout: 90_000 });
     await page.getByLabel('Nom de l’entreprise *').fill('Test Inscrit SARL');
+    if (etat().migration0012) {
+      // Sans code valide, pas d'espace ; avec le code tapé à sa façon, l'espace s'ouvre.
+      await page.getByLabel('Code d’agrément').fill('ABCDE-FGHJK');
+      await page.getByRole('button', { name: 'Créer mon espace' }).click();
+      await expect(page.getByText(/Code d.agrément invalide ou expiré/)).toBeVisible();
+      const code = await codeAgrementDeTest('Test Inscrit SARL');
+      await page.getByLabel('Code d’agrément').fill(`${code!.slice(0, 5).toLowerCase()} ${code!.slice(5)}`);
+    }
     await page.getByRole('button', { name: 'Créer mon espace' }).click();
     await expect(page).toHaveURL(/\/precollecteur\?bienvenue=1/);
     await expect(page.getByRole('heading', { name: /Bienvenue, Test Inscrit SARL/ })).toBeVisible();
@@ -224,6 +232,32 @@ test.describe('précollecteur : exploitation', () => {
     await expect(page.locator('li', { hasText: `Chaîne cassée ${RUN}` })).toHaveCount(0);
   });
 
+  test('charges du mois : saisie, refus d’un montant illisible, coût par ménage servi', async ({ page }) => {
+    test.skip(!etat().migration0011, SANS_MIGRATION_0011);
+    await page.goto('/precollecteur');
+    await page.getByRole('link', { name: 'Charges du mois' }).first().click();
+    await expect(page.getByRole('heading', { name: 'Charges du mois' })).toBeVisible();
+
+    await page.getByLabel('Carburant').fill('1,5');
+    await page.getByRole('button', { name: /Enregistrer les charges/ }).click();
+    await expect(page.getByText('Carburant : montant illisible (un nombre entier de FCFA).')).toBeVisible();
+
+    await page.getByLabel('Carburant').fill('30 000');
+    await page.getByLabel('Équipe', { exact: true }).fill('45000');
+    await page.getByRole('button', { name: /Enregistrer les charges/ }).click();
+    await expect(page.getByText(/enregistrées : 75\s000\sFCFA au total/)).toBeVisible();
+
+    // Relu depuis la base ; la tournée du test précédent a servi des ménages ce mois-ci.
+    await page.reload();
+    await expect(page.getByLabel('Carburant')).toHaveValue('30000');
+    await expect(page.getByTestId('cout-par-menage')).toContainText('FCFA');
+
+    // Un poste vidé est effacé.
+    await page.getByLabel('Équipe', { exact: true }).fill('');
+    await page.getByRole('button', { name: /Enregistrer les charges/ }).click();
+    await expect(page.getByText(/enregistrées : 30\s000\sFCFA au total/)).toBeVisible();
+  });
+
   test('grille tarifaire en lecture seule', async ({ page }) => {
     await page.goto('/precollecteur/grille');
     await expect(page.getByText(/35\s000\sFCFA/)).toBeVisible();
@@ -237,8 +271,8 @@ test.describe('précollecteur : exploitation', () => {
     await page.getByLabel('Téléphone').first().fill('690000321');
     await page.getByRole('button', { name: 'Enregistrer' }).first().click();
     await expect(page.getByText('Profil mis à jour.')).toBeVisible();
-    await page.getByLabel('Nouveau mot de passe').fill('abcdef');
-    await page.getByLabel('Confirmation').fill('abcdeg');
+    await page.getByLabel('Nouveau mot de passe').fill('abcdefgh');
+    await page.getByLabel('Confirmation').fill('abcdefgi');
     await page.getByRole('button', { name: 'Changer le mot de passe' }).click();
     await expect(page.getByText('Les deux mots de passe ne sont pas identiques.')).toBeVisible();
   });

@@ -24,7 +24,7 @@ export async function majProfilAction(_p: ActionState, fd: FormData): Promise<Ac
 
 export async function changerMotDePasseAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   const motDePasse = String(fd.get('password') ?? '');
-  if (motDePasse.length < 6) return { error: 'Le mot de passe doit faire au moins 6 caractères.' };
+  if (motDePasse.length < 8) return { error: 'Le mot de passe doit faire au moins 8 caractères.' };
   if (motDePasse !== String(fd.get('confirmation') ?? '')) {
     return { error: 'Les deux mots de passe ne sont pas identiques.' };
   }

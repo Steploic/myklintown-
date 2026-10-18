@@ -1,9 +1,17 @@
 /**
  * Comptes et données de TEST, réutilisés d'une exécution à l'autre.
  *
- * - Les identifiants vivent dans `tests/.fixtures.local.json` (ignoré par git :
- *   le dépôt est public). Absent ? Il est créé avec un suffixe et un mot de
- *   passe neufs.
+ * - QUELLE BASE : la base de test (`apps/web/.env.test.local`, projet Supabase
+ *   « myklintown-tests »). La vraie base n'est utilisée que sur demande
+ *   explicite (`TESTS_SUR_PROD=1`, par exemple pour vérifier une migration
+ *   après l'avoir jouée en production) ; sans base de test ni demande, les
+ *   tests REFUSENT de démarrer.
+ * - Sur la base de test, les comptes « admin » et « mairie » sont promus
+ *   automatiquement (clé secrète du projet de test) : plus aucun test ignoré.
+ *   Jamais sur la production.
+ * - Les identifiants vivent dans `tests/.fixtures.<base>.local.json` (ignorés
+ *   par git : le dépôt est public). Absent ? Il est créé avec un suffixe et un
+ *   mot de passe neufs.
  * - Adresses : mkt.test.<clé>.<suffixe>@gmail.com — le motif que
  *   `supabase/NETTOYAGE_TESTS.sql` sait supprimer.
  * - Chaque exécution REMET À ZÉRO les données des entreprises de test avant de
@@ -11,14 +19,15 @@
  * - Les zones de test sont tracées EN MER, au large de Kribi : aucun vrai
  *   ménage ne peut y tomber.
  */
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 const RACINE = path.resolve(__dirname, '..', '..');
 
-function lireEnv(): Record<string, string> {
-  const fichier = path.join(RACINE, '.env.local');
+function lireFichierEnv(nom: string): Record<string, string> {
+  const fichier = path.join(RACINE, nom);
   const brut = fs.existsSync(fichier) ? fs.readFileSync(fichier, 'utf8') : '';
   const env: Record<string, string> = {};
   for (const ligne of brut.split(/\r?\n/)) {
@@ -26,17 +35,33 @@ function lireEnv(): Record<string, string> {
     const i = ligne.indexOf('=');
     env[ligne.slice(0, i).trim()] = ligne.slice(i + 1).trim();
   }
-  return { ...env, ...(process.env as Record<string, string>) };
+  return env;
 }
 
-const ENV = lireEnv();
-export const SUPABASE_URL = ENV.NEXT_PUBLIC_SUPABASE_URL!;
-export const SUPABASE_ANON = ENV.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+/** 'test' (par défaut) ou 'production' (sur demande explicite seulement). */
+export const BASE: 'test' | 'production' = process.env.TESTS_SUR_PROD === '1' ? 'production' : 'test';
+const FICHIER_ENV = BASE === 'production' ? '.env.local' : '.env.test.local';
+if (BASE === 'test' && !fs.existsSync(path.join(RACINE, FICHIER_ENV))) {
+  throw new Error(
+    'Base de test absente : créer apps/web/.env.test.local (voir tests/README.md). ' +
+      'Pour lancer les tests sur la VRAIE base, exprès : TESTS_SUR_PROD=1.',
+  );
+}
+
+/** Variables de la base choisie (le fichier choisi l'emporte sur l'environnement du poste). */
+export const ENV_TESTS: Record<string, string> = { ...(process.env as Record<string, string>), ...lireFichierEnv(FICHIER_ENV) };
+export const SUPABASE_URL = ENV_TESTS.NEXT_PUBLIC_SUPABASE_URL!;
+export const SUPABASE_ANON = ENV_TESTS.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 if (!SUPABASE_URL || !SUPABASE_ANON) {
-  throw new Error('NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY absents (apps/web/.env.local).');
+  throw new Error(`NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY absents (apps/web/${FICHIER_ENV}).`);
+}
+if (BASE === 'test') {
+  // Garde-fou : un .env.test.local recopié de la production serait une erreur grave.
+  const prod = lireFichierEnv('.env.local').NEXT_PUBLIC_SUPABASE_URL;
+  if (prod && prod === SUPABASE_URL) throw new Error('.env.test.local pointe sur la base de PRODUCTION : refus.');
 }
 
-const FICHIER_FIXTURES = path.join(RACINE, 'tests', '.fixtures.local.json');
+const FICHIER_FIXTURES = path.join(RACINE, 'tests', BASE === 'production' ? '.fixtures.local.json' : '.fixtures.test.local.json');
 
 export interface Identifiants {
   suffixe: string;
@@ -56,17 +81,15 @@ export function identifiants(): Identifiants {
 export const emailDe = (cle: string) => `mkt.test.${cle}.${identifiants().suffixe}@gmail.com`;
 
 /**
- * Clé service (SUPABASE_SECRET_KEY = « secret key » sb_secret_…, ou l'ancienne
- * SUPABASE_SERVICE_ROLE_KEY) si elle figure dans .env.local :
+ * Clé secrète du projet de TEST (SUPABASE_SECRET_KEY de .env.test.local) :
  * certains tests préparent ou nettoient ce qu'aucun compte ne peut écrire
- * (paiement en ligne). Absente : ces tests sont ignorés, avec la consigne.
+ * (paiement en ligne). Jamais celle de la production : sur la vraie base, ces
+ * tests sont ignorés, avec la consigne.
  */
-export const CLE_SERVICE: string | undefined = ENV.SUPABASE_SECRET_KEY || ENV.SUPABASE_SERVICE_ROLE_KEY || undefined;
+export const CLE_SERVICE: string | undefined = BASE === 'test' ? ENV_TESTS.SUPABASE_SECRET_KEY || undefined : undefined;
 
-export function clientServiceTest(): SupabaseClient {
-  if (!CLE_SERVICE) throw new Error('SUPABASE_SECRET_KEY absente de apps/web/.env.local');
-  return createClient(SUPABASE_URL, CLE_SERVICE, { auth: { persistSession: false, autoRefreshToken: false } });
-}
+/** Client « service » du projet de test (refusé sur la production). */
+export const clientServiceTest = (): SupabaseClient => serviceBaseDeTest();
 
 export function clientAnonyme(): SupabaseClient {
   return createClient(SUPABASE_URL, SUPABASE_ANON, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -85,7 +108,14 @@ export async function compte(cle: string, roleDemande: 'citoyen' | 'precollecteu
   const email = emailDe(cle);
   const { motDePasse } = identifiants();
   let { data, error } = await sb.auth.signInWithPassword({ email, password: motDePasse });
-  if (error) {
+  if (error && BASE === 'test' && ENV_TESTS.SUPABASE_SECRET_KEY) {
+    // Base de test : compte créé (ou débloqué) par la clé secrète — sans e-mail
+    // de confirmation envoyé à une adresse qui n'existe pas, sans limite de débit.
+    // Le déclencheur d'inscription (rôle lu dans les métadonnées) joue quand même.
+    await creerSurBaseDeTest(email, motDePasse, { nom_complet: `Test ${cle}`, role: roleDemande, telephone: '690000000' });
+    ({ data, error } = await sb.auth.signInWithPassword({ email, password: motDePasse }));
+    if (error) throw new Error(`Connexion du compte ${cle} sur la base de test : ${error.message}`);
+  } else if (error) {
     const r = await sb.auth.signUp({
       email,
       password: motDePasse,
@@ -95,8 +125,52 @@ export async function compte(cle: string, roleDemande: 'citoyen' | 'precollecteu
     ({ data, error } = await sb.auth.signInWithPassword({ email, password: motDePasse }));
     if (error) throw error;
   }
-  const { data: p } = await sb.from('profiles').select('role').eq('id', data.user!.id).single();
-  return { sb, id: data.user!.id, email, role: (p as { role: string } | null)?.role ?? '?' };
+  const userId = data.user!.id;
+  const lireRole = async () => ((await sb.from('profiles').select('role').eq('id', userId).single()).data as { role: string } | null)?.role ?? '?';
+  let role = await lireRole();
+  // Base de test : les comptes « admin » et « mairie » reçoivent leur rôle d'office.
+  const voulu = ROLES_PROMUS[cle];
+  if (voulu && role !== voulu && BASE === 'test') {
+    await promouvoirSurBaseDeTest(email, voulu);
+    role = await lireRole();
+  }
+  return { sb, id: userId, email, role };
+}
+
+const ROLES_PROMUS: Record<string, 'admin' | 'mairie'> = { admin: 'admin', mairie: 'mairie' };
+
+/** Client « service » du projet de TEST. Refusé sur la production. */
+function serviceBaseDeTest(): SupabaseClient {
+  const cle = ENV_TESTS.SUPABASE_SECRET_KEY;
+  if (BASE !== 'test' || !cle) throw new Error('Clé secrète utilisable seulement sur la base de test.');
+  return createClient(SUPABASE_URL, cle, { auth: { persistSession: false, autoRefreshToken: false } });
+}
+
+async function creerSurBaseDeTest(email: string, motDePasse: string, metadonnees: Record<string, string>) {
+  const admin = serviceBaseDeTest().auth.admin;
+  const r = await admin.createUser({ email, password: motDePasse, email_confirm: true, user_metadata: metadonnees });
+  if (!r.error) return;
+  // Déjà là (essai précédent, ou inscrit sans confirmation) : on le confirme et on remet le mot de passe.
+  for (let page = 1; page <= 20; page++) {
+    const { data, error } = await admin.listUsers({ page, perPage: 200 });
+    if (error) throw error;
+    const u = data.users.find((x) => x.email?.toLowerCase() === email.toLowerCase());
+    if (u) {
+      const m = await admin.updateUserById(u.id, { password: motDePasse, email_confirm: true });
+      if (m.error) throw m.error;
+      return;
+    }
+    if (data.users.length < 200) break;
+  }
+  throw new Error(`Création de ${email} sur la base de test : ${r.error.message}`);
+}
+
+/** Promotion par la clé secrète du projet de TEST. Jamais sur la production. */
+async function promouvoirSurBaseDeTest(email: string, role: 'admin' | 'mairie') {
+  if (BASE !== 'test' || !ENV_TESTS.SUPABASE_SECRET_KEY) return;
+  const service = serviceBaseDeTest();
+  const { error } = await service.rpc('promouvoir_utilisateur', { p_email: email, p_role: role });
+  if (error) throw new Error(`Promotion de ${email} en ${role} sur la base de test : ${error.message}`);
 }
 
 export interface Precollecteur extends Compte {
@@ -109,13 +183,34 @@ export async function precollecteur(cle: string, nomEntreprise: string): Promise
   if (c.role !== 'precollecteur') throw new Error(`${cle} devrait être précollecteur, il est ${c.role}`);
   let { data } = await c.sb.from('entreprise_membres').select('entreprise_id').eq('user_id', c.id).maybeSingle();
   if (!data) {
-    const r = await c.sb.rpc('creer_mon_entreprise', { p_nom: nomEntreprise, p_telephone: '690000001', p_siege: 'Test' });
+    // Depuis la migration 20261013000012, un code d'agrément de la Mairie est exigé.
+    const code = await codeAgrementDeTest(nomEntreprise);
+    const r = await c.sb.rpc('creer_mon_entreprise', {
+      p_nom: nomEntreprise,
+      p_telephone: '690000001',
+      p_siege: 'Test',
+      ...(code ? { p_code: code } : {}),
+    });
     if (r.error) throw r.error;
     data = { entreprise_id: r.data as string };
   }
   const entrepriseId = (data as { entreprise_id: string }).entreprise_id;
   await reinitialiser(c.sb, entrepriseId);
   return { ...c, entrepriseId };
+}
+
+/**
+ * Code d'agrément délivré sur la base de TEST (clé secrète), comme le ferait la
+ * Mairie. null si la base ne connaît pas encore les codes, ou hors base de test.
+ */
+export async function codeAgrementDeTest(destinataire: string): Promise<string | null> {
+  if (BASE !== 'test' || !ENV_TESTS.SUPABASE_SECRET_KEY) return null;
+  const alphabet = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+  const code = Array.from(crypto.randomBytes(10), (o) => alphabet[o % 32]).join('');
+  const { error } = await serviceBaseDeTest()
+    .from('codes_agrement')
+    .insert({ code, destinataire: `Test ${destinataire}`.slice(0, 120) });
+  return error ? null : code;
 }
 
 /** Efface les données d'exploitation d'une entreprise de test (cascade SQL). */

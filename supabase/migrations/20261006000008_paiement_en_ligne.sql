@@ -16,8 +16,12 @@
 --   • le statut du compte de paiement d'une entreprise ne se modifie pas
 --     depuis l'application (seul le serveur, après vérification chez Notch Pay).
 --
--- Script ADDITIF et IDEMPOTENT. À exécuter APRÈS 20261005000007.
+-- Script ADDITIF et IDEMPOTENT. À exécuter APRÈS 20261005000007 ; il peut
+-- aussi être joué après 20261011000009 (base montée depuis main) : il pose
+-- alors lui-même les contrôles de cohérence prévus par l'audit (§5).
 -- =============================================================================
+
+begin;
 
 -- -----------------------------------------------------------------------------
 -- 1. Compte de paiement de l'entreprise (compte connecté Notch Pay)
@@ -172,8 +176,60 @@ grant execute on function public.enregistrer_paiement_en_ligne(text) to service_
 revoke all on function public.creer_lien_paiement(uuid) from public, anon;
 grant execute on function public.creer_lien_paiement(uuid) to authenticated;
 
--- Contrôle
-select (select count(*) from information_schema.columns
-         where table_name = 'entreprises' and column_name like 'paiement_%') as colonnes_entreprise,
-       (select relrowsecurity from pg_class where relname = 'paiements_en_ligne') as rls_transactions,
-       (select relrowsecurity from pg_class where relname = 'liens_paiement') as rls_liens;
+-- -----------------------------------------------------------------------------
+-- 5. Cohérence des références (audit du 11/10/2026)
+-- -----------------------------------------------------------------------------
+-- 20261011000009 pose ces déclencheurs sur les deux tables si elles existent.
+-- Jouée APRÈS lui (base montée depuis main), cette migration les pose
+-- elle-même ; jouée avant (production), elle les remet à l'identique.
+do $$
+declare
+  t text;
+begin
+  if to_regprocedure('public.verifier_coherence_entreprise()') is null then return; end if;
+  foreach t in array array['paiements_en_ligne', 'liens_paiement'] loop
+    execute format('drop trigger if exists %I on public.%I', t || '_coherence_entreprise', t);
+    execute format(
+      'create trigger %I before insert or update on public.%I
+         for each row execute function public.verifier_coherence_entreprise()',
+      t || '_coherence_entreprise', t);
+  end loop;
+end $$;
+
+commit;
+
+-- Contrôle : 6 lignes « OK » attendues (la ligne 4 dit « sans objet » avant 20261011000009).
+select controle, resultat
+from (
+  select 1 as n, 'Colonnes paiement_* sur entreprises (3)' as controle,
+         case when (select count(*) from information_schema.columns
+                     where table_schema = 'public' and table_name = 'entreprises'
+                       and column_name in ('paiement_compte_id', 'paiement_statut', 'paiement_maj_at')) = 3
+              then 'OK' else 'À VÉRIFIER' end as resultat
+  union all
+  select 2, 'RLS active sur paiements_en_ligne et liens_paiement',
+         case when (select bool_and(relrowsecurity) from pg_class
+                     where oid in ('public.paiements_en_ligne'::regclass, 'public.liens_paiement'::regclass))
+              then 'OK' else 'À VÉRIFIER' end
+  union all
+  select 3, 'Déclencheur entreprises_garde_paiement',
+         case when exists (select 1 from pg_trigger where tgname = 'entreprises_garde_paiement'
+                            and tgrelid = 'public.entreprises'::regclass)
+              then 'OK' else 'À VÉRIFIER' end
+  union all
+  select 4, 'Déclencheurs de cohérence sur les deux tables',
+         case when to_regprocedure('public.verifier_coherence_entreprise()') is null then 'OK (sans objet avant 20261011000009)'
+              when (select count(*) from pg_trigger
+                     where tgname in ('paiements_en_ligne_coherence_entreprise', 'liens_paiement_coherence_entreprise')) = 2
+              then 'OK' else 'À VÉRIFIER' end
+  union all
+  select 5, 'enregistrer_paiement_en_ligne fermée aux comptes (serveur seulement)',
+         case when not has_function_privilege('authenticated', 'public.enregistrer_paiement_en_ligne(text)', 'execute')
+               and not has_function_privilege('anon', 'public.enregistrer_paiement_en_ligne(text)', 'execute')
+              then 'OK' else 'À VÉRIFIER' end
+  union all
+  select 6, 'creer_lien_paiement fermée au visiteur anonyme',
+         case when not has_function_privilege('anon', 'public.creer_lien_paiement(uuid)', 'execute')
+               and has_function_privilege('authenticated', 'public.creer_lien_paiement(uuid)', 'execute')
+              then 'OK' else 'À VÉRIFIER' end
+) x order by n;

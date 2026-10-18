@@ -6,6 +6,7 @@ import { SelecteurEspace } from './selecteur-espace';
 import { navPourRole, PORTALS, type PortalKey, type PortalNavItem } from '@/lib/portal-config';
 import { signOutAction } from '@/lib/auth-actions';
 import { getCurrentProfile } from '@/lib/get-profile';
+import { EnvoiTerrainGlobal } from './precollecteur/envoi-terrain-global';
 
 export type { PortalKey, PortalNavItem };
 
@@ -119,7 +120,10 @@ export async function PortalShell({ portalKey, user, titre, currentPath, childre
         </header>
 
         <main className="flex-1 px-4 pb-28 pt-5 sm:px-6 lg:px-8 lg:pb-10 lg:pt-8">
-          <div className="mx-auto max-w-6xl">{children}</div>
+          <div className="mx-auto max-w-6xl">
+            {(portalKey === 'precollecteur' || portalKey === 'employe') && !/\/tournees\/[^/]+/.test(currentPath) && <EnvoiTerrainGlobal />}
+            {children}
+          </div>
         </main>
 
         {/* Onglets mobiles */}

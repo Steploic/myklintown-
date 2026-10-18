@@ -15,7 +15,7 @@ const FOYER_LIEN = 'Foyer Lien Paiement';
 const FOYER_TOURNEE = 'Foyer Tournee Paiement';
 const service = clientServiceTest;
 const RAISON =
-  'Paiement en ligne : migration 20261006000008 et SUPABASE_SECRET_KEY (apps/web/.env.local) requises ; simulation uniquement en local';
+  'Paiement en ligne : migration 20261006000008 et SUPABASE_SECRET_KEY du projet de test (apps/web/.env.test.local) requises ; simulation uniquement en local';
 
 test.describe('paiement en ligne (simulation)', () => {
   test.describe.configure({ mode: 'serial' });

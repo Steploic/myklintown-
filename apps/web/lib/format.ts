@@ -237,7 +237,20 @@ export const MESSAGE_RESEAU =
 /** Coupure réseau, et non refus du serveur : à ne jamais présenter comme une erreur de saisie. */
 export function estErreurReseau(e: { message?: string; status?: number } | null | undefined): boolean {
   if (!e) return false;
-  return e.status === 0 || /fetch failed|network|ECONNRESET|ETIMEDOUT|ENOTFOUND|Failed to fetch|TimeoutError|timed? ?out|aborted due to timeout/i.test(e.message ?? '');
+  return e.status === 0 || /fetch failed|network|ECONNRESET|ETIMEDOUT|ENOTFOUND|Failed to fetch|Load failed|TimeoutError|timed? ?out|aborted due to timeout/i.test(e.message ?? '');
+}
+
+export const MESSAGE_HORS_LIGNE = 'Pas de réseau : cette action demande une connexion. Réessayez quand le téléphone capte à nouveau.';
+
+/**
+ * Côté navigateur : l'appel d'une action serveur a-t-il échoué faute de
+ * réseau (téléphone hors ligne, coupure en cours de route) ? Si oui, rien
+ * n'est arrivé — ou rien de sûr — côté serveur : on retente, on n'accuse pas.
+ */
+export function estPanneReseau(e: unknown): boolean {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+  if (e instanceof TypeError) return true; // « Failed to fetch » (Chrome), « Load failed » (Safari)
+  return estErreurReseau({ message: e instanceof Error ? e.message : String(e ?? '') });
 }
 
 /** Fragment de nom de fichier lisible : « Famille Ateba » → « Famille_Ateba ». */

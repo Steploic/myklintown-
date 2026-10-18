@@ -5,6 +5,7 @@ node_modules/
 
 # Build output
 .next/
+.next-tests/
 out/
 dist/
 build/
@@ -48,9 +49,12 @@ supabase/.temp
 # publication ne l'est pas.
 docs/livrables/
 docs/reunions/
+# Rapports d'audit de sécurité : ils listent ce qui reste à fermer côté
+# configuration (Supabase, Vercel, comptes) — une feuille de route pour un attaquant.
+docs/securite/
 
 # Tests : identifiants des comptes de test (locaux) et rapports
-apps/web/tests/.fixtures.local.json
+apps/web/tests/.fixtures*.json
 e2e/.auth/
 e2e/.media/
 e2e/playwright-report/

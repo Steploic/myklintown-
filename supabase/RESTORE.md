@@ -148,8 +148,7 @@ pnpm dev
 > avoir poussé les correctifs de sécurité remettrait en ligne la version d'avant.
 
 **1. Poser les variables** — Vercel → projet → **Settings → Environment Variables**.
-Trois variables, et trois seulement : ce sont les seules que le code lit.
-Les cocher pour **Production** *et* **Preview**.
+Trois variables obligatoires, à cocher pour **Production** *et* **Preview**.
 
 | Variable | Valeur |
 |---|---|
@@ -157,9 +156,19 @@ Les cocher pour **Production** *et* **Preview**.
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | la clé `anon` (Project Settings → API) |
 | `NEXT_PUBLIC_SITE_URL` | l'URL de production, **jamais `localhost`** |
 
-> **Ne pas ajouter** `SUPABASE_SERVICE_ROLE_KEY` ni les variables `MOMO_*` :
-> aucun code ne les lit aujourd'hui. Une clé de service posée « au cas où » est
-> une clé exposée pour rien — elle contourne toute la sécurité par ligne.
+**Paiement en ligne (Mobile Money, Notch Pay)** — seulement quand le compte
+Notch Pay Business est ouvert, et pour **Production** uniquement :
+
+| Variable | Valeur |
+|---|---|
+| `SUPABASE_SECRET_KEY` | la « secret key » (Project Settings → API Keys), marquée **Sensitive** |
+| `NOTCHPAY_PUBLIC_KEY` / `NOTCHPAY_PRIVATE_KEY` | clés du compte Notch Pay |
+| `NOTCHPAY_WEBHOOK_HASH` | clé de signature des notifications (Notch Pay → Webhooks) |
+
+> **Ne jamais poser** `PAIEMENT_SIMULATION` sur Vercel (le code l'ignore de toute
+> façon), ni les anciennes variables `MOMO_*`. Sans le paiement en ligne, ne pas
+> poser `SUPABASE_SECRET_KEY` « au cas où » : une clé de service inutile est une
+> clé exposée pour rien — elle contourne toute la sécurité par ligne.
 
 **2. Autoriser le domaine côté Supabase** — sinon la connexion échouera en
 production alors qu'elle marche en local. Authentication → **URL Configuration** :

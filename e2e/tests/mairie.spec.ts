@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { mairie } from '../../apps/web/tests/support/fixtures';
-import { expect, etat, session, test } from './base';
+import { expect, etat, SANS_MIGRATION_0011, SANS_MIGRATION_0012, session, test } from './base';
 
 test.describe.configure({ mode: 'serial' });
 test.use({ storageState: session('mairie') });
@@ -23,6 +23,58 @@ test('supervision : indicateurs et export', async ({ page }) => {
   expect(fs.readFileSync((await csv.path())!, 'utf8')).toContain('Zone;Commune;Précollecteurs');
 });
 
+test('indicateurs du pilote : les 8 indicateurs, les périmètres, les exports', async ({ page }) => {
+  test.skip(!etat().migration0011, SANS_MIGRATION_0011);
+  await page.goto('/dashboard');
+  await page.getByRole('link', { name: 'Indicateurs du pilote' }).first().click();
+  await expect(page.getByRole('heading', { name: 'Indicateurs du pilote', level: 1 })).toBeVisible();
+
+  for (const cle of ['abonnes_actifs', 'taux_paiement', 'taux_execution', 'retention', 'delai_signalement_h', 'cout_par_menage', 'part_mobile_money', 'incidents_1000']) {
+    await expect(page.getByTestId(`kpi-${cle}`)).toBeVisible();
+  }
+  const mensuel = page.getByTestId('tableau-mensuel');
+  await expect(mensuel.getByRole('columnheader', { name: /octobre 2026/ })).toBeVisible();
+  await expect(mensuel.getByRole('columnheader', { name: /décembre 2026/ })).toBeVisible();
+  await expect(page.getByText('Critères de réussite au 31 décembre')).toBeVisible();
+
+  await page.getByRole('link', { name: 'Douala' }).click();
+  await expect(page).toHaveURL(/perimetre=douala/);
+  await expect(page.getByRole('link', { name: 'Douala' })).toHaveAttribute('aria-current', 'page');
+
+  const [mois] = await Promise.all([page.waitForEvent('download'), page.getByRole('link', { name: /Tableau mensuel \(CSV\)/ }).click()]);
+  expect(mois.suggestedFilename()).toMatch(/^indicateurs-pilote-mois-douala-/);
+  const csv = fs.readFileSync((await mois.path())!, 'utf8');
+  expect(csv).toContain('Indicateur;Définition;octobre 2026 — valeur');
+  expect(csv).toContain('Taux de paiement effectif');
+  const [semaines] = await Promise.all([page.waitForEvent('download'), page.getByRole('link', { name: /Relevés hebdomadaires \(CSV\)/ }).click()]);
+  expect(fs.readFileSync((await semaines.path())!, 'utf8')).toContain('Début;Fin;Ménages inscrits');
+});
+
+test('codes d’agrément : délivrer, envoyer par WhatsApp, révoquer', async ({ page }) => {
+  test.skip(!etat().migration0012, SANS_MIGRATION_0012);
+  const nom = `Test Agrément ${Date.now().toString().slice(-6)}`;
+  await page.goto('/dashboard/precollecteurs');
+  await page.getByLabel('Précollecteur agréé *').fill(nom);
+  await page.getByLabel('Téléphone').fill('690112233');
+  await page.getByRole('button', { name: 'Délivrer un code' }).click();
+  await expect(page.getByText(new RegExp(`Code délivré à ${nom} : [0-9A-Z]{5}-[0-9A-Z]{5}`))).toBeVisible();
+
+  const ligne = page.getByTestId('codes-agrement').getByRole('listitem').filter({ hasText: nom });
+  await expect(ligne.getByText('À utiliser')).toBeVisible();
+  const whatsapp = await ligne.getByRole('link', { name: 'WhatsApp' }).getAttribute('href');
+  expect(whatsapp).toMatch(/^https:\/\/wa\.me\/237690112233\?text=/);
+  expect(decodeURIComponent(whatsapp!)).toContain('/signup?role=precollecteur');
+
+  await ligne.getByRole('button', { name: 'Révoquer' }).click();
+  await expect(ligne.getByText('Révoqué')).toBeVisible();
+});
+
+test('l’ancienne page « rapports » mène aux indicateurs', async ({ page }) => {
+  test.skip(!etat().migration0011, SANS_MIGRATION_0011);
+  await page.goto('/dashboard/rapports');
+  await expect(page).toHaveURL(/\/dashboard\/indicateurs$/);
+});
+
 test('dessiner une zone, vérifier, enregistrer, affecter, supprimer', async ({ page }) => {
   await page.goto('/dashboard/zones');
   await page.getByRole('button', { name: 'Dessiner une zone' }).click();
@@ -36,8 +88,9 @@ test('dessiner une zone, vérifier, enregistrer, affecter, supprimer', async ({ 
   await carte.click({ position: { x: 300, y: 320 } });
   await page.getByLabel('Nom').fill('Zone test UI');
   await page.getByRole('button', { name: 'Vérifier les chevauchements' }).click();
-  await expect(page.getByText(/Aucun chevauchement|Chevauche/)).toBeVisible();
-  if (await page.getByText('Chevauche').isVisible()) await page.getByLabel('Chevauchement autorisé').check();
+  // « Aucun chevauchement. » ou « Chevauche : » (et non « chevauchements » du bouton ou du sous-titre).
+  await expect(page.getByText(/Aucun chevauchement\.|Chevauche :/)).toBeVisible();
+  if (await page.getByText('Chevauche :', { exact: true }).isVisible()) await page.getByLabel('Chevauchement autorisé').check();
   await page.getByRole('button', { name: 'Enregistrer' }).click();
   await expect(page.getByText('Zone créée.')).toBeVisible();
 

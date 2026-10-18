@@ -36,7 +36,7 @@ export default async function DemandesPage({ searchParams }: { searchParams: Pro
     <PrecoShell path="/precollecteur/demandes">
       <PageHeader
         titre="Demandes en attente"
-        sousTitre="Des ménages veulent être collectés là où aucun précollecteur n’est encore attitré. Prenez-les en charge : ils deviennent vos clients."
+        sousTitre="Des ménages veulent être collectés là où aucun précollecteur n’est encore attitré. Prenez-les en charge : ils deviennent vos clients. Position approximative (à 100 m près) : le nom, le téléphone et l’adresse exacte s’affichent dans la fiche client, une fois la demande prise."
       />
       {erreur && (
         <p role="alert" className="mb-4 flex items-start gap-2 rounded-md border border-terrain-stop/25 bg-terrain-stop/5 px-3 py-2 text-body-sm text-terrain-stop">

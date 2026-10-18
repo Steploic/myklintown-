@@ -4,8 +4,9 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { getSupabase, parametre, row, rows, rpc, type Supa } from '@/lib/server';
 import { requireEntreprise } from './context';
-import { ajouterJours, ajouterMois, dateFr, estErreurReseau, isoJour, MESSAGE_RESEAU } from '@/lib/format';
+import { ajouterJours, ajouterMois, dateFr, estErreurReseau, fcfa, isoJour, MESSAGE_RESEAU } from '@/lib/format';
 import { cheminInterne, normaliserNom, periodeFacture } from '@/lib/metier';
+import { CATEGORIES_CHARGES, MONTANT_MAX, lireMontant, moisValide } from '@/lib/charges';
 import type { ActionState, ClientStatut, Plan } from '@/lib/types';
 
 const txt = (fd: FormData, k: string) => {
@@ -48,6 +49,7 @@ export async function creerEntrepriseAction(_p: ActionState, fd: FormData): Prom
     p_telephone: txt(fd, 'telephone'),
     p_siege: txt(fd, 'siege'),
     p_commune: txt(fd, 'commune_id'),
+    p_code: txt(fd, 'code'),
   });
   if (error) return { error: erreurLisible(error.message) };
   rafraichir();
@@ -503,6 +505,49 @@ export async function planifierTourneeAction(_p: ActionState, fd: FormData): Pro
   }
   rafraichir();
   redirect(`/precollecteur/tournees/${tourneeId}`);
+}
+
+// =============================================================================
+// Charges d'exploitation du mois (indicateur « coût par ménage servi »)
+// =============================================================================
+
+export async function enregistrerChargesAction(_p: ActionState, fd: FormData): Promise<ActionState> {
+  const { supabase, entreprise } = await requireEntreprise();
+  const mois = txt(fd, 'mois');
+  if (!moisValide(mois)) return { error: 'Mois invalide : on ne saisit que les charges d’un mois commencé.' };
+
+  const aEcrire: { categorie: string; montant_fcfa: number; note: string | null }[] = [];
+  const aEffacer: string[] = [];
+  for (const c of CATEGORIES_CHARGES) {
+    const montant = lireMontant(txt(fd, c.cle));
+    if (montant === null) aEffacer.push(c.cle);
+    else if (Number.isNaN(montant) || montant > MONTANT_MAX) return { error: `${c.label} : montant illisible (un nombre entier de FCFA).` };
+    else aEcrire.push({ categorie: c.cle, montant_fcfa: montant, note: c.cle === 'autres' ? txt(fd, 'note_autres')?.slice(0, 500) ?? null : null });
+  }
+
+  const debut = `${mois}-01`;
+  if (aEcrire.length) {
+    const { error } = await supabase
+      .from('couts_exploitation')
+      .upsert(aEcrire.map((l) => ({ ...l, entreprise_id: entreprise.id, mois: debut })), { onConflict: 'entreprise_id,mois,categorie' });
+    if (error) return { error: erreurLisible(error.message) };
+  }
+  if (aEffacer.length) {
+    const { error } = await supabase
+      .from('couts_exploitation')
+      .delete()
+      .eq('entreprise_id', entreprise.id)
+      .eq('mois', debut)
+      .in('categorie', aEffacer);
+    if (error) return { error: erreurLisible(error.message) };
+  }
+  rafraichir();
+  const total = aEcrire.reduce((s, l) => s + l.montant_fcfa, 0);
+  return {
+    ok: aEcrire.length
+      ? `Charges de ${dateFr(debut, { month: 'long', year: 'numeric' })} enregistrées : ${fcfa(total)} au total.`
+      : `Charges de ${dateFr(debut, { month: 'long', year: 'numeric' })} effacées.`,
+  };
 }
 
 // =============================================================================

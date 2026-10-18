@@ -90,6 +90,7 @@ describe('choix du fournisseur', () => {
     vi.stubEnv('NOTCHPAY_PUBLIC_KEY', '');
     vi.stubEnv('PAIEMENT_SIMULATION', '1');
     vi.stubEnv('VERCEL', '');
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://projet-de-test.supabase.co');
     expect(fournisseurActif()?.nom).toBe('simulation');
     // Une préversion partage la vraie base : de faux paiements y régleraient de vraies factures.
     for (const env of ['production', 'preview', 'development']) {
@@ -97,6 +98,13 @@ describe('choix du fournisseur', () => {
       vi.stubEnv('VERCEL_ENV', env);
       expect(fournisseurActif()).toBeNull();
     }
+  });
+  it('jamais de simulation branchée sur la vraie base, même sur le poste local', () => {
+    vi.stubEnv('NOTCHPAY_PUBLIC_KEY', '');
+    vi.stubEnv('PAIEMENT_SIMULATION', '1');
+    vi.stubEnv('VERCEL', '');
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://xglomngvjsgbwobiwfqp.supabase.co');
+    expect(fournisseurActif()).toBeNull();
   });
   it('Notch Pay dès que sa clé est là', () => {
     vi.stubEnv('NOTCHPAY_PUBLIC_KEY', 'pk_test_x');

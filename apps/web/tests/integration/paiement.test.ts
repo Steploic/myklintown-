@@ -1,8 +1,8 @@
 /**
- * Paiement en ligne (migration 20261006000008), contre la vraie base :
+ * Paiement en ligne (migration 20261006000008), sur la base de test :
  * ce qu'AUCUN compte ne peut faire (s'activer, écrire ou confirmer une
- * transaction), les liens de paiement, et — si la clé service est fournie —
- * l'enregistrement unique d'un paiement confirmé.
+ * transaction), les liens de paiement, et — avec la clé secrète du projet de
+ * test — l'enregistrement unique d'un paiement confirmé.
  * Ignorés, avec la consigne, tant que la migration n'est pas exécutée.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -27,7 +27,7 @@ beforeAll(async () => {
     return;
   }
   if (CLE_SERVICE) service = clientServiceTest();
-  else console.warn('\n⚠️  Enregistrement d’un paiement confirmé NON testé : SUPABASE_SECRET_KEY absente de apps/web/.env.local\n');
+  else console.warn('\n⚠️  Enregistrement d’un paiement confirmé NON testé : SUPABASE_SECRET_KEY absente de apps/web/.env.test.local (jamais sur la production)\n');
 
   const planId = (await plans(A.sb))[0]!.id;
   const c = await A.sb.from('clients').insert({ entreprise_id: A.entrepriseId, nom: 'Foyer En Ligne', telephone: '677000333', plan_id: planId }).select('id').single();

@@ -155,13 +155,18 @@ export const simulation: Fournisseur = {
   },
 };
 
+/** Référence du projet Supabase de production (publique : elle figure dans son adresse). */
+const REF_BASE_PRODUCTION = 'xglomngvjsgbwobiwfqp';
+
 /** Le fournisseur en service, ou null si le paiement en ligne n'est pas configuré. */
 export function fournisseurActif(): Fournisseur | null {
   if (process.env.NOTCHPAY_PUBLIC_KEY) return notchPay;
   // La simulation ne s'allume jamais sur Vercel, ni en production NI sur une
   // préversion : une préversion partage la vraie base, et de faux paiements y
-  // régleraient de vraies factures (audit du 11/10/2026). Poste local seulement.
-  if (process.env.PAIEMENT_SIMULATION === '1' && !process.env.VERCEL) return simulation;
+  // régleraient de vraies factures (audit du 11/10/2026). Poste local seulement,
+  // et jamais branché sur la vraie base (`pnpm start` avec .env.local).
+  const vraieBase = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').includes(REF_BASE_PRODUCTION);
+  if (process.env.PAIEMENT_SIMULATION === '1' && !process.env.VERCEL && !vraieBase) return simulation;
   return null;
 }
 

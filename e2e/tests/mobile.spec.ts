@@ -75,6 +75,9 @@ test.describe('déconnexion sur téléphone', () => {
     await page.getByRole('button', { name: 'Ouvrir la navigation' }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Déconnexion' }).click();
     await expect(page).toHaveURL(/\/logout$/);
+    await expect(page.getByRole('heading', { name: /À très bientôt/ })).toBeVisible();
+    // Retour à l'accueil sans clic.
+    await expect(page).toHaveURL(/\/$/, { timeout: 10_000 });
     await page.goto('/citoyen');
     await expect(page).toHaveURL(/\/login/);
   });

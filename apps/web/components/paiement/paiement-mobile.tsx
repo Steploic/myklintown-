@@ -6,7 +6,7 @@ import { AlertCircle, CheckCircle2, Loader2, Smartphone } from 'lucide-react';
 import { cn } from '@myklintown/ui';
 import { CANAUX, operateurProbable, type Canal } from '@/lib/paiement/regles';
 import { statutPaiementAction, type ResultatDemande } from '@/lib/paiement/actions';
-import { fcfa } from '@/lib/format';
+import { estPanneReseau, fcfa, MESSAGE_HORS_LIGNE } from '@/lib/format';
 
 const INTERVALLE_MS = 3_000;
 const ATTENTE_MAX_MS = 4 * 60_000;
@@ -53,8 +53,17 @@ export function PaiementMobile({
   const lancer = () => {
     setMessage('');
     if (!canal) return setMessage('Choisissez MTN Mobile Money ou Orange Money.');
+    // Le Mobile Money passe par l'opérateur : sans réseau, rien n'est lancé.
+    if (!navigator.onLine) return setMessage(MESSAGE_HORS_LIGNE);
     start(async () => {
-      const r = await demander(canal, telephone);
+      let r: ResultatDemande;
+      try {
+        r = await demander(canal, telephone);
+      } catch (e) {
+        if (!estPanneReseau(e)) throw e;
+        setMessage(MESSAGE_HORS_LIGNE);
+        return;
+      }
       if (r.error || !r.reference) {
         setMessage(r.error ?? 'Le paiement n’a pas pu être lancé.');
         return;
@@ -70,12 +79,20 @@ export function PaiementMobile({
     let fini = false;
     const t = setInterval(async () => {
       if (fini) return;
-      const s = await statutPaiementAction(reference);
-      if (s.statut === 'reussi') {
+      let s: Awaited<ReturnType<typeof statutPaiementAction>> | null = null;
+      try {
+        s = await statutPaiementAction(reference);
+      } catch (e) {
+        // Coupure pendant l'attente : le paiement suit son cours chez l'opérateur,
+        // on redemande au prochain tour (le délai maximal s'applique toujours).
+        if (!estPanneReseau(e)) throw e;
+      }
+      if (fini) return;
+      if (s?.statut === 'reussi') {
         fini = true;
         setEtape('reussi');
         router.refresh();
-      } else if (s.statut === 'echoue' || s.statut === 'annule' || s.statut === 'expire') {
+      } else if (s && (s.statut === 'echoue' || s.statut === 'annule' || s.statut === 'expire')) {
         fini = true;
         setMessage(s.message ?? (s.statut === 'annule' ? 'Paiement annulé.' : s.statut === 'expire' ? 'Demande expirée.' : 'Le paiement a échoué.'));
         setEtape('echec');

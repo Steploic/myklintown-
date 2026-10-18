@@ -3,11 +3,14 @@
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Banknote, Check, Loader2, MapPin, QrCode, RotateCcw, ShieldAlert, ShieldCheck, TriangleAlert, X } from 'lucide-react';
+import { AlertCircle, Banknote, Check, CloudOff, CloudUpload, Loader2, MapPin, QrCode, RotateCcw, ShieldAlert, ShieldCheck, TriangleAlert, X } from 'lucide-react';
 import { cn } from '@myklintown/ui';
 import { QrScanner } from '@/components/qr-scanner';
 import { encaisserEspecesAction, marquerCollecteAction, scannerClientAction, type ResultatScan } from '@/lib/terrain-actions';
-import { fcfa, MOTIFS_NON_REALISEE, statutAbonnement } from '@/lib/format';
+import { estPanneReseau, fcfa, MOTIFS_NON_REALISEE, statutAbonnement } from '@/lib/format';
+import { extraireCodeClient } from '@/lib/metier';
+import { ajouter, oublierRefus, type OperationTerrain } from '@/lib/hors-ligne/file-terrain';
+import { useFileTerrain } from './use-file-terrain';
 import { ActionForm, SubmitButton } from '@/components/ui/action-form';
 import { PaiementMobile } from '@/components/paiement/paiement-mobile';
 import { demanderPaiementTourneeAction } from '@/lib/paiement/actions';
@@ -30,6 +33,9 @@ export interface Passage {
     telephone?: string | null;
   };
 }
+
+/** Résultat affiché après un scan : celui du serveur, ou celui de la liste du jour (hors ligne). */
+type ResultatAffiche = ResultatScan & { horsLigne?: boolean; inconnu?: boolean; code?: string };
 
 const TERRAIN = {
   ok: { classe: 'bg-terrain-ok', icone: ShieldCheck, consigne: 'Servir' },
@@ -73,39 +79,99 @@ export function TourneeRunner({
   const [scan, setScan] = useState(modifiable && scanAuDepart);
   const [encaissePour, setEncaissePour] = useState<string | null>(null);
   const [moyen, setMoyen] = useState<'especes' | 'mobile'>('especes');
-  const [resultat, setResultat] = useState<ResultatScan | null>(null);
+  const [resultat, setResultat] = useState<ResultatAffiche | null>(null);
+  const [erreur, setErreur] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+  const file = useFileTerrain(tourneeId);
+  // Hors ligne, on revient aux espèces (le choix revient avec le réseau).
+  const moyenAffiche = file.enLigne ? moyen : 'especes';
+
+  // Gestes qui attendent le réseau : ils priment sur ce que dit le serveur
+  // (qui ne les a pas encore reçus), dans l'ordre où ils ont été faits.
+  const enAttenteParPassage = new Map<string, { statut: 'realisee' | 'non_realisee' | 'prevue'; motif: string | null }>();
+  for (const op of file.enAttente) {
+    if (op.type === 'pointage') enAttenteParPassage.set(op.collecteId, { statut: op.statut, motif: op.motif });
+    else {
+      const p = passages.find((x) => x.client.code === op.code);
+      if (p) enAttenteParPassage.set(p.id, { statut: 'realisee', motif: null });
+    }
+  }
+  const vue = (id: string) => enAttenteParPassage.get(id) ?? etat.get(id) ?? { statut: 'prevue' as const, motif: null };
 
   const marquer = (id: string, statut: 'realisee' | 'non_realisee' | 'prevue', motif?: string) => {
-    setEnCours(id);
     setMotifPour(null);
+    setErreur(null);
+    const appliquer = () => setEtat((m) => new Map(m).set(id, { statut, motif: motif ?? null }));
+    // Pas de réseau : le geste est gardé sur le téléphone et partira tout seul.
+    const garder = () => {
+      ajouter({ type: 'pointage', tourneeId, collecteId: id, statut, motif: motif ?? null });
+      appliquer();
+    };
+    if (!navigator.onLine) return garder();
+    setEnCours(id);
     startTransition(async () => {
-      const r = await marquerCollecteAction({ collecteId: id, statut, motif });
-      if (!r.error) {
-        setEtat((m) => new Map(m).set(id, { statut, motif: motif ?? null }));
+      try {
+        const r = await marquerCollecteAction({ collecteId: id, statut, motif });
+        if (r.reseau) garder();
+        else if (r.error) setErreur(r.error);
+        else appliquer();
+      } catch (e) {
+        if (!estPanneReseau(e)) throw e;
+        garder();
+      } finally {
+        setEnCours(null);
       }
-      setEnCours(null);
     });
   };
 
   const onScan = (texte: string) => {
+    setErreur(null);
+    const code = extraireCodeClient(texte);
+    // Hors ligne : la couleur vient de la liste du jour, déjà sur le téléphone.
+    const garder = () => {
+      ajouter({ type: 'scan', tourneeId, code });
+      const p = passages.find((x) => x.client.code === code);
+      if (p) {
+        setEtat((m) => new Map(m).set(p.id, { statut: 'realisee', motif: null }));
+        setResultat({
+          client: { nom: p.client.nom, code: p.client.code, statut_abonnement: p.client.statut_abonnement, quartier: p.client.quartier },
+          horsLigne: true,
+        });
+      } else {
+        setResultat({ horsLigne: true, inconnu: true, code });
+      }
+    };
+    if (!navigator.onLine) return garder();
     startTransition(async () => {
-      const r = await scannerClientAction(tourneeId, texte);
-      setResultat(r);
-      if (r.client && !r.error) {
-        const p = passages.find((x) => x.client.code === r.client!.code);
-        if (p) setEtat((m) => new Map(m).set(p.id, { statut: 'realisee', motif: null }));
-        if (r.horsPlanning) router.refresh();
+      try {
+        const r = await scannerClientAction(tourneeId, texte);
+        if (r.reseau) return garder();
+        setResultat(r);
+        if (r.client && !r.error) {
+          const p = passages.find((x) => x.client.code === r.client!.code);
+          if (p) setEtat((m) => new Map(m).set(p.id, { statut: 'realisee', motif: null }));
+          if (r.horsPlanning) router.refresh();
+        }
+      } catch (e) {
+        if (!estPanneReseau(e)) throw e;
+        garder();
       }
     });
   };
 
-  const faits = [...etat.values()].filter((e) => e.statut === 'realisee').length;
-  const rates = [...etat.values()].filter((e) => e.statut === 'non_realisee').length;
+  const decrire = (op: OperationTerrain) => {
+    if (op.type === 'scan') return `Scan du QR ${op.code}`;
+    const p = passages.find((x) => x.id === op.collecteId);
+    const quoi = op.statut === 'realisee' ? 'collecté' : op.statut === 'non_realisee' ? 'non collecté' : 'annulation du passage';
+    return `${p?.client.nom ?? 'Passage'} : ${quoi}`;
+  };
+
+  const faits = passages.filter((p) => vue(p.id).statut === 'realisee').length;
+  const rates = passages.filter((p) => vue(p.id).statut === 'non_realisee').length;
   const restants = passages.length - faits - rates;
   const ordonnes = [...passages].sort((a, b) => {
-    const sa = etat.get(a.id)!.statut === 'prevue' ? 0 : 1;
-    const sb = etat.get(b.id)!.statut === 'prevue' ? 0 : 1;
+    const sa = vue(a.id).statut === 'prevue' ? 0 : 1;
+    const sb = vue(b.id).statut === 'prevue' ? 0 : 1;
     return sa - sb || a.client.nom.localeCompare(b.client.nom);
   });
 
@@ -131,7 +197,57 @@ export function TourneeRunner({
           <span className="bg-terrain-ok transition-all" style={{ width: `${(faits / Math.max(1, passages.length)) * 100}%` }} />
           <span className="bg-terrain-stop transition-all" style={{ width: `${(rates / Math.max(1, passages.length)) * 100}%` }} />
         </div>
+        {(!file.enLigne || file.enAttente.length > 0) && (
+          <div
+            role="status"
+            data-testid="etat-reseau"
+            className={cn(
+              'mt-3 flex flex-wrap items-center gap-2 rounded-md px-3 py-2 text-body-sm font-medium',
+              file.enLigne ? 'bg-brand-teal/10 text-brand-teal' : 'bg-terrain-relance/10 text-terrain-relance',
+            )}
+          >
+            {file.enLigne ? (
+              file.envoiEnCours ? <Loader2 size={16} className="animate-spin" /> : <CloudUpload size={16} />
+            ) : (
+              <CloudOff size={16} />
+            )}
+            <span className="flex-1">
+              {!file.enLigne && 'Hors ligne : vos scans et passages sont gardés sur le téléphone. '}
+              {file.enAttente.length > 0
+                ? file.enLigne && file.envoiEnCours
+                  ? `Envoi de ${file.enAttente.length} geste${file.enAttente.length > 1 ? 's' : ''}…`
+                  : `${file.enAttente.length} geste${file.enAttente.length > 1 ? 's' : ''} en attente d’envoi.`
+                : 'Rien en attente.'}
+            </span>
+            {file.enLigne && file.enAttente.length > 0 && !file.envoiEnCours && (
+              <button type="button" onClick={file.relancer} className="underline underline-offset-2">
+                Envoyer maintenant
+              </button>
+            )}
+          </div>
+        )}
       </div>
+
+      {erreur && (
+        <p role="alert" className="flex items-start gap-2 rounded-md border border-terrain-stop/25 bg-terrain-stop/5 px-3 py-2 text-body-sm text-terrain-stop">
+          <AlertCircle size={16} className="mt-0.5 shrink-0" /> {erreur}
+        </p>
+      )}
+      {file.refus.length > 0 && (
+        <div role="alert" className="rounded-md border border-terrain-stop/25 bg-terrain-stop/5 p-3 text-body-sm text-terrain-stop">
+          <p className="font-semibold">Refusé par le serveur au retour du réseau :</p>
+          <ul className="mt-1 list-disc pl-5">
+            {file.refus.map((op) => (
+              <li key={op.id}>
+                {decrire(op)} — {op.refus}
+              </li>
+            ))}
+          </ul>
+          <button type="button" onClick={() => oublierRefus(tourneeId)} className="mt-2 font-semibold underline underline-offset-2">
+            J’ai compris
+          </button>
+        </div>
+      )}
 
       {scan && (
         <div className="card-soft overflow-hidden">
@@ -139,12 +255,20 @@ export function TourneeRunner({
           {resultat && (
             <div
               role="status"
-              className={cn('flex items-center gap-4 p-5 text-white', resultat.error ? 'bg-brand-ink' : t?.classe)}
+              className={cn('flex items-center gap-4 p-5 text-white', resultat.error || resultat.inconnu ? 'bg-brand-ink' : t?.classe)}
             >
               {resultat.error ? (
                 <>
                   <X size={36} className="shrink-0" />
                   <p className="font-semibold">{resultat.error}</p>
+                </>
+              ) : resultat.inconnu ? (
+                <>
+                  <CloudOff size={36} className="shrink-0" />
+                  <div className="min-w-0">
+                    <p className="font-semibold">{resultat.code} n’est pas dans la liste du jour.</p>
+                    <p className="text-body-sm opacity-90">Hors ligne : passage gardé, il sera vérifié au retour du réseau.</p>
+                  </div>
                 </>
               ) : (
                 t && (
@@ -154,7 +278,14 @@ export function TourneeRunner({
                       <p className="text-small font-semibold uppercase tracking-wider opacity-90">{t.consigne}</p>
                       <p className="truncate text-h2 font-bold">{resultat.client!.nom}</p>
                       <p className="text-body-sm opacity-90">
-                        {rs!.label} · {resultat.dejaFait ? 'passage déjà enregistré' : resultat.horsPlanning ? 'passage ajouté (hors planning)' : 'passage enregistré ✓'}
+                        {rs!.label} ·{' '}
+                        {resultat.horsLigne
+                          ? 'hors ligne : passage gardé, envoyé au retour du réseau'
+                          : resultat.dejaFait
+                            ? 'passage déjà enregistré'
+                            : resultat.horsPlanning
+                              ? 'passage ajouté (hors planning)'
+                              : 'passage enregistré ✓'}
                       </p>
                     </div>
                   </>
@@ -167,7 +298,7 @@ export function TourneeRunner({
 
       <ul className="space-y-2">
         {ordonnes.map((p) => {
-          const e = etat.get(p.id)!;
+          const e = vue(p.id);
           const s = statutAbonnement(p.client.statut_abonnement);
           const bande = { ok: 'bg-terrain-ok', relance: 'bg-terrain-relance', stop: 'bg-terrain-stop', neutre: 'bg-border' }[s.terrain];
           return (
@@ -188,6 +319,11 @@ export function TourneeRunner({
                       <span className={s.chip}>{s.label}</span>
                       {e.statut === 'realisee' && <span className="chip-ok"><Check size={12} /> Collecté</span>}
                       {e.statut === 'non_realisee' && <span className="chip-stop">Non fait{e.motif ? ` · ${e.motif}` : ''}</span>}
+                      {enAttenteParPassage.has(p.id) && (
+                        <span className="chip-relance gap-1" title="Gardé sur le téléphone : envoyé au retour du réseau">
+                          <CloudOff size={12} /> En attente d’envoi
+                        </span>
+                      )}
                       {encaissement && Number(p.client.montant_impaye) > 0 && (
                         <button
                           type="button"
@@ -256,16 +392,22 @@ export function TourneeRunner({
                           key={m}
                           type="button"
                           role="tab"
-                          aria-selected={moyen === m}
+                          aria-selected={moyenAffiche === m}
+                          // Le Mobile Money passe par l'opérateur : indisponible sans réseau.
+                          disabled={m === 'mobile' && !file.enLigne}
+                          title={m === 'mobile' && !file.enLigne ? 'Indisponible hors ligne' : undefined}
                           onClick={() => setMoyen(m)}
-                          className={cn('rounded-md px-3 py-2 text-body-sm font-semibold', moyen === m ? 'bg-brand-green text-white' : 'text-muted-foreground')}
+                          className={cn(
+                            'rounded-md px-3 py-2 text-body-sm font-semibold disabled:opacity-50',
+                            moyenAffiche === m ? 'bg-brand-green text-white' : 'text-muted-foreground',
+                          )}
                         >
-                          {m === 'especes' ? 'Espèces' : 'Mobile Money'}
+                          {m === 'especes' ? 'Espèces' : file.enLigne ? 'Mobile Money' : 'Mobile Money (hors ligne)'}
                         </button>
                       ))}
                     </div>
                   )}
-                  {paiementEnLigne && moyen === 'mobile' ? (
+                  {paiementEnLigne && moyenAffiche === 'mobile' ? (
                     <PaiementMobile
                       montant={p.client.montant_impaye ?? 0}
                       telephoneParDefaut={p.client.telephone}

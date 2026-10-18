@@ -98,7 +98,9 @@ describe('redirection après enregistrement : chemins internes seulement', () =>
     const { cheminInterne } = await import('@/lib/metier');
     expect(cheminInterne(c)).toBe(true);
   });
-  it.each(['//evil.example', 'https://evil.example', '/\\evil.example', 'javascript:alert(1)', '', null, '/a b'])('%s refusé', async (c) => {
+  // Les deux derniers, collés à l'origine (« https://site » + next), mèneraient
+  // à https://site.evil.example ou https://site@evil.example (/auth/callback).
+  it.each(['//evil.example', 'https://evil.example', '/\\evil.example', 'javascript:alert(1)', '', null, '/a b', '.evil.example', '@evil.example'])('%s refusé', async (c) => {
     const { cheminInterne } = await import('@/lib/metier');
     expect(cheminInterne(c as string | null)).toBe(false);
   });

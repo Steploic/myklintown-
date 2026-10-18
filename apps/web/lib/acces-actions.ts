@@ -27,8 +27,8 @@ export async function demanderAccesMairieAction(_p: ActionState, fd: FormData): 
     const email = txt(fd, 'email').toLowerCase();
     const motDePasse = String(fd.get('password') ?? '');
     const nom = normaliserNom(txt(fd, 'nom'));
-    if (!nom || !email || motDePasse.length < 6) {
-      return { error: 'Nom, e-mail et mot de passe (6 caractères minimum) sont obligatoires.' };
+    if (!nom || !email || motDePasse.length < 8) {
+      return { error: 'Nom, e-mail et mot de passe (8 caractères minimum) sont obligatoires.' };
     }
     const { data, error } = await supabase.auth.signUp({
       email,

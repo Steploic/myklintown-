@@ -107,6 +107,9 @@ test.describe('connexion et déconnexion', () => {
     await page.goto('/settings');
     await page.getByRole('button', { name: 'Se déconnecter' }).click();
     await expect(page).toHaveURL(/\/logout$/);
+    await expect(page.getByRole('heading', { name: /À très bientôt/ })).toBeVisible();
+    // Retour à l'accueil sans clic.
+    await expect(page).toHaveURL(/\/$/, { timeout: 10_000 });
     await page.goto('/citoyen');
     await expect(page).toHaveURL(/\/login/);
   });

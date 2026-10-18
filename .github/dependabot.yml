@@ -1,0 +1,32 @@
+# Mises à jour des dépendances, sans submerger l'équipe :
+#   • failles de sécurité : une PR dès qu'un correctif est publié ;
+#   • le reste : UNE PR groupée par semaine, mineures et correctifs seulement.
+# Les versions MAJEURES (Next.js 16, TypeScript 7, lucide-react 1…) changent le
+# comportement : elles se font à la main, comme un chantier vérifié à l'écran.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      mineures:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+  - package-ecosystem: npm
+    directory: /supabase/tests-securite
+    schedule:
+      interval: monthly
+    groups:
+      banc:
+        patterns: ['*']
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ['*']

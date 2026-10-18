@@ -17,6 +17,8 @@ export const etat = () =>
     migration0006: boolean;
     migration0007: boolean;
     migration0008: boolean;
+    migration0011: boolean;
+    migration0012: boolean;
     adminPromu: boolean;
     adminEmail: string;
   };
@@ -27,6 +29,8 @@ export const RUN = Date.now().toString(36).toUpperCase();
 export const session = (cle: string) => path.resolve(__dirname, '..', '.auth', `${cle}.json`);
 
 export const SANS_MIGRATION_0006 = 'Migration 20261004000006_retours_tests_equipe.sql non exécutée';
+export const SANS_MIGRATION_0011 = 'Migration 20261013000011_indicateurs_pilote.sql non exécutée';
+export const SANS_MIGRATION_0012 = 'Migration 20261013000012_codes_agrement.sql non exécutée';
 
 /** Connexion par le vrai formulaire (comptes dont la session ne doit pas être partagée). */
 export async function seConnecter(page: Page, email: string, motDePasse: string) {
@@ -48,13 +52,18 @@ const IGNORES = [/tile\.openstreetmap|arcgisonline/i, /favicon/i, /Download the 
 // reste bloquante.
 const CONNUES = [/Minified React error #418/];
 
-export const test = base.extend<{ erreurs: string[] }>({
+export const test = base.extend<{ erreurs: string[]; erreursAttendues: RegExp | null }>({
+  // Messages console qu'UN test provoque exprès (ex. coupure réseau simulée) :
+  // déclarés par ce test seul (`test.use`), jamais tolérés ailleurs. Un seul
+  // motif (et non une liste : Playwright lit une liste comme « valeur + réglages »).
+  erreursAttendues: [null, { option: true }],
   erreurs: [
-    async ({ page }, use, testInfo) => {
+    async ({ page, erreursAttendues }, use, testInfo) => {
       const erreurs: string[] = [];
+      const ignorer = erreursAttendues ? [...IGNORES, erreursAttendues] : IGNORES;
       page.on('pageerror', (e) => erreurs.push(`pageerror: ${e.message}`));
       page.on('console', (m) => {
-        if (m.type() === 'error' && !IGNORES.some((r) => r.test(m.text()))) erreurs.push(`console: ${m.text()}`);
+        if (m.type() === 'error' && !ignorer.some((r) => r.test(m.text()))) erreurs.push(`console: ${m.text()}`);
       });
       await use(erreurs);
       const connues = erreurs.filter((e) => CONNUES.some((r) => r.test(e)));
