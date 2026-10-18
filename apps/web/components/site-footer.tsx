@@ -33,6 +33,8 @@ export function SiteFooter() {
           <ul className="space-y-2 text-body-sm text-white/75">
             <li><Link href="/#tarifs" className="hover:text-white">Grille tarifaire</Link></li>
             <li><Link href="/marque" className="hover:text-white">Charte graphique</Link></li>
+            <li><Link href="/legal/charte" className="hover:text-white">Charte du ménage</Link></li>
+            <li><Link href="/legal/contrat" className="hover:text-white">Contrat d’abonnement</Link></li>
             <li><Link href="/legal" className="hover:text-white">Mentions légales</Link></li>
           </ul>
         </div>

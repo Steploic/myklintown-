@@ -1,7 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import { useSoumission } from '@/components/ui/action-form';
+import { CaseDocuments } from '@/components/client/case-documents';
 import { AlertCircle, CheckCircle2, Home, Loader2, Truck } from 'lucide-react';
 import { signUpAction, type AuthState } from '@/lib/auth-actions';
 import { ChampMotDePasse } from '@/components/ui/champ-mot-de-passe';
@@ -18,6 +20,8 @@ const INITIAL: AuthState = {};
 
 export function SignupForm({ defaut }: { defaut: 'precollecteur' | 'citoyen' }) {
   const [state, formAction, pending] = useSoumission(signUpAction, INITIAL);
+  // Profil ménage : charte et contrat à accepter dès l'inscription.
+  const [role, setRole] = useState<string>(defaut);
 
   return (
     <form onSubmit={formAction} className="space-y-5">
@@ -28,7 +32,7 @@ export function SignupForm({ defaut }: { defaut: 'precollecteur' | 'citoyen' }) 
             key={value}
             className="flex cursor-pointer items-start gap-3 rounded-xl border border-input p-4 transition-colors has-[:checked]:border-brand-green has-[:checked]:bg-brand-green/5 has-[:checked]:ring-1 has-[:checked]:ring-brand-green"
           >
-            <input type="radio" name="role" value={value} defaultChecked={value === defaut} className="sr-only" />
+            <input type="radio" name="role" value={value} defaultChecked={value === defaut} onChange={() => setRole(value)} className="sr-only" />
             <span className="grid h-10 w-10 shrink-0 place-content-center rounded-lg bg-brand-ink text-brand-leaf">
               <Icon size={20} />
             </span>
@@ -70,6 +74,8 @@ export function SignupForm({ defaut }: { defaut: 'precollecteur' | 'citoyen' }) 
           <p className="field-hint">8 caractères minimum.</p>
         </div>
       </div>
+
+      {role === 'citoyen' && <CaseDocuments id="signup-documents" />}
 
       <button type="submit" disabled={pending} className="btn-primary w-full">
         {pending && <Loader2 size={16} className="animate-spin" />} {pending ? 'Création…' : 'Créer mon compte'}

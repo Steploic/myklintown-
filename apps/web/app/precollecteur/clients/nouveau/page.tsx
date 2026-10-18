@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { PrecoShell } from '@/components/precollecteur/shell';
 import { PageHeader } from '@/components/ui/blocks';
 import { ActionForm, SubmitButton } from '@/components/ui/action-form';
@@ -35,6 +36,18 @@ export default async function NouveauClientPage() {
             <strong className="text-brand-ink">Émettre la première facture maintenant</strong>
             <span className="block text-muted-foreground">
               Paiement avant service : la période commence aujourd’hui.
+            </span>
+          </span>
+        </label>
+        <label className="mt-3 flex items-start gap-3 rounded-lg bg-muted/60 p-3 text-body-sm">
+          <input type="checkbox" name="charte_remise" className="mt-0.5 h-5 w-5 shrink-0 accent-[#3E9A5E]" />
+          <span>
+            <strong className="text-brand-ink">Charte remise et acceptée</strong>
+            <span className="block text-muted-foreground">
+              Le ménage a reçu sur papier la{' '}
+              <Link href="/legal/charte" target="_blank" className="font-semibold text-brand-blue underline">charte du ménage</Link> et le{' '}
+              <Link href="/legal/contrat" target="_blank" className="font-semibold text-brand-blue underline">contrat d’abonnement</Link> en
+              vigueur, et les a acceptés. C’est enregistré à votre nom, avec la date.
             </span>
           </span>
         </label>

@@ -21,6 +21,7 @@ import { ActionForm, SubmitButton } from '@/components/ui/action-form';
 import { rattacherCompteAction } from '@/lib/compte-actions';
 import { annulerDemandeAction } from '@/lib/client/actions';
 import { BandeauAccesMairie } from '@/components/client/bandeau-acces';
+import { BandeauCharte } from '@/components/client/bandeau-charte';
 import { getMonAbonnement } from '@/lib/client/context';
 import { getCurrentProfile } from '@/lib/get-profile';
 import { rows } from '@/lib/server';
@@ -50,6 +51,7 @@ export default async function CitoyenAccueil({
     return (
       <PortalShell portalKey="citoyen" currentPath="/citoyen">
         <BandeauAccesMairie />
+        <BandeauCharte />
         <section className="rounded-2xl bg-brand-blue p-6 text-white sm:p-8">
           <div className="flex items-start gap-4">
             <Clock size={40} className="shrink-0" />
@@ -148,6 +150,7 @@ export default async function CitoyenAccueil({
   return (
     <PortalShell portalKey="citoyen" currentPath="/citoyen" titre={client.nom}>
       <BandeauAccesMairie />
+      <BandeauCharte />
       {rattache && (
         <p className="mb-5 flex items-center gap-2 rounded-lg border border-terrain-ok/25 bg-terrain-ok/5 px-4 py-3 text-body-sm font-medium text-terrain-ok">
           <CheckCircle2 size={18} /> Compte rattaché : voici votre abonnement chez {entreprise?.nom}.

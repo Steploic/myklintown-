@@ -5,7 +5,7 @@
 import { compte, emailDe, identifiants, iso } from '../../apps/web/tests/support/fixtures';
 import { etat, expect, pasDeDebordement, seConnecter, session, test } from './base';
 
-const PUBLIQUES = ['/', '/login', '/signup', '/marque', '/legal', '/acces-mairie', '/rejoindre'];
+const PUBLIQUES = ['/', '/login', '/signup', '/marque', '/legal', '/legal/charte', '/legal/contrat', '/acces-mairie', '/rejoindre'];
 const PRECOLLECTEUR = [
   '/precollecteur',
   '/precollecteur/clients',

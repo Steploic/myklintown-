@@ -20,6 +20,7 @@ import {
   KeyRound,
   History,
   ScanLine,
+  ScrollText,
   Sun,
   type LucideIcon,
 } from 'lucide-react';
@@ -71,6 +72,7 @@ export const DASHBOARD_NAV: PortalNavItem[] = [
   { href: '/dashboard/precollecteurs', label: 'Précollecteurs', icon: Truck },
   { href: '/dashboard/incidents', label: 'Incidents', icon: AlertTriangle },
   { href: '/dashboard/acces', label: 'Demandes d’accès', icon: KeyRound, roles: ['admin'] },
+  { href: '/dashboard/documents', label: 'Charte et contrat', icon: ScrollText, court: 'Charte', roles: ['admin'] },
 ];
 
 export type PortalKey = 'precollecteur' | 'employe' | 'citoyen' | 'mairie';

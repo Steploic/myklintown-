@@ -1,4 +1,4 @@
-import { carreEnMer, compte, mairie, POINT_EN_MER } from '../../apps/web/tests/support/fixtures';
+import { carreEnMer, compte, mairie, POINT_EN_MER, supprimerClientsDeTest } from '../../apps/web/tests/support/fixtures';
 import { expect, etat, RUN, SANS_MIGRATION_0006, session, test } from './base';
 import { CODE_LIEN, TEL_LIEN } from './global-setup';
 
@@ -130,6 +130,7 @@ test.describe('nouveau ménage : souscription en ligne', () => {
       await page.getByLabel('Quartier').fill(quartier);
       await page.getByRole('button', { name: 'Ma position' }).click();
       await page.getByRole('button', { name: /Trouver mon précollecteur/ }).click();
+      await page.getByRole('checkbox', { name: /J’ai lu et j’accepte/ }).check();
       await page.getByRole('button', { name: 'Transmettre ma demande' }).click();
       await expect(page).toHaveURL(/\/citoyen\?demande=attente/);
       await expect(page.getByText('Demande transmise')).toBeVisible();
@@ -153,7 +154,7 @@ test.describe('nouveau ménage : souscription en ligne', () => {
       await expect(page.getByText(/Test Propreté A/).first()).toBeVisible();
     } finally {
       await S.sb.from('demandes_abonnement').update({ statut: 'annulee' }).eq('statut', 'en_attente');
-      await A.sb.from('clients').delete().eq('entreprise_id', etat().precoA).eq('quartier', quartier);
+      await supprimerClientsDeTest(A.sb, etat().precoA, { quartier });
     }
   });
 
@@ -167,6 +168,7 @@ test.describe('nouveau ménage : souscription en ligne', () => {
       await page.getByRole('button', { name: 'Continuer' }).click();
       await page.getByRole('button', { name: 'Ma position' }).click();
       await page.getByRole('button', { name: /Trouver mon précollecteur/ }).click();
+      await page.getByRole('checkbox', { name: /J’ai lu et j’accepte/ }).check();
       await page.getByRole('button', { name: 'Transmettre ma demande' }).click();
       await expect(page.getByText('Demande transmise')).toBeVisible();
       await page.getByRole('button', { name: 'Annuler ma demande' }).click();
@@ -191,6 +193,9 @@ test.describe('nouveau ménage : souscription en ligne', () => {
       await page.getByRole('button', { name: /Trouver mon précollecteur/ }).click();
       await expect(page.getByText('Test Propreté A')).toBeVisible();
       await expect(page.getByText(/zone Zone test souscription/)).toBeVisible();
+      // Sans la case cochée, la demande ne part pas.
+      await expect(page.getByRole('button', { name: 'Envoyer ma demande' })).toBeDisabled();
+      await page.getByRole('checkbox', { name: /J’ai lu et j’accepte/ }).check();
       await page.getByRole('button', { name: 'Envoyer ma demande' }).click();
       await expect(page).toHaveURL(/\/citoyen\?demande=1/);
       await expect(page.getByText(/Demande envoyée à Test Propreté A/)).toBeVisible();
@@ -199,6 +204,8 @@ test.describe('nouveau ménage : souscription en ligne', () => {
       const p2 = await ctx.newPage();
       await p2.goto('/precollecteur/clients?filtre=demande');
       await p2.getByRole('link', { name: 'Test Souscripteur' }).first().click();
+      // La charte et le contrat ont été acceptés en ligne, avant la demande.
+      await expect(p2.getByText(/Acceptée en ligne/).first()).toBeVisible();
       await p2.getByRole('button', { name: 'Accepter le client' }).click();
       await expect(p2.getByText(/À régler avant le/)).toBeVisible();
       await ctx.close();
@@ -206,7 +213,7 @@ test.describe('nouveau ménage : souscription en ligne', () => {
       await page.goto('/citoyen');
       await expect(page.getByText(/première période à régler|À régler/).first()).toBeVisible();
     } finally {
-      await A.sb.from('clients').delete().eq('entreprise_id', etat().precoA).eq('nom', 'Test Souscripteur');
+      await supprimerClientsDeTest(A.sb, etat().precoA, { noms: ['Test Souscripteur'] });
       await M.sb.from('zones').delete().eq('id', z.data!.id);
     }
   });

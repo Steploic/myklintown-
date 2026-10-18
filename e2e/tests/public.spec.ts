@@ -35,6 +35,25 @@ test.describe('pages publiques', () => {
     await expect(page.getByRole('heading', { name: 'Données personnelles' })).toBeVisible();
   });
 
+  test('charte et contrat lisibles sans compte ; inscription ménage : case obligatoire', async ({ page }) => {
+    await page.goto('/legal');
+    await page.getByRole('link', { name: 'Charte du ménage' }).first().click();
+    await expect(page).toHaveURL(/\/legal\/charte/);
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expect(page.getByText(/^Version \d+$/).first()).toBeVisible();
+    await page.goto('/legal/contrat');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    // Une version qui n'existe pas : message clair, pas d'erreur.
+    await page.goto('/legal/contrat?version=999');
+    await expect(page.getByText(/n’existe pas ou n’est pas publiée/)).toBeVisible();
+
+    await page.goto('/signup?role=citoyen');
+    const caseDocs = page.getByRole('checkbox', { name: /J’ai lu et j’accepte/ });
+    await expect(caseDocs).toBeVisible();
+    await page.getByRole('radio', { name: /Précollecteur/ }).check({ force: true });
+    await expect(caseDocs).toHaveCount(0);
+  });
+
   test('aucune citation ou donnée inventée sur les pages publiques', async ({ page }) => {
     for (const url of ['/', '/login', '/signup', '/legal']) {
       await page.goto(url);

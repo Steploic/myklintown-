@@ -82,11 +82,19 @@ describe('Invariants (valables pour toute future migration)', () => {
     assert.deepEqual(r.map((x) => x.p), []);
   });
 
-  test('lecture anonyme : seulement la grille tarifaire, les communes et le référentiel PostGIS', async () => {
+  test('lecture anonyme : seulement la grille tarifaire, les communes, la charte et le contrat publiés, le référentiel PostGIS', async () => {
     const r = await lignes(`
       select distinct tablename from pg_policies
        where schemaname in ('public', 'storage') and roles && array['anon', 'public']::name[] order by 1`);
-    assert.deepEqual(r.map((x) => x.tablename), ['communes', 'plans_tarifaires', 'spatial_ref_sys']);
+    assert.deepEqual(r.map((x) => x.tablename), ['communes', 'documents_legaux', 'plans_tarifaires', 'spatial_ref_sys']);
+  });
+
+  test('documents légaux : le visiteur anonyme ne lit que les versions publiées', async () => {
+    await db.query(`insert into public.documents_legaux (type, version, titre, contenu) values ('charte_menage', 99, 'Brouillon caché', 'Texte non publié') on conflict do nothing`);
+    const r = await comme(db, 'anon', async (tx) => (await tx.query(`select version, publie_at is not null as publie from public.documents_legaux`)).rows);
+    assert.ok(r.length >= 2, 'les versions publiées doivent être lisibles');
+    assert.ok(r.every((x) => x.publie), 'un brouillon est visible du public');
+    await db.query(`delete from public.documents_legaux where version = 99`);
   });
 
   test('toute vue du schéma public s’exécute avec les droits de l’appelant', async () => {
@@ -99,8 +107,12 @@ describe('Invariants (valables pour toute future migration)', () => {
   });
 
   test('le compte anonyme ne lit aucune donnée personnelle', async () => {
-    for (const table of ['profiles', 'clients', 'factures', 'paiements_clients', 'employes', 'demandes_abonnement', 'incidents_precollecte', 'positions_tournee']) {
-      const n = await comme(db, 'anon', async (tx) => (await tx.query(`select count(*)::int n from public.${table}`)).rows[0].n);
+    for (const table of ['profiles', 'clients', 'factures', 'paiements_clients', 'employes', 'demandes_abonnement', 'incidents_precollecte', 'positions_tournee', 'acceptations_documents', 'factures_compteurs']) {
+      // 0 ligne (RLS), ou accès refusé d'emblée (droits retirés au rôle anon).
+      const n = await comme(db, 'anon', async (tx) => (await tx.query(`select count(*)::int n from public.${table}`)).rows[0].n).catch((e) => {
+        if (/permission denied/i.test(e.message)) return 0;
+        throw e;
+      });
       assert.equal(n, 0, table);
     }
   });

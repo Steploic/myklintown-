@@ -1,4 +1,5 @@
-import { FileText, Smartphone } from 'lucide-react';
+import Link from 'next/link';
+import { FileText, Printer, Smartphone } from 'lucide-react';
 import { PortalShell } from '@/components/portal-shell';
 import { EmptyState, PageHeader } from '@/components/ui/blocks';
 import { Volet } from '@/components/ui/volet';
@@ -79,6 +80,9 @@ export default async function MesFacturesPage() {
                     ))}
                   </ul>
                 )}
+                <Link href={`/citoyen/factures/${f.id}`} className="btn-ghost -ml-2.5 mt-2">
+                  <Printer size={15} /> {f.statut === 'payee' ? 'Voir le reçu' : 'Voir la facture'}
+                </Link>
                 {enLigne && f.statut === 'emise' && aPayer > 0 && (
                   <Volet
                     className="mt-3 rounded-lg border border-border"
