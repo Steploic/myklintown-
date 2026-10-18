@@ -1,17 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { canAccessPath, homeForRole, isProtectedPath, isSelfServiceRole, ROLE_HOME } from '@/lib/roles';
+import { canAccessPath, homeForRole, isProtectedPath, isSelfServiceRole, ROLE_HOME, ROLES_RETIRES } from '@/lib/roles';
 
 describe('rôles auto-attribuables à l’inscription', () => {
   it('ménage et précollecteur : oui', () => {
     expect(isSelfServiceRole('citoyen')).toBe(true);
     expect(isSelfServiceRole('precollecteur')).toBe(true);
   });
-  it('mairie, admin, collecteur : jamais', () => {
+  it('mairie, admin, collecteur, employé : jamais', () => {
     expect(isSelfServiceRole('mairie')).toBe(false);
     expect(isSelfServiceRole('admin')).toBe(false);
     expect(isSelfServiceRole('collecteur')).toBe(false);
+    expect(isSelfServiceRole('employe')).toBe(false);
     expect(isSelfServiceRole('')).toBe(false);
     expect(isSelfServiceRole('ADMIN')).toBe(false);
+  });
+  it('« enterprise » (portail de démonstration retiré) : plus jamais', () => {
+    expect(isSelfServiceRole('enterprise')).toBe(false);
   });
 });
 
@@ -31,8 +35,22 @@ describe('page d’accueil par rôle', () => {
   });
 });
 
+describe('rôles des portails retirés (collecteur, enterprise)', () => {
+  it.each(ROLES_RETIRES.map((r) => [r]))('%s : atterrit sur ses paramètres, et n’ouvre rien d’autre', (role) => {
+    expect(homeForRole(role)).toBe('/settings');
+    expect(canAccessPath(role, '/settings')).toBe(true);
+    for (const chemin of ['/citoyen', '/precollecteur', '/employe', '/dashboard', '/collecteur', '/enterprise']) {
+      expect(canAccessPath(role, chemin)).toBe(false);
+    }
+  });
+  it('l’administrateur n’a plus d’accès vers ces anciens portails', () => {
+    expect(canAccessPath('admin', '/collecteur')).toBe(false);
+    expect(canAccessPath('admin', '/enterprise')).toBe(false);
+  });
+});
+
 describe('chemins protégés', () => {
-  it.each(['/citoyen', '/precollecteur/clients', '/dashboard/zones', '/settings', '/collecteur/scan', '/enterprise'])(
+  it.each(['/citoyen', '/precollecteur/clients', '/dashboard/zones', '/settings', '/employe'])(
     '%s est protégé',
     (p) => expect(isProtectedPath(p)).toBe(true),
   );

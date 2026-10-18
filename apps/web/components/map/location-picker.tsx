@@ -3,7 +3,8 @@
 import dynamic from 'next/dynamic';
 import { useState } from 'react';
 import { Crosshair, Loader2, MapPin } from 'lucide-react';
-import type { ZoneAffichee } from './location-picker-inner';
+import type { VueCarte, ZoneAffichee } from './location-picker-inner';
+import { VILLES } from './use-centre-carte';
 
 const Carte = dynamic(() => import('./location-picker-inner'), {
   ssr: false,
@@ -17,6 +18,8 @@ const Carte = dynamic(() => import('./location-picker-inner'), {
 /**
  * Choix d'un emplacement : clic sur la carte, marqueur déplaçable, ou position GPS
  * du téléphone. Écrit `lat` et `lng` dans des champs cachés du formulaire parent.
+ * La carte s'ouvre sur le territoire du compte ; « Yaoundé · Douala » y mène
+ * en un geste quand ce n'est pas le bon.
  */
 export function LocationPicker({
   defaut,
@@ -32,11 +35,15 @@ export function LocationPicker({
   const [pos, setPos] = useState<[number, number] | null>(defaut ?? null);
   const [gps, setGps] = useState<'idle' | 'attente' | 'bloque' | 'indisponible' | 'delai' | 'absent'>('idle');
   const [cle, setCle] = useState(0);
+  const [vue, setVue] = useState<VueCarte | null>(null);
 
   const choisir = (lat: number, lng: number, recentrer = false) => {
     setPos([lat, lng]);
     onChange?.(lat, lng);
-    if (recentrer) setCle((k) => k + 1);
+    if (recentrer) {
+      setVue(null);
+      setCle((k) => k + 1);
+    }
   };
 
   const maPosition = () => {
@@ -63,10 +70,24 @@ export function LocationPicker({
           <MapPin size={16} className="text-brand-green" />
           {pos ? `Position : ${pos[0].toFixed(5)}, ${pos[1].toFixed(5)}` : 'Touchez la carte pour placer le domicile.'}
         </p>
-        <button type="button" onClick={maPosition} className="btn-outline min-h-[38px] py-1.5">
-          {gps === 'attente' ? <Loader2 size={16} className="animate-spin" /> : <Crosshair size={16} />}
-          Ma position
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <div role="group" aria-label="Aller à une ville" className="inline-flex overflow-hidden rounded-md border border-input bg-surface">
+            {VILLES.map((v, i) => (
+              <button
+                key={v.nom}
+                type="button"
+                onClick={() => setVue({ centre: v.centre, zoom: v.zoom })}
+                className={`min-h-[38px] px-3 text-body-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-blue ${i > 0 ? 'border-l border-input' : ''}`}
+              >
+                {v.nom}
+              </button>
+            ))}
+          </div>
+          <button type="button" onClick={maPosition} className="btn-outline min-h-[38px] py-1.5">
+            {gps === 'attente' ? <Loader2 size={16} className="animate-spin" /> : <Crosshair size={16} />}
+            Ma position
+          </button>
+        </div>
       </div>
       {gps !== 'idle' && gps !== 'attente' && (
         <div role="status" className="rounded-md border border-terrain-relance/30 bg-terrain-relance/5 px-3 py-2 text-small text-terrain-relance">
@@ -92,7 +113,7 @@ export function LocationPicker({
           Vous pouvez aussi toucher la carte pour placer le domicile à la main.
         </div>
       )}
-      <Carte key={cle} valeur={pos} onChange={(lat, lng) => choisir(lat, lng)} zones={zones} hauteur={hauteur} />
+      <Carte key={cle} valeur={pos} onChange={(lat, lng) => choisir(lat, lng)} zones={zones} hauteur={hauteur} vue={vue} />
     </div>
   );
 }

@@ -3,8 +3,8 @@ import { ArrowLeftRight, ChevronDown, Home, Landmark, Truck } from 'lucide-react
 import type { PortalKey } from '@/lib/portal-config';
 
 /**
- * Espaces ouverts aux administrateurs. Les portails collecteur et partenaire
- * B2B sont masqués depuis le pivot précollecteurs : ils n'y figurent pas.
+ * Espaces ouverts aux administrateurs. (Les portails de démonstration
+ * Collecteur et Partenaire B2B ont été retirés le 19/10/2026.)
  */
 const ESPACES = [
   { cle: 'mairie', href: '/dashboard', label: 'Espace Mairie', icon: Landmark },

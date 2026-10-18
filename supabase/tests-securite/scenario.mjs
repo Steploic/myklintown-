@@ -4,7 +4,9 @@
 // Une attaque renvoie `true` si elle a RÉUSSI (faille présente), `false` si la
 // base l'a refusée. Un parcours lève une erreur s'il ne fonctionne plus.
 
-import { comme, creerCompte, creerEntreprise, promouvoir, valeur } from './banc.mjs';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { comme, creerCompte, creerEntreprise, DOSSIER_MIGRATIONS, promouvoir, valeur } from './banc.mjs';
 
 const CONTOUR_Z = {
   type: 'Polygon',
@@ -20,6 +22,12 @@ async function accepte(db, qui, sql, params = []) {
   } catch {
     return false;
   }
+}
+
+/** Texte d'une migration du dépôt (par son numéro), ou null si elle n'y est pas. */
+function migration(numero) {
+  const f = readdirSync(DOSSIER_MIGRATIONS).find((x) => x.startsWith(numero));
+  return f ? readFileSync(join(DOSSIER_MIGRATIONS, f), 'utf8') : null;
 }
 
 export async function preparer(db) {
@@ -340,6 +348,29 @@ export const ATTAQUES = [
       return n > 0;
     },
   },
+  {
+    id: 'inscription-enterprise',
+    titre: 'Un visiteur s’inscrit en « enterprise » (portail de démonstration retiré)',
+    async jouer(db) {
+      const u = await creerCompte(db, `partenaire.${Date.now()}@test.cm`, 'enterprise');
+      return (await valeur(db, `select role::text from public.profiles where id = $1`, [u])) === 'enterprise';
+    },
+  },
+  {
+    id: 'communes-mairie',
+    titre: 'La Mairie modifie le référentiel des communes (réservé à l’administrateur)',
+    async jouer(db, s) {
+      await accepte(db, s.mairie, `update public.communes set nom = 'Commune pirate' where code = 'DLA1'`);
+      const effet = (await valeur(db, `select nom from public.communes where code = 'DLA1'`)) === 'Commune pirate';
+      if (effet) await db.query(`update public.communes set nom = 'Douala I' where code = 'DLA1'`);
+      return effet;
+    },
+  },
+  {
+    id: 'centre-carte-anon',
+    titre: 'Un visiteur anonyme interroge centre_carte()',
+    jouer: (db) => accepte(db, 'anon', `select * from public.centre_carte()`),
+  },
 ];
 
 // -----------------------------------------------------------------------------
@@ -553,6 +584,70 @@ export const PARCOURS = [
       await promouvoir(db, email, 'admin');
       const ent = await comme(db, a, (tx) => valeur(tx, `select public.creer_mon_entreprise('Démonstration MyKlinTown')`));
       if (!ent) throw new Error('pas d’entreprise');
+    },
+  },
+  {
+    titre: 'Carte vide : centrée sur les zones du gérant et de son équipe, la commune de la Mairie, le domicile du ménage ; Yaoundé sinon',
+    async jouer(db, s) {
+      if (!(await valeur(db, `select to_regprocedure('public.centre_carte()') is not null`))) return;
+      const centre = (qui) => comme(db, qui, async (tx) => (await tx.query(`select * from public.centre_carte()`)).rows[0]);
+      const attendu = (qui, r, ok) => {
+        if (!r || !ok(r)) throw new Error(`${qui} : ${JSON.stringify(r)}`);
+      };
+
+      // Gérant A et son employé : emprise de la zone Z.
+      for (const [qui, id] of [['gérant A', s.gerantA], ['employé de A', s.employe]]) {
+        attendu(qui, await centre(id), (r) => r.origine === 'zones' && r.lat_min === 3.84 && r.lat_max === 3.86 && r.lng_min === 11.49 && r.lng_max === 11.51);
+      }
+      // Gérant B : ni zone, ni commune, ni client localisé → Yaoundé. Puis sa commune (Douala II).
+      attendu('gérant B', await centre(s.gerantB), (r) => r.origine === 'defaut' && r.lat === 3.848 && r.lng === 11.502);
+      await db.query(`update public.entreprises set commune_id = (select id from public.communes where code = 'DLA2') where id = $1`, [s.entB]);
+      attendu('gérant B (Douala II)', await centre(s.gerantB), (r) => r.origine === 'commune' && r.lat === 4.05 && r.lng === 9.7 && r.zoom === 12);
+      await db.query(`update public.entreprises set commune_id = null where id = $1`, [s.entB]);
+
+      // Ménage de la liste d'attente : sa demande (ou sa fiche, une fois prise), arrondie à ≈ 100 m.
+      attendu('demandeur', await centre(s.demandeur), (r) => ['demande', 'domicile'].includes(r.origine) && r.lat === 3.851 && r.lng === 11.501);
+      // Ménage sans position → Yaoundé.
+      attendu('ménage', await centre(s.menage), (r) => r.origine === 'defaut');
+
+      // Mairie de Douala I (demande d'accès acceptée) → sa commune ; Mairie sans commune et admin → toutes les zones.
+      const u = await creerCompte(db, `mairie.douala.${Date.now()}@test.cm`);
+      await comme(db, u, (tx) => tx.query(`select public.demander_acces_mairie((select id from public.communes where code = 'DLA1'), 'Chef de service hygiène', null, null, null)`));
+      const d = await comme(db, s.admin, (tx) => valeur(tx, `select id from public.demandes_acces where user_id = $1`, [u]));
+      await comme(db, s.admin, (tx) => tx.query(`select public.traiter_demande_acces($1, true)`, [d]));
+      attendu('Mairie de Douala I', await centre(u), (r) => r.origine === 'commune' && r.lat === 4.05 && r.lng === 9.7);
+      attendu('Mairie sans commune', await centre(s.mairie), (r) => r.origine === 'zones');
+      attendu('administrateur', await centre(s.admin), (r) => r.origine === 'zones');
+
+      // L'administrateur affine le centre d'une commune.
+      await comme(db, s.admin, (tx) => tx.query(`update public.communes set centre_lat = 4.061, centre_lng = 9.736 where code = 'DLA1'`));
+      attendu('Mairie de Douala I (centre affiné)', await centre(u), (r) => r.lat === 4.061 && r.lng === 9.736);
+    },
+  },
+  {
+    titre: 'Migration 0015 rejouée : comptes « enterprise » et « collecteur » convertis en ménage, rôle d’origine gardé, centre affiné conservé',
+    async jouer(db) {
+      const sql = migration('20261019000015');
+      if (!sql) return;
+      const partenaire = await creerCompte(db, `ancien.partenaire.${Date.now()}@test.cm`);
+      const collecteur = await creerCompte(db, `ancien.collecteur.${Date.now()}@test.cm`);
+      // Comme en production : rôles posés avant la migration (SQL Editor).
+      await db.query(`update public.profiles set role = 'enterprise' where id = $1`, [partenaire]);
+      await db.query(`update public.profiles set role = 'collecteur' where id = $1`, [collecteur]);
+      const affine = await valeur(db, `select centre_lat from public.communes where code = 'DLA1'`);
+
+      await db.exec(sql);
+      await db.exec(sql);
+
+      const r = (await db.query(
+        `select p.role::text as role, r.ancien_role::text as ancien from public.profiles p
+           left join securite.roles_retires r on r.user_id = p.id where p.id = any($1) order by p.email`,
+        [[partenaire, collecteur]])).rows;
+      if (JSON.stringify(r) !== JSON.stringify([{ role: 'citoyen', ancien: 'collecteur' }, { role: 'citoyen', ancien: 'enterprise' }])) {
+        throw new Error(JSON.stringify(r));
+      }
+      const apres = await valeur(db, `select centre_lat from public.communes where code = 'DLA1'`);
+      if (apres !== affine) throw new Error(`centre affiné écrasé : ${affine} → ${apres}`);
     },
   },
 ];

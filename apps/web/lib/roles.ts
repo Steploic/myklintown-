@@ -5,14 +5,24 @@
  */
 export type UserRole = 'citoyen' | 'precollecteur' | 'employe' | 'collecteur' | 'mairie' | 'enterprise' | 'admin';
 
+/**
+ * Rôles des anciens portails de démonstration (Collecteur, Partenaire B2B),
+ * retirés le 19/10/2026. Ils restent dans l'enum de la base mais n'ouvrent plus
+ * aucun espace : les comptes concernés sont repassés en ménage par la migration
+ * 20261019000015. Un compte qui en porterait encore un (migration pas encore
+ * jouée, rôle remis à la main) n'a accès qu'à ses paramètres : il y atterrit,
+ * sans boucle de redirection.
+ */
+export const ROLES_RETIRES = ['collecteur', 'enterprise'] as const;
+
 /** Page d'accueil de chaque rôle après connexion. */
 export const ROLE_HOME: Record<UserRole, string> = {
   citoyen: '/citoyen',
   precollecteur: '/precollecteur',
   employe: '/employe',
-  collecteur: '/collecteur',
+  collecteur: '/settings',
   mairie: '/dashboard',
-  enterprise: '/enterprise',
+  enterprise: '/settings',
   admin: '/dashboard',
 };
 
@@ -22,18 +32,20 @@ export const ROLE_HOME: Record<UserRole, string> = {
  * `precollecteur` y figure : il ne donne accès qu'aux données de SA propre
  * entreprise (RLS par appartenance, `est_membre()`), jamais à celles des autres.
  *
- * `employe` n'y figure pas non plus : on le devient en rejoignant une équipe
- * avec le code d'invitation du gérant (`rejoindre_entreprise`).
+ * `employe` n'y figure pas : on le devient en rejoignant une équipe avec le
+ * code d'invitation du gérant (`rejoindre_entreprise`).
  *
- * `collecteur`, `mairie` et `admin` en sont exclus : ils ouvrent l'accès aux
- * données des ménages, aux tournées et aux encaissements. Ils se promeuvent
- * côté serveur, ils ne se demandent pas.
+ * `mairie` et `admin` en sont exclus : ils ouvrent l'accès aux données des
+ * ménages, aux tournées et aux encaissements. Ils se promeuvent côté serveur,
+ * ils ne se demandent pas. `collecteur` et `enterprise` (portails de
+ * démonstration retirés) non plus.
  *
- * ⚠️ Doit rester aligné sur `handle_new_user()` dans `supabase/setup_rls.sql`.
- * C'est la base qui fait autorité — cette liste n'est qu'un garde-fou en amont,
- * pour rendre le refus lisible plutôt que silencieux.
+ * ⚠️ Doit rester aligné sur `handle_new_user()` (dernière version :
+ * `supabase/migrations/20261019000015_nettoyage_demo_douala.sql`). C'est la
+ * base qui fait autorité — cette liste n'est qu'un garde-fou en amont, pour
+ * rendre le refus lisible plutôt que silencieux.
  */
-export const SELF_SERVICE_ROLES = ['citoyen', 'precollecteur', 'enterprise'] as const;
+export const SELF_SERVICE_ROLES = ['citoyen', 'precollecteur'] as const;
 
 export type SelfServiceRole = (typeof SELF_SERVICE_ROLES)[number];
 
@@ -46,9 +58,7 @@ export const PROTECTED_PREFIXES = [
   '/citoyen',
   '/precollecteur',
   '/employe',
-  '/collecteur',
   '/dashboard',
-  '/enterprise',
   '/settings',
 ] as const;
 
@@ -69,10 +79,10 @@ export const ROLE_ALLOWED_PREFIXES: Record<UserRole, readonly string[]> = {
   citoyen: ['/citoyen', '/settings'],
   precollecteur: ['/precollecteur', '/settings'],
   employe: ['/employe', '/settings'],
-  collecteur: ['/collecteur', '/settings'],
+  collecteur: ['/settings'],
   mairie: ['/dashboard', '/settings'],
-  enterprise: ['/enterprise', '/settings'],
-  admin: ['/citoyen', '/precollecteur', '/collecteur', '/dashboard', '/enterprise', '/settings'],
+  enterprise: ['/settings'],
+  admin: ['/citoyen', '/precollecteur', '/dashboard', '/settings'],
 };
 
 /** Ce rôle a-t-il le droit d'ouvrir ce chemin ? Refuse par défaut. */

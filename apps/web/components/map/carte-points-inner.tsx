@@ -5,6 +5,8 @@ import { MapContainer, Marker, Polygon, Popup, TileLayer, Tooltip, useMap } from
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { GeoPolygon } from '@/lib/types';
+import { CentrageCompte } from './centrage-compte';
+import { YAOUNDE, ZOOM_DEFAUT } from './use-centre-carte';
 
 export type Ton = 'ok' | 'relance' | 'stop' | 'neutre' | 'info' | 'direct';
 export type Picto = 'maison' | 'collecte' | 'a_collecter' | 'non_collecte' | 'demande' | 'tricycle';
@@ -91,12 +93,14 @@ export default function CartePointsInner({
 }) {
   return (
     <div style={{ height: hauteur }} className="overflow-hidden rounded-xl border border-border">
-      <MapContainer center={[3.848, 11.502]} zoom={13} style={{ height: '100%', width: '100%' }} scrollWheelZoom>
+      <MapContainer center={YAOUNDE} zoom={ZOOM_DEFAUT} style={{ height: '100%', width: '100%' }} scrollWheelZoom>
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <Cadrage points={points} zones={zones} />
+        {/* Rien à cadrer : le territoire du compte plutôt que Yaoundé. */}
+        <CentrageCompte vide={points.length === 0 && zones.length === 0} zoomMax={16} />
         {zones.map((z) => (
           <Polygon
             key={z.id}

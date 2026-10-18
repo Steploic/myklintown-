@@ -39,6 +39,15 @@ const nextConfig = {
   async headers() {
     return [{ source: '/:path*', headers: ENTETES_SECURITE }];
   },
+  // Portails de démonstration retirés (Collecteur, Partenaire B2B) : un ancien
+  // lien ou favori mène à l'accueil plutôt qu'à une page introuvable.
+  // Redirection temporaire : rien n'empêche de rouvrir un jour ces adresses.
+  async redirects() {
+    return [
+      { source: '/collecteur/:path*', destination: '/', permanent: false },
+      { source: '/enterprise/:path*', destination: '/', permanent: false },
+    ];
+  },
 };
 
 export default nextConfig;
