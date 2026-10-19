@@ -43,7 +43,8 @@ export default async function PrecollecteurDashboard({
       .eq('entreprise_id', entreprise.id),
     supabase
       .from('collectes')
-      .select('id, statut, date_prevue, employe_id, tournee_id')
+      // « * » : `refus_abonnement` n'existe qu'après la migration 20261019000013.
+      .select('*')
       .eq('entreprise_id', entreprise.id)
       .gte('date_prevue', il30),
     supabase
@@ -83,7 +84,9 @@ export default async function PrecollecteurDashboard({
     nb_impayees: number;
     est_demo: boolean;
   }>(cl.data);
-  const collectes = rows<{ id: string; statut: string; date_prevue: string; employe_id: string | null; tournee_id: string | null }>(co.data);
+  const collectes = rows<{
+    id: string; statut: string; date_prevue: string; employe_id: string | null; tournee_id: string | null; refus_abonnement?: boolean;
+  }>(co.data);
   const tournees = rows<{ id: string; date: string; statut: string; tricycle_id: string | null; employe_id: string | null }>(to.data);
   const paiements = rows<{ montant_fcfa: number; created_at: string }>(pa.data);
   const employes = rows<{ id: string; nom: string }>(em.data);
@@ -92,7 +95,7 @@ export default async function PrecollecteurDashboard({
   const actifs = clients.filter((c) => c.statut === 'actif');
   const aJour = actifs.filter((c) => c.statut_abonnement === 'a_jour').length;
   const echeance = actifs.filter((c) => c.statut_abonnement === 'echeance_proche').length;
-  const aFacturer = actifs.filter((c) => ['sans_facture', 'expire'].includes(c.statut_abonnement)).length;
+  const aFacturer = actifs.filter((c) => ['sans_facture', 'grace', 'expire'].includes(c.statut_abonnement)).length;
   const impayes = clients.filter((c) => Number(c.nb_impayees) > 0);
   const montantImpaye = impayes.reduce((s, c) => s + Number(c.montant_impaye || 0), 0);
   const demandes = clients.filter((c) => c.statut === 'demande').length;
@@ -107,6 +110,8 @@ export default async function PrecollecteurDashboard({
   const realisees = collectes.filter((c) => c.statut === 'realisee').length;
   const nonRealisees = collectes.filter((c) => c.statut === 'non_realisee').length;
   const enAttente = prevues - realisees - nonRealisees;
+  // Un passage refusé pour abonnement impayé (blocage au passage) n'était pas dû : hors taux d'exécution.
+  const nonRealiseesDues = collectes.filter((c) => c.statut === 'non_realisee' && !c.refus_abonnement).length;
 
   // Graphique : 14 derniers jours.
   const jours = Array.from({ length: 14 }, (_, i) => ajouterJours(auj, i - 13));
@@ -281,7 +286,7 @@ export default async function PrecollecteurDashboard({
 
       <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi label="Collectes prévues (30 j)" valeur={nombre(prevues)} detail={`${enAttente} encore à faire`} />
-        <Kpi label="Réalisées" valeur={nombre(realisees)} detail={`Taux d’exécution ${pct(realisees, realisees + nonRealisees)}`} ton="ok" icon={CheckCircle2} />
+        <Kpi label="Réalisées" valeur={nombre(realisees)} detail={`Taux d’exécution ${pct(realisees, realisees + nonRealiseesDues)}`} ton="ok" icon={CheckCircle2} />
         <Kpi label="Non réalisées" valeur={nombre(nonRealisees)} detail="avec motif enregistré" ton="stop" icon={AlertTriangle} />
         <Kpi
           label="Incidents ouverts"

@@ -5,7 +5,7 @@ import { PrecoShell } from '@/components/precollecteur/shell';
 import { EmptyState, PageHeader } from '@/components/ui/blocks';
 import { requireEntreprise } from '@/lib/precollecteur/context';
 import { rows } from '@/lib/server';
-import { dateFr, fcfa, statutAbonnement, telLisible } from '@/lib/format';
+import { dateFr, fcfa, statutAbonnement, STATUTS_A_FACTURER, telLisible } from '@/lib/format';
 import type { ClientStatut } from '@/lib/types';
 
 export const metadata = { title: 'Clients' };
@@ -24,7 +24,7 @@ function filtrer(c: ClientStatut, f: string) {
     case 'a_jour':
       return c.statut_abonnement === 'a_jour';
     case 'echeance':
-      return ['echeance_proche', 'sans_facture', 'expire'].includes(c.statut_abonnement) && c.statut === 'actif';
+      return STATUTS_A_FACTURER.includes(c.statut_abonnement) && c.statut === 'actif';
     case 'impaye':
       return Number(c.nb_impayees) > 0;
     case 'demande':

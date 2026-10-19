@@ -173,7 +173,7 @@ export default async function FicheClientPage({
               </div>
             </dl>
 
-            {client.statut_abonnement === 'echeance_proche' && client.couverture_fin && (
+            {(client.statut_abonnement === 'echeance_proche' || client.statut_abonnement === 'grace') && client.couverture_fin && (
               <div className="mt-4 rounded-lg bg-terrain-relance/5 p-3">
                 <p className="mb-2 text-body-sm font-semibold text-terrain-relance">Rappel d’échéance à envoyer</p>
                 <RelanceButtons

@@ -371,6 +371,26 @@ export const ATTAQUES = [
     titre: 'Un visiteur anonyme interroge centre_carte()',
     jouer: (db) => accepte(db, 'anon', `select * from public.centre_carte()`),
   },
+  {
+    id: 'refus-excuse-par-le-gerant',
+    titre: 'Le gérant « excuse » un passage manqué (refus_abonnement) pour gonfler son taux d’exécution',
+    async jouer(db, s) {
+      if (!(await valeur(db, `select exists (select 1 from information_schema.columns where table_name = 'collectes' and column_name = 'refus_abonnement')`))) return false;
+      await accepte(db, s.gerantA, `update public.collectes set statut = 'non_realisee', motif = 'Client absent' where id = $1`, [s.collecteA]);
+      const ok = await accepte(db, s.gerantA, `update public.collectes set refus_abonnement = true where id = $1`, [s.collecteA]);
+      const effet = (await valeur(db, `select refus_abonnement from public.collectes where id = $1`, [s.collecteA])) === true;
+      if (effet) await db.query(`update public.collectes set refus_abonnement = false where id = $1`, [s.collecteA]);
+      return ok && effet;
+    },
+  },
+  {
+    id: 'calcul-terrain-ouvert',
+    titre: 'Un compte connecté appelle etat_terrain_client (fonction interne au terrain)',
+    async jouer(db, s) {
+      if (!(await valeur(db, `select to_regprocedure('public.etat_terrain_client(uuid, date)') is not null`))) return false;
+      return accepte(db, s.intrus, `select * from public.etat_terrain_client($1, current_date)`, [s.clientA]);
+    },
+  },
   // --- Chantier 3 : facture inaltérable, charte et contrat (migration 0014)
   {
     id: 'facture-montant-gerant',
@@ -804,6 +824,108 @@ export const PARCOURS = [
       }
       const apres = await valeur(db, `select centre_lat from public.communes where code = 'DLA1'`);
       if (apres !== affine) throw new Error(`centre affiné écrasé : ${affine} → ${apres}`);
+    },
+  },
+  {
+    titre: 'Délai de grâce et blocage au passage : orange le dernier passage, rouge non servi, hors taux d’exécution',
+    async jouer(db, s) {
+      if (!(await valeur(db, `select to_regprocedure('public.terrain_blocage_actif()') is not null`))) return;
+      const interrupteur = (v) => db.query(`update public.parametres_plateforme set valeur = $1::jsonb where cle = 'terrain_blocage_actif'`, [v]);
+      const passage = (id) => db.query(`select statut, motif, refus_abonnement from public.collectes where id = $1`, [id]).then((r) => r.rows[0]);
+      try {
+        // Foyers de A, couverture payée finie : hier (grâce), il y a 10 jours (expiré),
+        // il y a 8 jours (grâce hier, expiré aujourd'hui) ; plus un impayé couvert
+        // par des espèces remises à l'employé (à valider), et un expiré hors planning.
+        const f = await comme(db, s.gerantA, async (tx) => {
+          const foyer = (nom) =>
+            valeur(tx, `insert into public.clients (entreprise_id, nom, plan_id) values ($1, $2, $3) returning id`, [s.entA, nom, s.plan]);
+          const payee = async (c, finIlYa) => {
+            const fac = await valeur(tx, `insert into public.factures (entreprise_id, client_id, plan_id, periode_debut, periode_fin, montant_fcfa, echeance)
+              values ($1, $2, $3, public.jour_douala() - $4::int - 29, public.jour_douala() - $4::int, 3500, public.jour_douala() - $4::int - 22) returning id`,
+              [s.entA, c, s.plan, finIlYa]);
+            await tx.query(`insert into public.paiements_clients (facture_id, entreprise_id, client_id, montant_fcfa, methode) values ($1, $2, $3, 3500, 'especes')`,
+              [fac, s.entA, c]);
+          };
+          const r = {
+            grace: await foyer('Foyer grâce'), expire: await foyer('Foyer expiré'), veille: await foyer('Foyer grâce hier'),
+            couvert: await foyer('Foyer espèces à valider'), nonVisite: await foyer('Foyer expiré non visité'), horsPlan: await foyer('Foyer expiré hors planning'),
+          };
+          await payee(r.grace, 1);
+          await payee(r.expire, 10);
+          await payee(r.veille, 8);
+          await payee(r.nonVisite, 10);
+          await payee(r.horsPlan, 10);
+          await tx.query(`insert into public.factures (entreprise_id, client_id, plan_id, periode_debut, periode_fin, montant_fcfa, echeance)
+            values ($1, $2, $3, public.jour_douala() - 10, public.jour_douala() + 19, 3500, public.jour_douala() - 3)`, [s.entA, r.couvert, s.plan]);
+          r.t = await valeur(tx, `insert into public.tournees_precollecte (entreprise_id, date) values ($1, public.jour_douala()) returning id`, [s.entA]);
+          await tx.query(`insert into public.tournee_equipe (tournee_id, employe_id, entreprise_id) values ($1, $2, $3)`, [r.t, s.employeA, s.entA]);
+          for (const k of ['grace', 'expire', 'veille', 'couvert', 'nonVisite']) {
+            r[`co_${k}`] = await valeur(tx, `insert into public.collectes (entreprise_id, tournee_id, client_id, date_prevue) values ($1, $2, $3, public.jour_douala()) returning id`,
+              [s.entA, r.t, r[k]]);
+          }
+          for (const k of ['grace', 'expire', 'veille', 'couvert', 'horsPlan']) r[`code_${k}`] = await valeur(tx, `select code from public.clients where id = $1`, [r[k]]);
+          return r;
+        });
+        // L'employé encaisse les espèces du foyer impayé : « à valider ».
+        await comme(db, s.employe, (tx) => tx.query(`select public.encaisser_especes($1, 3500)`, [f.couvert]));
+
+        const vue = async (id) => (await db.query(`select statut_abonnement, consigne_terrain, fin_grace from public.v_clients_statut where id = $1`, [id])).rows[0];
+        const attendu = { grace: ['grace', 'servir_rappeler'], expire: ['expire', 'ne_pas_servir'], veille: ['expire', 'ne_pas_servir'], couvert: ['impaye', 'servir_rappeler'] };
+        for (const [k, [st, cons]] of Object.entries(attendu)) {
+          const v = await vue(f[k]);
+          if (v.statut_abonnement !== st || v.consigne_terrain !== cons) throw new Error(`${k} : ${v.statut_abonnement} / ${v.consigne_terrain}`);
+        }
+
+        // Blocage ÉTEINT (par défaut) : le scan sert, comme avant.
+        const sansBlocage = await comme(db, s.employe, (tx) => valeur(tx, `select public.scanner_passage($1, $2)`, [f.t, f.code_expire]));
+        if (sansBlocage.refuse !== false || (await passage(f.co_expire)).statut !== 'realisee') throw new Error('blocage éteint : le passage devait être servi');
+        await comme(db, s.gerantA, (tx) => tx.query(`select public.pointer_passage($1, 'prevue')`, [f.co_expire]));
+
+        // Blocage ALLUMÉ.
+        await interrupteur('1');
+        await comme(db, s.employe, async (tx) => {
+          const g = await valeur(tx, `select public.scanner_passage($1, $2)`, [f.t, f.code_grace]);
+          if (g.refuse || g.consigne !== 'servir_rappeler' || g.statut_abonnement !== 'grace') throw new Error(`grâce : ${JSON.stringify(g)}`);
+          const e = await valeur(tx, `select public.scanner_passage($1, $2)`, [f.t, f.code_expire]);
+          if (!e.refuse || e.consigne !== 'ne_pas_servir') throw new Error(`expiré : ${JSON.stringify(e)}`);
+          const c = await valeur(tx, `select public.scanner_passage($1, $2)`, [f.t, f.code_couvert]);
+          if (c.refuse) throw new Error('espèces à valider : le foyer devait être servi');
+          // Geste fait hier, hors ligne : jugé au jour d'hier (encore en grâce), donc servi.
+          const h = await valeur(tx, `select public.scanner_passage($1, $2, now() - interval '24 hours')`, [f.t, f.code_veille]);
+          if (h.refuse || h.statut_abonnement !== 'grace') throw new Error(`geste d'hier : ${JSON.stringify(h)}`);
+          // Expiré hors planning : refusé, rien n'est ajouté à la tournée.
+          const x = await valeur(tx, `select public.scanner_passage($1, $2)`, [f.t, f.code_horsPlan]);
+          if (!x.refuse) throw new Error('hors planning : refus attendu');
+        });
+        const pe = await passage(f.co_expire);
+        if (pe.statut !== 'non_realisee' || pe.motif !== 'Refus / impayé' || !pe.refus_abonnement) throw new Error(`passage refusé : ${JSON.stringify(pe)}`);
+        if ((await valeur(db, `select count(*)::int from public.collectes where client_id = $1`, [f.horsPlan])) !== 0) throw new Error('passage hors planning créé pour un foyer à ne pas servir');
+        if ((await passage(f.co_grace)).statut !== 'realisee' || (await passage(f.co_veille)).statut !== 'realisee') throw new Error('grâce : passage non servi');
+
+        // « Collecté » refusé pour un foyer à ne pas servir.
+        const collecte = await comme(db, s.employe, (tx) => tx.query(`select public.pointer_passage($1, 'realisee')`, [f.co_nonVisite])).then(() => true, () => false);
+        if (collecte) throw new Error('« Collecté » accepté pour un foyer à ne pas servir');
+
+        // Fin de tournée : le foyer à ne pas servir, non visité, est noté refusé (pas « non visité »).
+        await comme(db, s.employe, (tx) => tx.query(`select public.changer_statut_tournee($1, 'en_cours')`, [f.t]));
+        await comme(db, s.employe, (tx) => tx.query(`select public.changer_statut_tournee($1, 'terminee')`, [f.t]));
+        const nv = await passage(f.co_nonVisite);
+        if (nv.motif !== 'Refus / impayé' || !nv.refus_abonnement) throw new Error(`non visité : ${JSON.stringify(nv)}`);
+
+        // Indicateur : les passages refusés sortent des passages planifiés, comptés à part.
+        const k = await valeur(db, `select public.kpi_calculer(public.jour_douala(), public.jour_douala(), 'pilote', 'libre')`);
+        const refus = await valeur(db, `select count(*)::int from public.collectes co join public.clients c on c.id = co.client_id
+          where co.refus_abonnement and not c.est_demo and co.date_prevue = public.jour_douala()`);
+        const dus = await valeur(db, `select count(*)::int from public.collectes co join public.clients c on c.id = co.client_id
+          left join public.tournees_precollecte t on t.id = co.tournee_id
+          where not c.est_demo and co.date_prevue = public.jour_douala() and t.statut is distinct from 'annulee'
+            and co.statut <> 'prevue' and not co.refus_abonnement`);
+        if (k.taux_execution.exclus_refus !== refus || refus < 2 || k.taux_execution.den !== dus) {
+          throw new Error(`KPI : ${JSON.stringify(k.taux_execution)} (refus ${refus}, passages dus ${dus})`);
+        }
+      } finally {
+        await interrupteur('0');
+      }
     },
   },
   // --- Chantier 3 : charte et contrat, facture conforme (migration 0014)

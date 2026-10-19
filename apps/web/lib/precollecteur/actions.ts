@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { getSupabase, parametre, row, rows, rpc, type Supa } from '@/lib/server';
 import { requireEntreprise } from './context';
-import { ajouterJours, ajouterMois, dateFr, estErreurReseau, fcfa, isoJour, MESSAGE_RESEAU } from '@/lib/format';
+import { ajouterJours, ajouterMois, dateFr, estErreurReseau, fcfa, isoJour, MESSAGE_RESEAU, STATUTS_A_FACTURER } from '@/lib/format';
 import { cheminInterne, normaliserNom, periodeFacture } from '@/lib/metier';
 import { CATEGORIES_CHARGES, MONTANT_MAX, lireMontant, moisValide } from '@/lib/charges';
 import { enregistrerAcceptation } from '@/lib/acceptations';
@@ -165,7 +165,7 @@ export async function genererFacturesAction(_p: ActionState, _fd: FormData): Pro
   const cibles = rows<Pick<ClientStatut, 'id' | 'statut_abonnement' | 'nb_impayees'>>(data).filter(
     (c) =>
       Number(c.nb_impayees) === 0 &&
-      ['echeance_proche', 'expire', 'sans_facture'].includes(c.statut_abonnement),
+      STATUTS_A_FACTURER.includes(c.statut_abonnement),
   );
   let n = 0;
   for (const c of cibles) {

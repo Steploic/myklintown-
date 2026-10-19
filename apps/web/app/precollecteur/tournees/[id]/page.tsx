@@ -9,6 +9,7 @@ import { TourneeRunner, type Passage } from '@/components/precollecteur/tournee-
 import { RafraichissementAuto } from '@/components/ui/rafraichissement-auto';
 import { paiementEnLigneDisponible } from '@/lib/paiement/service';
 import { requireEntreprise } from '@/lib/precollecteur/context';
+import { blocageAuPassage, clientsDeTournee } from '@/lib/clients-tournee';
 import { BoutonStatutTournee } from '@/components/precollecteur/bouton-statut-tournee';
 import { row, rows } from '@/lib/server';
 import { dateFr, dateHeureFr, heureFr, STATUT_TOURNEE, statutAbonnement } from '@/lib/format';
@@ -36,10 +37,9 @@ export default async function TourneePage({ params }: { params: Promise<{ id: st
     .eq('tournee_id', id);
   const collectes = rows<{ id: string; statut: Passage['statut']; motif: string | null; client_id: string }>(co);
   const ids = collectes.map((c) => c.client_id);
-  const { data: cl } = ids.length
-    ? await supabase.from('v_clients_statut').select('id, nom, code, quartier, adresse, statut_abonnement, lat, lng, montant_impaye, telephone').in('id', ids)
-    : { data: [] };
-  const [eq, att, pos] = await Promise.all([
+  const [cl, blocage, eq, att, pos] = await Promise.all([
+    clientsDeTournee(supabase, ids),
+    blocageAuPassage(supabase),
     supabase.from('tournee_equipe').select('employe_id, employes(nom)').eq('tournee_id', id),
     supabase.from('paiements_clients').select('client_id, montant_fcfa').eq('entreprise_id', entreprise.id).eq('statut', 'a_valider'),
     supabase
@@ -56,7 +56,7 @@ export default async function TourneePage({ params }: { params: Promise<{ id: st
     enAttente.set(p.client_id, (enAttente.get(p.client_id) ?? 0) + p.montant_fcfa);
   }
   const clients = new Map(
-    rows<Passage['client']>(cl).map((c) => [
+    cl.map((c) => [
       c.id,
       { ...c, montant_impaye: Math.max(0, Number(c.montant_impaye ?? 0) - (enAttente.get(c.id) ?? 0)) },
     ]),
@@ -136,6 +136,7 @@ export default async function TourneePage({ params }: { params: Promise<{ id: st
         modifiable={modifiable}
         encaissement={modifiable}
         paiementEnLigne={modifiable && paiementEnLigneDisponible() && entreprise.paiement_statut === 'actif'}
+        blocage={blocage}
       />
 
       <Volet

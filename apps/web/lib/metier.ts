@@ -2,8 +2,8 @@
  * Règles métier pures (sans base, sans réseau) : testées unitairement.
  * Les Server Actions s'appuient dessus pour que la règle n'existe qu'à un endroit.
  */
-import { ajouterJours, ajouterMois, statutAbonnement } from './format';
-import type { GeoPolygon } from './types';
+import { ajouterJours, ajouterMois, dateFr, fcfa, statutAbonnement } from './format';
+import type { ConsigneTerrain, GeoPolygon } from './types';
 
 /**
  * Période couverte par la prochaine facture.
@@ -48,11 +48,54 @@ export function contourDepuisPoints(points: [number, number][]): GeoPolygon | nu
   return { type: 'Polygon', coordinates: [anneau] };
 }
 
-/** Statut au scan : que doit faire l'agent devant ce portail ? */
-export function consigneTerrain(statut: string): 'servir' | 'servir_rappeler' | 'ne_pas_servir' | 'verifier' {
+/**
+ * Statut au scan : que doit faire l'agent devant ce portail ? Même règle que la
+ * fonction SQL `consigne_terrain_calculee` (qui fait foi) : recopiée ici pour la
+ * liste du jour affichée hors ligne. Un impayé couvert par des espèces déjà
+ * remises à l'équipe (à valider par le gérant) est servi.
+ */
+export function consigneTerrain(statut: string, argent?: { reste?: number | null; aValider?: number | null }): ConsigneTerrain {
+  if (statut === 'impaye' && argent) {
+    const reste = Number(argent.reste ?? 0);
+    if (reste > 0 && Number(argent.aValider ?? 0) >= reste) return 'servir_rappeler';
+  }
   return ({ ok: 'servir', relance: 'servir_rappeler', stop: 'ne_pas_servir', neutre: 'verifier' } as const)[
     statutAbonnement(statut).terrain
   ];
+}
+
+/** Motif affiché à l'agent sous la consigne (null quand il n'y a rien à dire). */
+export function motifTerrain(c: {
+  statut_abonnement: string;
+  consigne_terrain?: string | null;
+  couverture_fin?: string | null;
+  fin_grace?: string | null;
+  plus_ancienne_echeance?: string | null;
+  montant_impaye?: number | null;
+}): string | null {
+  const jour = (d: string | null | undefined) => dateFr(d, { day: 'numeric', month: 'long' });
+  switch (c.statut_abonnement) {
+    case 'grace':
+      return c.fin_grace ? `Délai de grâce jusqu’au ${jour(c.fin_grace)} : dernier passage, rappeler le paiement` : 'Délai de grâce : dernier passage, rappeler le paiement';
+    case 'impaye':
+      if (c.consigne_terrain === 'servir_rappeler') return 'Espèces remises, en attente de validation par le gérant';
+      return [
+        c.plus_ancienne_echeance ? `Facture impayée depuis le ${jour(c.plus_ancienne_echeance)}` : 'Facture impayée',
+        Number(c.montant_impaye) > 0 ? `${fcfa(Number(c.montant_impaye))} dus` : null,
+      ]
+        .filter(Boolean)
+        .join(' · ');
+    case 'expire':
+      return c.couverture_fin ? `Abonnement terminé le ${jour(c.couverture_fin)}, délai de grâce écoulé` : 'Abonnement expiré';
+    case 'suspendu':
+      return 'Abonnement suspendu par le précollecteur';
+    case 'echeance_proche':
+      return c.couverture_fin ? `Abonnement payé jusqu’au ${jour(c.couverture_fin)}` : null;
+    case 'sans_facture':
+      return 'Aucune facture payée : à facturer';
+    default:
+      return null;
+  }
 }
 
 /**
