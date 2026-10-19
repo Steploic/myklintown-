@@ -50,7 +50,7 @@ export function DocumentFacture({
           {em.niu && <p className="num">NIU : {em.niu}</p>}
           {em.rccm && <p className="num">RCCM : {em.rccm}</p>}
         </div>
-        <div className="text-right">
+        <div className="sm:text-right">
           <p className={`text-small font-semibold uppercase tracking-wider ${annulee ? 'text-terrain-stop' : 'text-brand-green'}`}>{type}</p>
           <p className="num text-h2 font-bold text-brand-ink">{f.numero}</p>
           <p className="text-body-sm text-muted-foreground">Émise le {dateFr(f.created_at)}</p>
@@ -90,39 +90,39 @@ export function DocumentFacture({
         <thead>
           <tr className="border-y border-border text-left text-small uppercase tracking-wider text-muted-foreground">
             <th className="py-2">Désignation</th>
-            <th className="py-2 text-right">Montant HT</th>
+            <th className="whitespace-nowrap py-2 text-right">Montant HT</th>
           </tr>
         </thead>
         <tbody>
           <tr className="border-b border-border">
             <td className="py-3 pr-3">{f.libelle ?? 'Abonnement de précollecte des déchets ménagers'}</td>
-            <td className="num py-3 text-right font-semibold">{fcfa(ht)}</td>
+            <td className="num whitespace-nowrap py-3 text-right font-semibold">{fcfa(ht)}</td>
           </tr>
         </tbody>
-        <tfoot>
+        <tfoot className="[&_td:first-child]:pr-4">
           <tr>
             <td className="pt-3 text-right text-muted-foreground">Total HT</td>
-            <td className="num pt-3 text-right">{fcfa(ht)}</td>
+            <td className="num whitespace-nowrap pt-3 text-right">{fcfa(ht)}</td>
           </tr>
           <tr>
             <td className="text-right text-muted-foreground">
               {taux > 0 ? `TVA ${tauxLisible(taux)}` : em.mention_tva || 'TVA'}
             </td>
-            <td className="num text-right">{fcfa(tva)}</td>
+            <td className="num whitespace-nowrap text-right">{fcfa(tva)}</td>
           </tr>
           <tr>
             <td className="pt-1 text-right font-semibold text-brand-ink">Total TTC</td>
-            <td className="num pt-1 text-right text-h2-sm font-bold text-brand-ink">{fcfa(f.montant_fcfa)}</td>
+            <td className="num whitespace-nowrap pt-1 text-right text-h2-sm font-bold text-brand-ink">{fcfa(f.montant_fcfa)}</td>
           </tr>
           {!annulee && (
             <>
               <tr>
                 <td className="text-right text-muted-foreground">Déjà réglé</td>
-                <td className="num text-right text-terrain-ok">{fcfa(recu)}</td>
+                <td className="num whitespace-nowrap text-right text-terrain-ok">{fcfa(recu)}</td>
               </tr>
               <tr>
                 <td className="text-right font-semibold">Reste à payer</td>
-                <td className="num text-right font-bold">{fcfa(reste)}</td>
+                <td className="num whitespace-nowrap text-right font-bold">{fcfa(reste)}</td>
               </tr>
             </>
           )}

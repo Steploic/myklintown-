@@ -972,6 +972,38 @@ export const PARCOURS = [
     },
   },
   {
+    titre: 'Compte supprimé : ses annulations et ses publications restent, sans auteur (le reste demeure figé)',
+    async jouer(db, s) {
+      if (!(await avec0014(db))) return;
+      // Un gérant annule une facture, un administrateur publie une version ; puis leurs comptes sont supprimés.
+      const g = await creerCompte(db, `gerant.parti.${Date.now()}@test.cm`, 'precollecteur');
+      const ent = await creerEntreprise(db, g, 'Entreprise du gérant parti');
+      const f = await comme(db, g, async (tx) => {
+        const c = await valeur(tx, `insert into public.clients (entreprise_id, nom, plan_id) values ($1, 'Foyer du gérant parti', $2) returning id`, [ent, s.plan]);
+        const id = await valeur(tx, `insert into public.factures (entreprise_id, client_id, periode_debut, periode_fin, montant_fcfa, echeance)
+          values ($1, $2, current_date, current_date + 30, 3500, current_date + 7) returning id`, [ent, c]);
+        await tx.query(`update public.factures set statut = 'annulee', motif_annulation = 'Doublon' where id = $1`, [id]);
+        return id;
+      });
+      const email = `admin.parti.${Date.now()}@test.cm`;
+      const a = await creerCompte(db, email);
+      await promouvoir(db, email, 'admin');
+      const doc = await comme(db, a, async (tx) => {
+        const id = await valeur(tx, `insert into public.documents_legaux (type, version, titre, contenu) values ('charte_menage', 70, 'Charte', 'Texte') returning id`);
+        await tx.query(`update public.documents_legaux set publie_at = now() where id = $1`, [id]);
+        return id;
+      });
+      await db.query(`delete from auth.users where id = any($1)`, [[g, a]]);
+      const r = (await db.query(`select statut, annulee_par, motif_annulation from public.factures where id = $1`, [f])).rows[0];
+      if (r?.statut !== 'annulee' || r.annulee_par !== null || r.motif_annulation !== 'Doublon') throw new Error(JSON.stringify(r));
+      const d = (await db.query(`select cree_par, publie_at is not null as publie from public.documents_legaux where id = $1`, [doc])).rows[0];
+      if (d?.cree_par !== null || !d.publie) throw new Error(JSON.stringify(d));
+      // La version reste figée, même sans auteur.
+      const reecrite = await accepte(db, s.admin, `update public.documents_legaux set contenu = 'Réécrit' where id = $1`, [doc]);
+      if (reecrite) throw new Error('version publiée réécrite après la suppression de son auteur');
+    },
+  },
+  {
     titre: 'Migration 0014 rejouée : préfixes, numéros, montants et documents inchangés',
     async jouer(db) {
       const sql = migration('20261019000014');
