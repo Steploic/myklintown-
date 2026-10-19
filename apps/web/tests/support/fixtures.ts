@@ -1,8 +1,8 @@
 /**
  * Comptes et données de TEST, réutilisés d'une exécution à l'autre.
  *
- * - QUELLE BASE : la base de test (`apps/web/.env.test.local`, projet Supabase
- *   « myklintown-tests »). La vraie base n'est utilisée que sur demande
+ * - QUELLE BASE : la base de test (`apps/web/.env.test.local` ; en CI, une base
+ *   Supabase locale éphémère, voir tests/README.md). La vraie base n'est utilisée que sur demande
  *   explicite (`TESTS_SUR_PROD=1`, par exemple pour vérifier une migration
  *   après l'avoir jouée en production) ; sans base de test ni demande, les
  *   tests REFUSENT de démarrer.
@@ -55,10 +55,24 @@ export const SUPABASE_ANON = ENV_TESTS.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 if (!SUPABASE_URL || !SUPABASE_ANON) {
   throw new Error(`NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY absents (apps/web/${FICHIER_ENV}).`);
 }
+/** Projet Supabase de production (le pilote) : jamais visé sans TESTS_SUR_PROD=1. */
+const PROJET_PRODUCTION = 'xglomngvjsgbwobiwfqp';
+const hote = (url: string | undefined): string => {
+  try {
+    return new URL(url ?? '').host.toLowerCase();
+  } catch {
+    return '';
+  }
+};
 if (BASE === 'test') {
   // Garde-fou : un .env.test.local recopié de la production serait une erreur grave.
-  const prod = lireFichierEnv('.env.local').NEXT_PUBLIC_SUPABASE_URL;
-  if (prod && prod === SUPABASE_URL) throw new Error('.env.test.local pointe sur la base de PRODUCTION : refus.');
+  // Comparaison par hôte (une barre finale ou une majuscule ne le trompe pas), et le
+  // projet de production est refusé même sans .env.local (worktree, CI).
+  const test = hote(SUPABASE_URL);
+  const prod = hote(lireFichierEnv('.env.local').NEXT_PUBLIC_SUPABASE_URL);
+  if (test.startsWith(`${PROJET_PRODUCTION}.`) || (prod && prod === test)) {
+    throw new Error('.env.test.local pointe sur la base de PRODUCTION : refus.');
+  }
 }
 
 const FICHIER_FIXTURES = path.join(RACINE, 'tests', BASE === 'production' ? '.fixtures.local.json' : '.fixtures.test.local.json');
