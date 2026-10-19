@@ -211,7 +211,7 @@ describe('Les huit indicateurs, au chiffre près', () => {
 
   test('Yaoundé : exécution (tournée annulée ignorée, passage oublié compté) et incidents pour 1 000 passages', async () => {
     const v = await kpi(D - 6, D, 'yaounde');
-    assert.deepEqual(v.taux_execution, { valeur: 0.6, num: 3, den: 5 });
+    assert.deepEqual(v.taux_execution, { valeur: 0.6, num: 3, den: 5, exclus_refus: 0 });
     assert.deepEqual(v.incidents_1000, { valeur: 666.7, num: 2, den: 3 });
   });
 
@@ -239,14 +239,14 @@ describe('Les huit indicateurs, au chiffre près', () => {
     const dla = await kpi(D - 6, D, 'douala');
     assert.equal(dla.menages_inscrits, 3, 'b1, b2 (période payée finie depuis longtemps), e1 (sans facture)');
     assert.deepEqual(dla.taux_paiement, { valeur: 0.3333, num: 1, den: 3 });
-    assert.deepEqual(dla.taux_execution, { valeur: 1, num: 1, den: 1 });
+    assert.deepEqual(dla.taux_execution, { valeur: 1, num: 1, den: 1, exclus_refus: 0 });
     assert.equal(dla.precollecteurs_actifs, 2);
 
     const tout = await kpi(D - 6, D, 'pilote');
     assert.equal(tout.menages_inscrits, 11, 'A : 7, Douala : 3, C : 1');
     assert.deepEqual(tout.taux_paiement, { valeur: 0.3636, num: 4, den: 11 });
     assert.equal(tout.precollecteurs_actifs, 4);
-    assert.deepEqual(tout.taux_execution, { valeur: 0.6667, num: 4, den: 6 });
+    assert.deepEqual(tout.taux_execution, { valeur: 0.6667, num: 4, den: 6, exclus_refus: 0 });
     assert.deepEqual(tout.incidents_1000, { valeur: 500, num: 2, den: 4 });
   });
 
@@ -273,7 +273,7 @@ describe('Les huit indicateurs, au chiffre près', () => {
     const id = await collecte(d.C, t5, d.c1, 0, 'prevue');
     const v = await un(`select public.kpi_calculer($1::date, $2::date, 'pilote', 'libre')`, [jour(-1), jour(30)]);
     assert.equal(v.mesure_au, T);
-    assert.deepEqual(v.taux_execution, { valeur: 0, num: 0, den: 1 });
+    assert.deepEqual(v.taux_execution, { valeur: 0, num: 0, den: 1, exclus_refus: 0 });
     assert.equal(await un(`select public.kpi_calculer($1::date, $2::date)`, [jour(1), jour(7)]), null);
     await db.query(`delete from public.collectes where id = $1`, [id]);
   });

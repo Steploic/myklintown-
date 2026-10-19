@@ -87,7 +87,14 @@ export interface ClientStatut {
   montant_impaye: number;
   plus_ancienne_echeance: string | null;
   statut_abonnement: string;
+  /** Migration 20261019000013 : fin du délai de grâce, espèces à valider, consigne de terrain. */
+  fin_grace?: string | null;
+  montant_a_valider?: number;
+  consigne_terrain?: ConsigneTerrain;
 }
+
+/** Que fait l'agent devant le portail (calculé par la base, recopié dans metier.ts pour le hors ligne). */
+export type ConsigneTerrain = 'servir' | 'servir_rappeler' | 'ne_pas_servir' | 'verifier';
 
 export interface Facture {
   id: string;

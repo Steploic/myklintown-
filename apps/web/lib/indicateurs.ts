@@ -37,7 +37,8 @@ export interface ValeursKpi {
   menages_inscrits: number;
   abonnes_actifs: { valeur: number; dont_grace: number };
   taux_paiement: Ratio;
-  taux_execution: Ratio;
+  /** `exclus_refus` : passages refusés pour abonnement impayé (migration 20261019000013 ; absent des relevés d'avant). */
+  taux_execution: Ratio & { exclus_refus?: number };
   retention: Ratio;
   delai_signalement_h: { valeur: number | null; n: number; en_attente: number; plus_ancien_h: number | null };
   cout_par_menage: null | {
@@ -156,7 +157,7 @@ export const INDICATEURS: DefIndicateur[] = [
     label: 'Taux d’exécution du service',
     definition: 'Passages réalisés ÷ passages planifiés',
     methode:
-      'Passages des tournées de la période, hors tournées annulées. Un passage resté « prévu » un jour passé compte comme non réalisé ; prévu aujourd’hui, il n’est pas encore dû.',
+      'Passages des tournées de la période, hors tournées annulées. Un passage resté « prévu » un jour passé compte comme non réalisé ; prévu aujourd’hui, il n’est pas encore dû. Un ménage refusé pour abonnement impayé, expiré ou suspendu (blocage au passage) n’était pas à servir : son passage est retiré des passages planifiés.',
     sens: 'haut',
     format: pourcent,
   },
@@ -279,7 +280,10 @@ export function detail(v: ValeursKpi, cle: CleIndicateur): string {
     case 'taux_paiement':
       return `${nombre(v.taux_paiement.num)} à jour sur ${nombre(v.taux_paiement.den)} inscrits`;
     case 'taux_execution':
-      return `${nombre(v.taux_execution.num)} passages réalisés sur ${nombre(v.taux_execution.den)} planifiés`;
+      return (
+        `${nombre(v.taux_execution.num)} passages réalisés sur ${nombre(v.taux_execution.den)} planifiés` +
+        (v.taux_execution.exclus_refus ? ` · ${nombre(v.taux_execution.exclus_refus)} refusé${v.taux_execution.exclus_refus > 1 ? 's' : ''} pour impayé, hors calcul` : '')
+      );
     case 'retention':
       return v.retention.den
         ? `${nombre(v.retention.num)} renouvellement${v.retention.num > 1 ? 's' : ''} sur ${nombre(v.retention.den)} fins de période`

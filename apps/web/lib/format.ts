@@ -102,6 +102,7 @@ export function telLisible(tel: string | null | undefined): string {
 export type StatutAbonnement =
   | 'a_jour'
   | 'echeance_proche'
+  | 'grace'
   | 'impaye'
   | 'expire'
   | 'sans_facture'
@@ -113,6 +114,8 @@ export type StatutAbonnement =
 export const STATUT_ABONNEMENT: Record<StatutAbonnement, { label: string; chip: string; terrain: 'ok' | 'relance' | 'stop' | 'neutre' }> = {
   a_jour: { label: 'À jour', chip: 'chip-ok', terrain: 'ok' },
   echeance_proche: { label: 'Échéance proche', chip: 'chip-relance', terrain: 'relance' },
+  // Couverture terminée depuis moins de `delai_grace_jours` : dernier passage (migration 20261019000013).
+  grace: { label: 'Délai de grâce', chip: 'chip-relance', terrain: 'relance' },
   sans_facture: { label: 'À facturer', chip: 'chip-relance', terrain: 'relance' },
   impaye: { label: 'Impayé', chip: 'chip-stop', terrain: 'stop' },
   expire: { label: 'Expiré', chip: 'chip-stop', terrain: 'stop' },
@@ -124,6 +127,9 @@ export const STATUT_ABONNEMENT: Record<StatutAbonnement, { label: string; chip: 
 export function statutAbonnement(s: string | null | undefined) {
   return STATUT_ABONNEMENT[(s as StatutAbonnement) ?? 'sans_facture'] ?? STATUT_ABONNEMENT.sans_facture;
 }
+
+/** Fiches qui attendent leur prochaine facture (échéance proche, grâce, expirée, jamais facturée). */
+export const STATUTS_A_FACTURER: readonly string[] = ['echeance_proche', 'grace', 'expire', 'sans_facture'];
 
 export const STATUT_COLLECTE: Record<string, { label: string; chip: string }> = {
   prevue: { label: 'Prévue', chip: 'chip-info' },

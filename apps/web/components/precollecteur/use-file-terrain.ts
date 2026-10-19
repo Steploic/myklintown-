@@ -14,6 +14,9 @@ const EXECUTEURS: Executeurs = {
   },
   scan: async (op) => {
     const r = await scannerClientAction(op.tourneeId, op.code, op.horodatage);
+    // Ménage à ne pas servir (blocage au passage) : la base a noté « Refus / impayé ».
+    // Montré à l'agent comme un refus ; la file continue.
+    if (r.refuse) return { error: `Non servi : abonnement impayé, expiré ou suspendu (${r.client?.nom ?? op.code})` };
     return { error: r.error, reseau: r.reseau };
   },
 };

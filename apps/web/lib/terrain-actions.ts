@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { getSupabase, row, rpc } from '@/lib/server';
 import { estErreurReseau, MESSAGE_RESEAU } from '@/lib/format';
 import { extraireCodeClient } from '@/lib/metier';
-import type { ActionState } from '@/lib/types';
+import type { ActionState, ConsigneTerrain } from '@/lib/types';
 
 /**
  * Gestes de terrain, partagés par le gérant (espace précollecteur) et ses
@@ -66,6 +66,10 @@ export interface ResultatScan {
   client?: { nom: string; code: string; statut_abonnement: string; quartier: string | null };
   horsPlanning?: boolean;
   dejaFait?: boolean;
+  /** Consigne de la base (migration 20261019000013 ; absente avant). */
+  consigne?: ConsigneTerrain;
+  /** Blocage actif et ménage à ne pas servir : le passage est noté « Refus / impayé », pas servi. */
+  refuse?: boolean;
 }
 
 /** Scan du QR d'un client pendant la tournée : le passage est tracé en base, immédiatement. */
@@ -78,12 +82,17 @@ export async function scannerClientAction(tourneeId: string, codeLu: string, hor
     horodatage,
   );
   if (error) return { error: erreurLisible(error.message), reseau: estErreurReseau(error) || undefined };
-  const r = row<{ nom: string; code: string; statut_abonnement: string; quartier: string | null; hors_planning: boolean; deja_fait: boolean }>(data)!;
+  const r = row<{
+    nom: string; code: string; statut_abonnement: string; quartier: string | null; hors_planning: boolean; deja_fait: boolean;
+    consigne?: ConsigneTerrain; refuse?: boolean;
+  }>(data)!;
   if (!r.deja_fait) rafraichir();
   return {
     client: { nom: r.nom, code: r.code, statut_abonnement: r.statut_abonnement, quartier: r.quartier },
     horsPlanning: r.hors_planning,
     dejaFait: r.deja_fait,
+    consigne: r.consigne,
+    refuse: r.refuse === true,
   };
 }
 
