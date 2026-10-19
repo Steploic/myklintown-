@@ -2,7 +2,7 @@
  * Retours de test de l'équipe (rapport de Julien R1–R10, compte rendu de Pie) :
  * chaque correction est rejouée dans un vrai navigateur.
  */
-import { compte, emailDe, identifiants, iso } from '../../apps/web/tests/support/fixtures';
+import { compte, emailDe, identifiants, iso, supprimerClientsDeTest } from '../../apps/web/tests/support/fixtures';
 import { expect, etat, SANS_MIGRATION_0006, seConnecter, session, test } from './base';
 import { CODE_SCAN } from './global-setup';
 
@@ -86,7 +86,7 @@ test.describe('précollecteur : retours de test', () => {
       await expect(page.getByRole('heading', { name: 'Famille Ngono-Esso' })).toBeVisible();
       await expect(page.getByText('Mvog-Ada').first()).toBeVisible();
     } finally {
-      await A.sb.from('clients').delete().eq('entreprise_id', etat().precoA).eq('nom', 'Famille Ngono-Esso');
+      await supprimerClientsDeTest(A.sb, etat().precoA, { noms: ['Famille Ngono-Esso'] });
     }
   });
 });

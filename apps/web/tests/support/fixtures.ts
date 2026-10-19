@@ -229,12 +229,57 @@ export async function codeAgrementDeTest(destinataire: string): Promise<string |
 
 /** Efface les données d'exploitation d'une entreprise de test (cascade SQL). */
 export async function reinitialiser(sb: SupabaseClient, entrepriseId: string) {
-  for (const table of ['clients', 'tournees_precollecte', 'employes', 'tricycles'] as const) {
-    const { error } = await sb.from(table).delete().eq('entreprise_id', entrepriseId);
-    if (error) throw new Error(`Remise à zéro ${table} : ${error.message}`);
-  }
+  await purgerDonneesDeTest(sb, entrepriseId);
   // Les incidents ne se suppriment pas (ce sont des preuves) : on clôt ceux des essais précédents.
   await sb.from('incidents_precollecte').update({ statut: 'resolu' }).eq('entreprise_id', entrepriseId).neq('statut', 'resolu');
+}
+
+/**
+ * Depuis la migration 20261019000014, une facture ne se supprime plus, ni un
+ * client facturé (même avec la clé de service). Les données de TEST passent
+ * par `purger_donnees_de_test` : clé de service du projet de test, et
+ * entreprise dont tous les membres sont des comptes mkt.test.….
+ *
+ * Sans liste : toute l'exploitation de l'entreprise (clients et leurs
+ * factures, tournées, employés, tricycles, numérotation remise à zéro) ;
+ * avec une liste : ces fiches client-là.
+ *
+ * Repli (base sans 0014, ou vraie base sans clé de service) : suppression par
+ * le gérant, comme avant ; sur la vraie base, les clients facturés restent
+ * (à effacer avec supabase/NETTOYAGE_TESTS.sql).
+ */
+export async function purgerDonneesDeTest(sb: SupabaseClient, entrepriseId: string, clients?: string[]) {
+  if (clients && !clients.length) return;
+  if (CLE_SERVICE) {
+    const { error } = await serviceBaseDeTest().rpc('purger_donnees_de_test', { p_entreprise: entrepriseId, p_clients: clients ?? null });
+    if (!error) return;
+    if (!/could not find the function|does not exist/i.test(error.message)) throw new Error(`Purge des données de test : ${error.message}`);
+  }
+  if (clients) {
+    for (const id of clients) await sb.from('clients').delete().eq('id', id).eq('entreprise_id', entrepriseId);
+    return;
+  }
+  for (const table of ['clients', 'tournees_precollecte', 'employes', 'tricycles'] as const) {
+    const { error } = await sb.from(table).delete().eq('entreprise_id', entrepriseId);
+    if (!error) continue;
+    if (table === 'clients' && /factures/i.test(error.message)) {
+      // Vraie base, sans clé de service : on retire ce qui peut l'être, fiche par fiche.
+      const { data } = await sb.from('clients').select('id').eq('entreprise_id', entrepriseId);
+      for (const c of (data ?? []) as { id: string }[]) await sb.from('clients').delete().eq('id', c.id);
+      continue;
+    }
+    throw new Error(`Remise à zéro ${table} : ${error.message}`);
+  }
+}
+
+/** Fiches client de test choisies par nom ou par quartier, effacées avec leurs factures. */
+export async function supprimerClientsDeTest(sb: SupabaseClient, entrepriseId: string, filtre: { noms?: string[]; quartier?: string }) {
+  let q = sb.from('clients').select('id').eq('entreprise_id', entrepriseId);
+  if (filtre.noms) q = q.in('nom', filtre.noms);
+  if (filtre.quartier) q = q.eq('quartier', filtre.quartier);
+  const { data, error } = await q;
+  if (error) throw new Error(`Recherche des fiches de test : ${error.message}`);
+  await purgerDonneesDeTest(sb, entrepriseId, ((data ?? []) as { id: string }[]).map((c) => c.id));
 }
 
 /** Compte Mairie de test : n'existe qu'après promotion SQL (voir tests/README.md). */

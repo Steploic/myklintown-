@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { CalendarCheck, CheckCircle2, FileText, Link2, MapPin, MessageCircle, Pencil, Printer, Receipt, UserCheck } from 'lucide-react';
+import { CalendarCheck, CheckCircle2, FileText, Link2, MapPin, MessageCircle, Pencil, Printer, Receipt, ScrollText, UserCheck } from 'lucide-react';
 import { PrecoShell } from '@/components/precollecteur/shell';
 import { PageHeader, Section } from '@/components/ui/blocks';
 import { ActionForm, SubmitButton } from '@/components/ui/action-form';
@@ -13,9 +13,11 @@ import {
   annulerFactureAction,
   changerStatutClientAction,
   emettreFactureAction,
+  enregistrerRemiseCharteAction,
   majClientAction,
 } from '@/lib/precollecteur/actions';
-import { origineDemande, row, rows } from '@/lib/server';
+import { origineDemande, row, rows, rpc } from '@/lib/server';
+import { DOCUMENTS, type EtatDocumentClient } from '@/lib/documents';
 import { creerLienPaiementAction } from '@/lib/paiement/actions';
 import { paiementEnLigneDisponible } from '@/lib/paiement/service';
 import { qrSvg } from '@/lib/qr';
@@ -64,7 +66,7 @@ export default async function FicheClientPage({
   const enLigne = paiementEnLigneDisponible() && entreprise.paiement_statut === 'actif';
   const urlLien = lien ? `${await origineDemande()}/payer/${lien}` : null;
 
-  const [fa, pa, co, inc, re, em, pl, za] = await Promise.all([
+  const [fa, pa, co, inc, re, em, pl, za, ch] = await Promise.all([
     supabase.from('factures').select('*').eq('client_id', id).order('periode_debut', { ascending: false }),
     supabase.from('paiements_clients').select('*').eq('client_id', id).order('created_at', { ascending: false }),
     supabase.from('collectes').select('*').eq('client_id', id).order('date_prevue', { ascending: false }).limit(30),
@@ -73,7 +75,11 @@ export default async function FicheClientPage({
     supabase.from('employes').select('id, nom').eq('entreprise_id', entreprise.id).eq('actif', true),
     supabase.from('plans_tarifaires').select('*').eq('actif', true).order('ordre'),
     supabase.from('zone_affectations').select('zones(*)').eq('entreprise_id', entreprise.id),
+    rpc(supabase, 'charte_du_client', { p_client: id }),
   ]);
+  // Charte et contrat (migration 20261019000014) : absents si la base ne les connaît pas encore.
+  const charte = ch.error ? null : rows<EtatDocumentClient>(ch.data);
+  const aFaireAccepter = (charte ?? []).filter((d) => !d.acceptee);
   const factures = rows<Facture>(fa.data);
   const paiements = rows<Paiement>(pa.data);
   const collectes = rows<Collecte>(co.data);
@@ -236,6 +242,11 @@ export default async function FicheClientPage({
                             {f.statut === 'emise' && (retard > 0 ? <span className="chip-stop">En retard de {retard} j</span> : <span className="chip-relance">À régler avant le {dateFr(f.echeance)}</span>)}
                           </p>
                           <p className="text-small text-muted-foreground">{f.libelle}</p>
+                          {f.statut === 'annulee' && f.motif_annulation && (
+                            <p className="text-small text-muted-foreground">
+                              Annulée{f.annulee_at ? ` le ${dateFr(f.annulee_at)}` : ''} — motif : {f.motif_annulation}
+                            </p>
+                          )}
                         </div>
                         <div className="text-right">
                           <p className="num font-bold text-brand-ink">{fcfa(f.montant_fcfa)}</p>
@@ -301,10 +312,26 @@ export default async function FicheClientPage({
                               <Printer size={16} /> Facture
                             </Link>
                             {paye === 0 && (
-                              <form action={annulerFactureAction}>
-                                <input type="hidden" name="facture_id" value={f.id} />
-                                <SubmitButton variant="ghost" pendingLabel="…">Annuler</SubmitButton>
-                              </form>
+                              <details className="group open:basis-full">
+                                <summary className="btn-ghost cursor-pointer list-none">Annuler</summary>
+                                <ActionForm action={annulerFactureAction} className="mt-2 rounded-lg border border-border bg-muted/40 p-3">
+                                  <input type="hidden" name="facture_id" value={f.id} />
+                                  <label className="field-label" htmlFor={`motif-${f.id}`}>Motif de l’annulation</label>
+                                  <div className="flex flex-wrap items-start gap-2">
+                                    <input
+                                      id={`motif-${f.id}`}
+                                      name="motif"
+                                      required
+                                      minLength={3}
+                                      maxLength={300}
+                                      placeholder="ex. Erreur de formule, ménage parti"
+                                      className="field min-w-[12rem] flex-1"
+                                    />
+                                    <SubmitButton variant="danger" pendingLabel="Annulation…">Confirmer l’annulation</SubmitButton>
+                                  </div>
+                                  <p className="field-hint">La facture n’est pas effacée : elle reste consultable, marquée « annulée », avec ce motif.</p>
+                                </ActionForm>
+                              </details>
                             )}
                           </div>
                         </div>
@@ -312,6 +339,11 @@ export default async function FicheClientPage({
                       {f.statut === 'payee' && (
                         <Link href={`/precollecteur/facturation/${f.id}`} className="btn-ghost -ml-2.5">
                           <Printer size={15} /> Reçu imprimable
+                        </Link>
+                      )}
+                      {f.statut === 'annulee' && (
+                        <Link href={`/precollecteur/facturation/${f.id}`} className="btn-ghost -ml-2.5">
+                          <FileText size={15} /> Facture annulée
                         </Link>
                       )}
                     </li>
@@ -392,6 +424,45 @@ export default async function FicheClientPage({
               <Printer size={16} /> Imprimer l’étiquette
             </Link>
           </Section>
+
+          {charte && charte.length > 0 && (
+            <Section titre="Charte et contrat">
+              <ul className="space-y-3 text-body-sm">
+                {charte.map((d) => (
+                  <li key={d.type}>
+                    <p className="flex flex-wrap items-center gap-2 font-semibold text-brand-ink">
+                      <ScrollText size={16} className="text-muted-foreground" />
+                      <Link href={DOCUMENTS[d.type]?.chemin ?? '/legal'} target="_blank" className="hover:underline">
+                        {DOCUMENTS[d.type]?.libelle ?? d.titre}
+                      </Link>
+                      <span className="num text-small font-normal text-muted-foreground">v{d.version}{d.provisoire ? ' (provisoire)' : ''}</span>
+                    </p>
+                    {d.acceptee ? (
+                      <p className="mt-0.5 text-small text-terrain-ok">
+                        Acceptée {d.mode === 'remise_papier' ? 'sur papier' : 'en ligne'} le {dateHeureFr(d.accepte_at)}
+                      </p>
+                    ) : (
+                      <p className="mt-0.5 text-small text-terrain-relance">
+                        {d.version_acceptee ? `Version ${d.version_acceptee} acceptée : la version ${d.version} reste à accepter` : 'Pas encore acceptée'}
+                      </p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              {aFaireAccepter.length > 0 && (
+                <ActionForm action={enregistrerRemiseCharteAction} className="mt-4 border-t border-border pt-4">
+                  <input type="hidden" name="client_id" value={client.id} />
+                  {aFaireAccepter.map((d) => (
+                    <input key={d.type} type="hidden" name="type" value={d.type} />
+                  ))}
+                  <p className="mb-2 text-small text-muted-foreground">
+                    Vous avez remis le texte en vigueur au ménage, qui l’a accepté : enregistrez-le (à votre nom, daté).
+                  </p>
+                  <SubmitButton variant="outline" className="w-full" pendingLabel="Enregistrement…">Enregistrer la remise</SubmitButton>
+                </ActionForm>
+              )}
+            </Section>
+          )}
 
           <Section titre="Contact">
             <dl className="space-y-3 text-body-sm">

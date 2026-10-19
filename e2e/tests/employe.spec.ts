@@ -4,7 +4,7 @@
  * caméra simulée, position en direct, espèces reçues), le gérant valide.
  */
 import type { Page } from '@playwright/test';
-import { compte, emailDe, identifiants, iso, plans } from '../../apps/web/tests/support/fixtures';
+import { compte, emailDe, identifiants, iso, plans, supprimerClientsDeTest } from '../../apps/web/tests/support/fixtures';
 import { etat, expect, session, test } from './base';
 
 const SANS_MIGRATION_0007 = 'Migration 20261005000007_espace_employe.sql non exécutée';
@@ -26,7 +26,7 @@ test.describe('espace employé : de l’invitation à la validation des espèces
     const A = await compte('precoA', 'precollecteur');
     const e = etat().precoA;
     await A.sb.from('employes').delete().eq('entreprise_id', e).eq('nom', EMPLOYE);
-    await A.sb.from('clients').delete().eq('entreprise_id', e).eq('nom', FOYER);
+    await supprimerClientsDeTest(A.sb, e, { noms: [FOYER] });
     const [plan] = await plans(A.sb);
     const { data } = await A.sb.from('clients').insert({ entreprise_id: e, nom: FOYER, telephone: '677000222', plan_id: plan!.id }).select('id').single();
     await A.sb.from('factures').insert({
@@ -38,7 +38,7 @@ test.describe('espace employé : de l’invitation à la validation des espèces
   test.afterAll(async () => {
     if (!etat().migration0007) return;
     const A = await compte('precoA', 'precollecteur');
-    await A.sb.from('clients').delete().eq('entreprise_id', etat().precoA).eq('nom', FOYER);
+    await supprimerClientsDeTest(A.sb, etat().precoA, { noms: [FOYER] });
   });
 
   const gerant = async (browser: import('@playwright/test').Browser) => {

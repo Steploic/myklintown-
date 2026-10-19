@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 import { AlertCircle, ArrowLeft, ArrowRight, Check, Loader2, Phone, Send, Truck } from 'lucide-react';
 import { cn } from '@myklintown/ui';
 import { LocationPicker } from '@/components/map/location-picker';
+import { CaseDocuments } from '@/components/client/case-documents';
 import { chercherPrecollecteursAction, deposerDemandeAction, souscrireAction, type PrecollecteurTrouve } from '@/lib/client/actions';
 import { fcfa, telLisible } from '@/lib/format';
 import type { Plan } from '@/lib/types';
@@ -25,6 +26,8 @@ export function Souscription({ plans, nomDefaut, telDefaut }: { plans: Plan[]; n
   const [pos, setPos] = useState<[number, number] | null>(null);
   const [trouves, setTrouves] = useState<PrecollecteurTrouve[] | null>(null);
   const [choix, setChoix] = useState('');
+  // Charte du ménage et contrat d'abonnement : acceptation obligatoire, enregistrée avant la demande.
+  const [accepte, setAccepte] = useState(false);
   const [erreur, setErreur] = useState('');
   const [enCours, startTransition] = useTransition();
 
@@ -47,7 +50,7 @@ export function Souscription({ plans, nomDefaut, telDefaut }: { plans: Plan[]; n
     if (!pos) return;
     setErreur('');
     startTransition(async () => {
-      const r = await deposerDemandeAction({ planId, nom, telephone, adresse, quartier, lat: pos[0], lng: pos[1] });
+      const r = await deposerDemandeAction({ planId, nom, telephone, adresse, quartier, lat: pos[0], lng: pos[1], documentsAcceptes: accepte });
       if (r?.error) setErreur(r.error);
     });
   };
@@ -56,7 +59,7 @@ export function Souscription({ plans, nomDefaut, telDefaut }: { plans: Plan[]; n
     if (!pos || !choix) return;
     setErreur('');
     startTransition(async () => {
-      const r = await souscrireAction({ entrepriseId: choix, planId, nom, telephone, adresse, quartier, lat: pos[0], lng: pos[1] });
+      const r = await souscrireAction({ entrepriseId: choix, planId, nom, telephone, adresse, quartier, lat: pos[0], lng: pos[1], documentsAcceptes: accepte });
       // En cas de succès, le serveur redirige lui-même vers /citoyen?demande=1.
       if (r?.error) setErreur(r.error);
     });
@@ -166,8 +169,11 @@ export function Souscription({ plans, nomDefaut, telDefaut }: { plans: Plan[]; n
                   Transmettez votre demande : elle est proposée aux précollecteurs MyKlinTown, et le premier qui la
                   prend en charge vous appelle pour démarrer. Vous suivez son avancement depuis votre espace.
                 </p>
+                <div className="w-full max-w-md">
+                  <CaseDocuments id="s-documents-attente" checked={accepte} onChange={setAccepte} />
+                </div>
                 {erreur && <Erreur texte={erreur} />}
-                <button type="button" className="btn-primary" onClick={transmettre} disabled={enCours}>
+                <button type="button" className="btn-primary" onClick={transmettre} disabled={enCours || !accepte}>
                   {enCours ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} Transmettre ma demande
                 </button>
                 <div className="flex flex-wrap justify-center gap-2">
@@ -202,12 +208,13 @@ export function Souscription({ plans, nomDefaut, telDefaut }: { plans: Plan[]; n
                   Récapitulatif : formule <strong>{plan?.nom}</strong> à <strong>{fcfa(plan?.prix_fcfa)}</strong>. Le précollecteur
                   valide votre demande, puis vous réglez la première période (espèces ou Mobile Money) avant le premier passage.
                 </div>
+                <CaseDocuments id="s-documents" checked={accepte} onChange={setAccepte} />
                 {erreur && <Erreur texte={erreur} />}
                 <div className="flex justify-between">
                   <button type="button" className="btn-outline" onClick={() => setEtape(1)}>
                     <ArrowLeft size={16} /> Retour
                   </button>
-                  <button type="button" className="btn-primary" onClick={envoyer} disabled={!choix || enCours}>
+                  <button type="button" className="btn-primary" onClick={envoyer} disabled={!choix || !accepte || enCours}>
                     {enCours ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} Envoyer ma demande
                   </button>
                 </div>

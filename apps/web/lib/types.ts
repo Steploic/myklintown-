@@ -24,6 +24,12 @@ export interface Entreprise {
   /** Paiement en ligne (compte connecté Notch Pay) : « actif » une fois la vérification faite. */
   paiement_statut?: 'inactif' | 'en_verification' | 'actif' | 'refuse';
   paiement_compte_id?: string | null;
+  /** Identité fiscale imprimée sur les factures (migration 20261019000014). */
+  niu?: string | null;
+  rccm?: string | null;
+  adresse_fiscale?: string | null;
+  /** Préfixe des numéros de facture (F001…), attribué une fois pour toutes. */
+  prefixe_facture?: string;
   created_at: string;
 }
 
@@ -109,6 +115,41 @@ export interface Facture {
   echeance: string;
   statut: 'emise' | 'payee' | 'annulee';
   created_at: string;
+  // Facture conforme (migration 20261019000014) : montant_fcfa reste le TTC.
+  montant_ht_fcfa?: number;
+  tva_taux?: number | string;
+  montant_tva_fcfa?: number;
+  emetteur?: EmetteurFacture | null;
+  destinataire?: DestinataireFacture | null;
+  exercice?: number;
+  sequence?: number | null;
+  est_demo?: boolean;
+  annulee_at?: string | null;
+  motif_annulation?: string | null;
+}
+
+/** Instantané de l'émetteur, pris à l'émission de la facture. */
+export interface EmetteurFacture {
+  nom: string;
+  telephone?: string | null;
+  email?: string | null;
+  siege?: string | null;
+  adresse_fiscale?: string | null;
+  niu?: string | null;
+  rccm?: string | null;
+  commune?: string | null;
+  mention_tva?: string | null;
+  mentions_legales?: string | null;
+}
+
+/** Instantané du client, pris à l'émission de la facture. */
+export interface DestinataireFacture {
+  nom: string;
+  code: string;
+  telephone?: string | null;
+  email?: string | null;
+  adresse?: string | null;
+  quartier?: string | null;
 }
 
 export interface Paiement {

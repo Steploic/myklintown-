@@ -4,7 +4,11 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { getSupabase, row, rpc } from '@/lib/server';
 import { cheminInterne, normaliserNom } from '@/lib/metier';
+import { enregistrerAcceptation } from '@/lib/acceptations';
+import { estTypeDocument } from '@/lib/documents';
 import type { ActionState } from '@/lib/types';
+
+const MESSAGE_DOCUMENTS = 'Cochez la case pour accepter la charte du ménage et le contrat d’abonnement.';
 import type { IncidentInput } from '@/components/capture/incident-form';
 
 export interface PrecollecteurTrouve {
@@ -31,10 +35,15 @@ export async function souscrireAction(input: {
   quartier: string;
   lat: number;
   lng: number;
+  documentsAcceptes: boolean;
 }): Promise<ActionState> {
   const supabase = await getSupabase();
   if (!input.nom.trim()) return { error: 'Indiquez votre nom.' };
   if (!input.telephone.trim()) return { error: 'Indiquez un numéro de téléphone : votre précollecteur vous appellera.' };
+  if (!input.documentsAcceptes) return { error: MESSAGE_DOCUMENTS };
+  // L'acceptation est enregistrée AVANT la demande : pas d'abonnement sans charte ni contrat.
+  const refus = await enregistrerAcceptation(supabase);
+  if (refus) return { error: refus };
   const { error } = await rpc(supabase, 'souscrire_client', {
     p_entreprise: input.entrepriseId,
     p_plan: input.planId,
@@ -119,10 +128,14 @@ export async function deposerDemandeAction(input: {
   quartier: string;
   lat: number;
   lng: number;
+  documentsAcceptes: boolean;
 }): Promise<ActionState> {
   if (!input.nom.trim()) return { error: 'Indiquez votre nom.' };
   if (!input.telephone.trim()) return { error: 'Indiquez un numéro de téléphone : le précollecteur vous appellera.' };
+  if (!input.documentsAcceptes) return { error: MESSAGE_DOCUMENTS };
   const supabase = await getSupabase();
+  const refus = await enregistrerAcceptation(supabase);
+  if (refus) return { error: refus };
   const { error } = await rpc(supabase, 'deposer_demande_abonnement', {
     p_plan: input.planId,
     p_nom: normaliserNom(input.nom),
@@ -135,6 +148,17 @@ export async function deposerDemandeAction(input: {
   if (error) return { error: error.message };
   revalidatePath('/citoyen', 'layout');
   redirect('/citoyen?demande=attente');
+}
+
+/** Bandeau des ménages déjà inscrits : acceptation en ligne des versions en vigueur. */
+export async function accepterDocumentsAction(_p: ActionState, fd: FormData): Promise<ActionState> {
+  if (fd.get('documents') !== 'on') return { error: MESSAGE_DOCUMENTS };
+  const types = fd.getAll('type').filter(estTypeDocument);
+  const supabase = await getSupabase();
+  const refus = await enregistrerAcceptation(supabase, types.length ? { types } : {});
+  if (refus) return { error: refus };
+  revalidatePath('/citoyen', 'layout');
+  return { ok: 'Merci : votre acceptation est enregistrée, avec sa date.' };
 }
 
 export async function annulerDemandeAction(fd: FormData) {

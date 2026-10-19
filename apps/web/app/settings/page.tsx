@@ -7,6 +7,7 @@ import { ActionForm, SubmitButton } from '@/components/ui/action-form';
 import { changerMotDePasseAction, majProfilAction } from '@/lib/compte-actions';
 import { majEntrepriseAction } from '@/lib/precollecteur/actions';
 import { getSupabase, row, utilisateurCourant } from '@/lib/server';
+import { isoJour } from '@/lib/format';
 import type { Entreprise } from '@/lib/types';
 import { ChampMotDePasse } from '@/components/ui/champ-mot-de-passe';
 
@@ -66,7 +67,7 @@ export default async function SettingsPage() {
         </Section>
 
         {entreprise && (
-          <Section titre="Mon entreprise" sousTitre="Nom et contact imprimés sur les factures, reçus et étiquettes QR.">
+          <Section titre="Mon entreprise" sousTitre="Nom, contact et mentions fiscales imprimés sur les factures, reçus et étiquettes QR.">
             <ActionForm action={majEntrepriseAction} className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label className="field-label" htmlFor="e-nom">Nom de l’entreprise</label>
@@ -80,6 +81,29 @@ export default async function SettingsPage() {
                 <label className="field-label" htmlFor="e-siege">Quartier / siège</label>
                 <input id="e-siege" name="siege" defaultValue={entreprise.siege ?? ''} className="field" />
               </div>
+              <fieldset className="grid gap-4 rounded-lg border border-border p-4 sm:col-span-2 sm:grid-cols-2">
+                <legend className="px-1 text-body-sm font-semibold text-brand-ink">Mentions fiscales des factures</legend>
+                <div>
+                  <label className="field-label" htmlFor="e-niu">NIU</label>
+                  <input id="e-niu" name="niu" maxLength={30} defaultValue={entreprise.niu ?? ''} className="field num uppercase" placeholder="ex. M012345678901A" autoCapitalize="characters" />
+                  <p className="field-hint">Numéro d’identifiant unique (impôts).</p>
+                </div>
+                <div>
+                  <label className="field-label" htmlFor="e-rccm">RCCM</label>
+                  <input id="e-rccm" name="rccm" maxLength={60} defaultValue={entreprise.rccm ?? ''} className="field num uppercase" placeholder="ex. RC/YAO/2026/B/0001" autoCapitalize="characters" />
+                  <p className="field-hint">Registre du commerce et du crédit mobilier.</p>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="field-label" htmlFor="e-adresse-fiscale">Adresse fiscale</label>
+                  <input id="e-adresse-fiscale" name="adresse_fiscale" maxLength={300} defaultValue={entreprise.adresse_fiscale ?? ''} className="field" placeholder="ex. BP 1234 Yaoundé, Nsam" />
+                </div>
+                <p className="text-small text-muted-foreground sm:col-span-2">
+                  Imprimées sur les factures émises à partir de maintenant ; une facture déjà émise garde celles du jour de son émission.
+                  {entreprise.prefixe_facture && (
+                    <> Vos factures sont numérotées <span className="num font-semibold text-brand-ink">{entreprise.prefixe_facture}-{isoJour().slice(0, 4)}-00001</span>, <span className="num">…-00002</span>, et ainsi de suite, sans trou.</>
+                  )}
+                </p>
+              </fieldset>
               <div className="sm:col-span-2">
                 <SubmitButton>Enregistrer</SubmitButton>
               </div>

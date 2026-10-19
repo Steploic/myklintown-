@@ -391,7 +391,163 @@ export const ATTAQUES = [
       return accepte(db, s.intrus, `select * from public.etat_terrain_client($1, current_date)`, [s.clientA]);
     },
   },
+  // --- Chantier 3 : facture inaltérable, charte et contrat (migration 0014)
+  {
+    id: 'facture-montant-gerant',
+    titre: 'Le gérant modifie le montant (ou le numéro, l’échéance) d’une facture émise',
+    async jouer(db, s) {
+      if (!(await avec0014(db))) return false;
+      return (await accepte(db, s.gerantA, `update public.factures set montant_fcfa = 100 where id = $1`, [s.factureA]))
+        || (await accepte(db, s.gerantA, `update public.factures set numero = 'F-ARRANGE' where id = $1`, [s.factureA]))
+        || (await accepte(db, s.gerantA, `update public.factures set echeance = echeance + 30 where id = $1`, [s.factureA]));
+    },
+  },
+  {
+    id: 'facture-montant-service',
+    titre: 'Même la clé de service modifie le montant ou l’instantané de l’émetteur d’une facture',
+    async jouer(db, s) {
+      if (!(await avec0014(db))) return false;
+      return (await accepte(db, 'service', `update public.factures set montant_fcfa = 100, montant_ht_fcfa = 100 where id = $1`, [s.factureA]))
+        || (await accepte(db, 'service', `update public.factures set emetteur = emetteur || '{"niu":"FAUX"}' where id = $1`, [s.factureA]));
+    },
+  },
+  {
+    id: 'facture-supprimee',
+    titre: 'Le gérant supprime une facture, puis la clé de service essaie à son tour',
+    async jouer(db, s) {
+      if (!(await avec0014(db))) return false;
+      await accepte(db, s.gerantA, `delete from public.factures where id = $1`, [s.factureA]);
+      await accepte(db, 'service', `delete from public.factures where id = $1`, [s.factureA]);
+      return !(await valeur(db, `select exists (select 1 from public.factures where id = $1)`, [s.factureA]));
+    },
+  },
+  {
+    id: 'client-facture-supprime',
+    titre: 'Le gérant supprime un client facturé (et ses factures avec lui)',
+    async jouer(db, s) {
+      if (!(await avec0014(db))) return false;
+      await accepte(db, s.gerantA, `delete from public.clients where id = $1`, [s.clientA]);
+      return !(await valeur(db, `select exists (select 1 from public.clients where id = $1)`, [s.clientA]));
+    },
+  },
+  {
+    id: 'client-reel-devient-demo',
+    titre: 'Le gérant marque un client réel « démo » pour pouvoir supprimer ses factures',
+    async jouer(db, s) {
+      if (!(await avec0014(db))) return false;
+      return accepte(db, s.gerantA, `update public.clients set est_demo = true where id = $1`, [s.clientA]);
+    },
+  },
+  {
+    id: 'facture-antidatee',
+    titre: 'Le gérant émet une facture antidatée d’un an',
+    async jouer(db, s) {
+      if (!(await avec0014(db))) return false;
+      const id = await comme(db, s.gerantA, (tx) => valeur(tx,
+        `insert into public.factures (entreprise_id, client_id, periode_debut, periode_fin, montant_fcfa, echeance, created_at)
+         values ($1, $2, current_date, current_date + 30, 3500, current_date + 7, now() - interval '1 year') returning id`, [s.entA, s.clientA]));
+      return (await valeur(db, `select created_at < now() - interval '1 day' from public.factures where id = $1`, [id])) === true;
+    },
+  },
+  {
+    id: 'facture-annulee-rouverte',
+    titre: 'Une facture annulée est remise « émise » (même par un administrateur)',
+    async jouer(db, s) {
+      if (!(await avec0014(db))) return false;
+      const f = await comme(db, s.gerantA, async (tx) => {
+        const id = await valeur(tx, `insert into public.factures (entreprise_id, client_id, periode_debut, periode_fin, montant_fcfa, echeance)
+          values ($1, $2, current_date, current_date + 30, 3500, current_date + 7) returning id`, [s.entA, s.clientA]);
+        await tx.query(`update public.factures set statut = 'annulee', motif_annulation = 'Erreur de formule' where id = $1`, [id]);
+        return id;
+      });
+      return (await accepte(db, s.admin, `update public.factures set statut = 'emise' where id = $1`, [f]))
+        || (await accepte(db, s.gerantA, `update public.factures set motif_annulation = 'Autre motif' where id = $1`, [f]));
+    },
+  },
+  {
+    id: 'prefixe-facture-change',
+    titre: 'Le gérant change le préfixe de facturation de son entreprise (numéros d’un autre émetteur)',
+    async jouer(db, s) {
+      if (!(await avec0014(db))) return false;
+      return accepte(db, s.gerantA, `update public.entreprises set prefixe_facture = 'F999' where id = $1`, [s.entA]);
+    },
+  },
+  {
+    id: 'compteur-facture',
+    titre: 'Le gérant lit ou remet à zéro le compteur de numérotation',
+    async jouer(db, s) {
+      if (!(await avec0014(db))) return false;
+      const n = await comme(db, s.gerantA, (tx) => valeur(tx, `select count(*)::int from public.factures_compteurs`)).catch(() => 0);
+      return n > 0 || (await accepte(db, s.gerantA, `update public.factures_compteurs set dernier = 0 where entreprise_id = $1`, [s.entA])
+        && (await valeur(db, `select dernier from public.factures_compteurs where entreprise_id = $1 order by exercice desc limit 1`, [s.entA])) === 0);
+    },
+  },
+  {
+    id: 'acceptation-ecrite',
+    titre: 'Le gérant écrit lui-même une acceptation de la charte (sans le ménage)',
+    async jouer(db, s) {
+      if (!(await avec0014(db))) return false;
+      const doc = await valeur(db, `select id from public.documents_legaux where type = 'charte_menage' and publie_at is not null order by version desc limit 1`);
+      return accepte(db, s.gerantA,
+        `insert into public.acceptations_documents (document_id, user_id, client_id, entreprise_id, mode) values ($1, $2, $3, $4, 'en_ligne')`,
+        [doc, s.victime, s.clientA, s.entA]);
+    },
+  },
+  {
+    id: 'acceptation-pour-autrui',
+    titre: 'Le gérant B enregistre une « remise papier » pour le client du précollecteur A',
+    async jouer(db, s) {
+      if (!(await avec0014(db))) return false;
+      return accepte(db, s.gerantB, `select public.accepter_documents(array['charte_menage'], $1)`, [s.clientA]);
+    },
+  },
+  {
+    id: 'charte-autrui',
+    titre: 'Le gérant B lit l’état de la charte d’un client de A',
+    async jouer(db, s) {
+      if (!(await avec0014(db))) return false;
+      const n = await comme(db, s.gerantB, (tx) => valeur(tx, `select count(*)::int from public.charte_du_client($1)`, [s.clientA]));
+      return n > 0;
+    },
+  },
+  {
+    id: 'document-publie-modifie',
+    titre: 'L’administrateur réécrit une version publiée de la charte (déjà acceptée)',
+    async jouer(db, s) {
+      if (!(await avec0014(db))) return false;
+      return (await accepte(db, s.admin, `update public.documents_legaux set contenu = 'Texte réécrit' where type = 'charte_menage' and version = 1`))
+        || (await accepte(db, 'service', `update public.documents_legaux set titre = 'Titre réécrit' where type = 'charte_menage' and version = 1`));
+    },
+  },
+  {
+    id: 'document-ecrit-gerant',
+    titre: 'Un gérant publie sa propre version du contrat',
+    async jouer(db, s) {
+      if (!(await avec0014(db))) return false;
+      return accepte(db, s.gerantA,
+        `insert into public.documents_legaux (type, version, titre, contenu, publie_at) values ('contrat_menage', 50, 'Contrat maison', 'Clauses', now())`);
+    },
+  },
+  {
+    id: 'purge-gerant',
+    titre: 'Un gérant appelle la purge des données de test',
+    async jouer(db, s) {
+      if (!(await avec0014(db))) return false;
+      return accepte(db, s.gerantA, `select public.purger_donnees_de_test($1)`, [s.entA]);
+    },
+  },
+  {
+    id: 'purge-vraie-entreprise',
+    titre: 'La clé de service purge une entreprise dont les comptes ne sont pas des comptes de test',
+    async jouer(db, s) {
+      if (!(await avec0014(db))) return false;
+      return accepte(db, 'service', `select public.purger_donnees_de_test($1)`, [s.entB]);
+    },
+  },
 ];
+
+/** Migration 0014 (facture inaltérable, charte) présente dans la base ? */
+const avec0014 = (db) => valeur(db, `select to_regclass('public.documents_legaux') is not null`);
 
 // -----------------------------------------------------------------------------
 // Parcours normaux : ils doivent TOUS continuer de fonctionner
@@ -770,6 +926,220 @@ export const PARCOURS = [
       } finally {
         await interrupteur('0');
       }
+    },
+  },
+  // --- Chantier 3 : charte et contrat, facture conforme (migration 0014)
+  {
+    titre: 'Charte en ligne : le ménage accepte charte et contrat une seule fois ; son précollecteur voit l’acceptation horodatée',
+    async jouer(db, s) {
+      if (!(await avec0014(db))) return;
+      const avant = (await comme(db, s.menage, (tx) => tx.query(`select type from public.documents_a_accepter()`))).rows;
+      if (avant.length !== 2) throw new Error(`à accepter : ${JSON.stringify(avant)}`);
+      const n1 = await comme(db, s.menage, (tx) => valeur(tx, `select public.accepter_documents(array['charte_menage', 'contrat_menage'])`));
+      const n2 = await comme(db, s.menage, (tx) => valeur(tx, `select public.accepter_documents(array['contrat_menage', 'charte_menage'])`));
+      if (n1 !== 2 || n2 !== 0) throw new Error(`acceptations ajoutées : ${n1} puis ${n2}`);
+      const reste = await comme(db, s.menage, (tx) => valeur(tx, `select count(*)::int from public.documents_a_accepter()`));
+      if (reste !== 0) throw new Error(`encore ${reste} document(s) à accepter`);
+      const etat = (await comme(db, s.gerantA, (tx) => tx.query(`select type, acceptee, mode, accepte_at from public.charte_du_client($1)`, [s.clientA]))).rows;
+      if (etat.length !== 2 || !etat.every((x) => x.acceptee && x.mode === 'en_ligne' && x.accepte_at)) throw new Error(JSON.stringify(etat));
+      const lues = await comme(db, s.menage, (tx) => valeur(tx, `select count(*)::int from public.acceptations_documents`));
+      if (lues !== 2) throw new Error(`le ménage lit ${lues} acceptation(s)`);
+    },
+  },
+  {
+    titre: 'Charte remise sur papier : le gérant, puis l’employé, l’enregistrent pour des ménages sans compte',
+    async jouer(db, s) {
+      if (!(await avec0014(db))) return;
+      const [c1, c2] = await comme(db, s.gerantA, async (tx) => [
+        await valeur(tx, `insert into public.clients (entreprise_id, nom, plan_id) values ($1, 'Foyer papier 1', $2) returning id`, [s.entA, s.plan]),
+        await valeur(tx, `insert into public.clients (entreprise_id, nom, plan_id) values ($1, 'Foyer papier 2', $2) returning id`, [s.entA, s.plan]),
+      ]);
+      await comme(db, s.gerantA, (tx) => tx.query(`select public.accepter_documents(array['charte_menage'], $1)`, [c1]));
+      await comme(db, s.employe, (tx) => tx.query(`select public.accepter_documents(array['charte_menage', 'contrat_menage'], $1)`, [c2]));
+      const etat = async (c) => Object.fromEntries((await comme(db, s.gerantA, (tx) => tx.query(`select type, acceptee, mode from public.charte_du_client($1)`, [c]))).rows.map((x) => [x.type, x]));
+      const e1 = await etat(c1);
+      if (!e1.charte_menage?.acceptee || e1.charte_menage.mode !== 'remise_papier' || e1.contrat_menage?.acceptee) throw new Error(JSON.stringify(e1));
+      const e2 = await etat(c2);
+      if (!e2.charte_menage?.acceptee || !e2.contrat_menage?.acceptee) throw new Error(JSON.stringify(e2));
+      const auteur = await valeur(db, `select auteur_id from public.acceptations_documents where client_id = $1 limit 1`, [c2]);
+      if (auteur !== s.employe) throw new Error('auteur de la remise papier non tracé');
+    },
+  },
+  {
+    titre: 'Numérotation par émetteur : A et B ont chacun leur 00001, sans trou (une émission abandonnée ne consomme pas de numéro)',
+    async jouer(db, s) {
+      if (!(await avec0014(db))) return;
+      const annee = await valeur(db, `select extract(year from (now() at time zone 'Africa/Douala'))::int`);
+      const prefixe = (e) => valeur(db, `select prefixe_facture from public.entreprises where id = $1`, [e]);
+      const [pA, pB] = [await prefixe(s.entA), await prefixe(s.entB)];
+      if (!/^F\d{3,}$/.test(pA) || pA === pB) throw new Error(`préfixes ${pA} / ${pB}`);
+      const numero = (f) => valeur(db, `select numero from public.factures where id = $1`, [f]);
+      const [nA, nB] = [await numero(s.factureA), await numero(s.factureB)];
+      if (nA !== `${pA}-${annee}-00001` || nB !== `${pB}-${annee}-00001`) throw new Error(`premières factures : ${nA} / ${nB}`);
+
+      const emettre = (tx) => tx.query(
+        `insert into public.factures (entreprise_id, client_id, periode_debut, periode_fin, montant_fcfa, echeance, numero)
+         values ($1, $2, current_date, current_date + 30, 3500, current_date + 7, 'F-CHOISI-PAR-MOI') returning numero, sequence`, [s.entA, s.clientA]);
+      const max = () => valeur(db, `select max(sequence) from public.factures where entreprise_id = $1 and exercice = $2`, [s.entA, annee]);
+      const avant = await max();
+      await comme(db, s.gerantA, async (tx) => {
+        await emettre(tx);
+        throw new Error('abandon');
+      }).catch(() => {});
+      const f = (await comme(db, s.gerantA, emettre)).rows[0];
+      if (f.sequence !== avant + 1 || f.numero !== `${pA}-${annee}-${String(avant + 1).padStart(5, '0')}`) {
+        throw new Error(`après abandon : ${f.numero} (rang ${f.sequence}, précédent ${avant})`);
+      }
+      const rangs = (await db.query(`select sequence from public.factures where entreprise_id = $1 and exercice = $2 and sequence is not null order by 1`, [s.entA, annee])).rows.map((r) => r.sequence);
+      if (rangs.some((x, i) => x !== i + 1)) throw new Error(`numérotation trouée : ${rangs.join(',')}`);
+    },
+  },
+  {
+    titre: 'Facture conforme : HT + TVA = TTC selon le taux paramétré, instantanés de l’émetteur et du client gardés',
+    async jouer(db, s) {
+      if (!(await avec0014(db))) return;
+      await comme(db, s.gerantA, (tx) => tx.query(`update public.entreprises set niu = 'M012345678901A', rccm = 'RC/YAO/2026/B/0001', adresse_fiscale = 'BP 100 Yaoundé' where id = $1`, [s.entA]));
+      await comme(db, s.admin, (tx) => tx.query(`update public.parametres_plateforme set valeur = '0.1925' where cle = 'facturation_tva_taux'`));
+      const f = await comme(db, s.gerantA, async (tx) => (await tx.query(
+        `insert into public.factures (entreprise_id, client_id, periode_debut, periode_fin, montant_fcfa, echeance)
+         values ($1, $2, current_date, current_date + 30, 3500, current_date + 7)
+         returning id, montant_ht_fcfa, montant_tva_fcfa, tva_taux, emetteur, destinataire`, [s.entA, s.clientA])).rows[0]);
+      await comme(db, s.admin, (tx) => tx.query(`update public.parametres_plateforme set valeur = '0' where cle = 'facturation_tva_taux'`));
+      if (f.montant_ht_fcfa !== 2935 || f.montant_tva_fcfa !== 565 || Number(f.tva_taux) !== 0.1925) throw new Error(JSON.stringify(f));
+      if (f.emetteur.niu !== 'M012345678901A' || f.emetteur.mention_tva !== 'TVA non applicable' || f.destinataire.code !== s.codeA) {
+        throw new Error(JSON.stringify({ emetteur: f.emetteur, destinataire: f.destinataire }));
+      }
+      // L'entreprise change de NIU : la facture déjà émise garde l'ancien.
+      await comme(db, s.gerantA, (tx) => tx.query(`update public.entreprises set niu = 'M999999999999Z' where id = $1`, [s.entA]));
+      if ((await valeur(db, `select emetteur ->> 'niu' from public.factures where id = $1`, [f.id])) !== 'M012345678901A') throw new Error('instantané modifié');
+    },
+  },
+  {
+    titre: 'Annulation tracée : motif, date et auteur gardés',
+    async jouer(db, s) {
+      if (!(await avec0014(db))) return;
+      const id = await comme(db, s.gerantA, async (tx) => {
+        const f = await valeur(tx, `insert into public.factures (entreprise_id, client_id, periode_debut, periode_fin, montant_fcfa, echeance)
+          values ($1, $2, current_date, current_date + 30, 3500, current_date + 7) returning id`, [s.entA, s.clientA]);
+        await tx.query(`update public.factures set statut = 'annulee', motif_annulation = '  Doublon de facture  ', annulee_par = $2 where id = $1`, [f, s.victime]);
+        return f;
+      });
+      const r = (await db.query(`select annulee_at, annulee_par, motif_annulation from public.factures where id = $1`, [id])).rows[0];
+      if (!r.annulee_at || r.annulee_par !== s.gerantA || r.motif_annulation !== 'Doublon de facture') throw new Error(JSON.stringify(r));
+    },
+  },
+  {
+    titre: 'Démonstration : facture DEMO-…, hors numérotation réelle, supprimée avec sa fiche',
+    async jouer(db, s) {
+      if (!(await avec0014(db))) return;
+      const compteur = () => valeur(db, `select coalesce(sum(dernier), 0)::int from public.factures_compteurs where entreprise_id = $1`, [s.entA]);
+      const avant = await compteur();
+      const r = await comme(db, s.gerantA, async (tx) => {
+        const c = await valeur(tx, `insert into public.clients (entreprise_id, nom, plan_id, est_demo) values ($1, 'Famille démo', $2, true) returning id`, [s.entA, s.plan]);
+        const f = (await tx.query(`insert into public.factures (entreprise_id, client_id, periode_debut, periode_fin, montant_fcfa, echeance)
+          values ($1, $2, current_date, current_date + 30, 3500, current_date + 7) returning numero, sequence, est_demo`, [s.entA, c])).rows[0];
+        await tx.query(`insert into public.paiements_clients (facture_id, entreprise_id, client_id, montant_fcfa, methode)
+          select id, entreprise_id, client_id, 3500, 'especes' from public.factures where client_id = $1`, [c]);
+        return { c, f };
+      });
+      if (!r.f.numero.startsWith('DEMO-') || r.f.sequence !== null || !r.f.est_demo) throw new Error(JSON.stringify(r.f));
+      if ((await compteur()) !== avant) throw new Error('la démonstration a consommé un numéro réel');
+      await comme(db, s.gerantA, (tx) => tx.query(`delete from public.clients where id = $1`, [r.c]));
+      if (await valeur(db, `select exists (select 1 from public.factures where client_id = $1)`, [r.c])) throw new Error('facture de démonstration restée');
+    },
+  },
+  {
+    titre: 'Purge des données de test (clé de service) : entreprise mkt.test.… vidée ou fiches ciblées, compteur remis à zéro',
+    async jouer(db) {
+      if (!(await avec0014(db))) return;
+      const g = await creerCompte(db, `mkt.test.purge.${Date.now()}@gmail.com`, 'precollecteur');
+      const ent = await creerEntreprise(db, g, 'Test Purge');
+      const plan = await valeur(db, `select id from public.plans_tarifaires where code = 'MENSUEL'`);
+      const clientFacture = async (tx, nom) => {
+        const c = await valeur(tx, `insert into public.clients (entreprise_id, nom, plan_id) values ($1, $2, $3) returning id`, [ent, nom, plan]);
+        await tx.query(`insert into public.factures (entreprise_id, client_id, periode_debut, periode_fin, montant_fcfa, echeance)
+          values ($1, $2, current_date, current_date + 30, 3500, current_date + 7)`, [ent, c]);
+        return c;
+      };
+      const [c1, c2] = await comme(db, g, async (tx) => [await clientFacture(tx, 'Foyer purge 1'), await clientFacture(tx, 'Foyer purge 2')]);
+
+      // Même un gérant de test ne supprime pas un client facturé par l'API…
+      await comme(db, g, (tx) => tx.query(`delete from public.clients where id = $1`, [c1])).catch(() => {});
+      if (!(await valeur(db, `select exists (select 1 from public.clients where id = $1)`, [c1]))) throw new Error('client facturé supprimé par l’API');
+      // … la clé de service, si : d'abord une fiche ciblée, puis tout.
+      if ((await comme(db, 'service', (tx) => valeur(tx, `select public.purger_donnees_de_test($1, $2)`, [ent, [c1]]))) !== 1) throw new Error('purge ciblée');
+      if (!(await valeur(db, `select exists (select 1 from public.clients where id = $1)`, [c2]))) throw new Error('purge ciblée trop large');
+      if ((await comme(db, 'service', (tx) => valeur(tx, `select public.purger_donnees_de_test($1)`, [ent]))) !== 1) throw new Error('purge complète');
+      if (await valeur(db, `select exists (select 1 from public.factures_compteurs where entreprise_id = $1)`, [ent])) throw new Error('compteur non remis à zéro');
+      const n = await comme(db, g, (tx) => clientFacture(tx, 'Foyer après purge').then((c) => valeur(tx, `select numero from public.factures where client_id = $1`, [c])));
+      if (!n.endsWith('-00001')) throw new Error(`après purge : ${n}`);
+    },
+  },
+  {
+    titre: 'Nouvelle version du contrat : brouillon modifiable, puis publiée et à accepter de nouveau',
+    async jouer(db, s) {
+      if (!(await avec0014(db))) return;
+      await comme(db, s.admin, async (tx) => {
+        const id = await valeur(tx, `insert into public.documents_legaux (type, version, titre, contenu) values ('contrat_menage', 2, 'Contrat d''abonnement', '## Parties\nBrouillon') returning id`);
+        await tx.query(`update public.documents_legaux set contenu = '## Parties\nTexte définitif' where id = $1`, [id]);
+        await tx.query(`update public.documents_legaux set publie_at = now(), provisoire = false where id = $1`, [id]);
+      });
+      const a = (await comme(db, s.menage, (tx) => tx.query(`select type, version from public.documents_a_accepter()`))).rows;
+      if (a.length !== 1 || a[0].type !== 'contrat_menage' || a[0].version !== 2) throw new Error(JSON.stringify(a));
+      const e = (await comme(db, s.gerantA, (tx) => tx.query(`select acceptee, version, version_acceptee from public.charte_du_client($1) where type = 'contrat_menage'`, [s.clientA]))).rows[0];
+      if (e?.acceptee || e?.version !== 2 || e?.version_acceptee !== 1) throw new Error(JSON.stringify(e));
+      // Lisible par tous dès sa publication.
+      const publique = await comme(db, 'anon', (tx) => valeur(tx, `select count(*)::int from public.documents_legaux where type = 'contrat_menage' and version = 2`));
+      if (publique !== 1) throw new Error('version publiée invisible du public');
+    },
+  },
+  {
+    titre: 'Compte supprimé : ses annulations et ses publications restent, sans auteur (le reste demeure figé)',
+    async jouer(db, s) {
+      if (!(await avec0014(db))) return;
+      // Un gérant annule une facture, un administrateur publie une version ; puis leurs comptes sont supprimés.
+      const g = await creerCompte(db, `gerant.parti.${Date.now()}@test.cm`, 'precollecteur');
+      const ent = await creerEntreprise(db, g, 'Entreprise du gérant parti');
+      const f = await comme(db, g, async (tx) => {
+        const c = await valeur(tx, `insert into public.clients (entreprise_id, nom, plan_id) values ($1, 'Foyer du gérant parti', $2) returning id`, [ent, s.plan]);
+        const id = await valeur(tx, `insert into public.factures (entreprise_id, client_id, periode_debut, periode_fin, montant_fcfa, echeance)
+          values ($1, $2, current_date, current_date + 30, 3500, current_date + 7) returning id`, [ent, c]);
+        await tx.query(`update public.factures set statut = 'annulee', motif_annulation = 'Doublon' where id = $1`, [id]);
+        return id;
+      });
+      const email = `admin.parti.${Date.now()}@test.cm`;
+      const a = await creerCompte(db, email);
+      await promouvoir(db, email, 'admin');
+      const doc = await comme(db, a, async (tx) => {
+        const id = await valeur(tx, `insert into public.documents_legaux (type, version, titre, contenu) values ('charte_menage', 70, 'Charte', 'Texte') returning id`);
+        await tx.query(`update public.documents_legaux set publie_at = now() where id = $1`, [id]);
+        return id;
+      });
+      await db.query(`delete from auth.users where id = any($1)`, [[g, a]]);
+      const r = (await db.query(`select statut, annulee_par, motif_annulation from public.factures where id = $1`, [f])).rows[0];
+      if (r?.statut !== 'annulee' || r.annulee_par !== null || r.motif_annulation !== 'Doublon') throw new Error(JSON.stringify(r));
+      const d = (await db.query(`select cree_par, publie_at is not null as publie from public.documents_legaux where id = $1`, [doc])).rows[0];
+      if (d?.cree_par !== null || !d.publie) throw new Error(JSON.stringify(d));
+      // La version reste figée, même sans auteur.
+      const reecrite = await accepte(db, s.admin, `update public.documents_legaux set contenu = 'Réécrit' where id = $1`, [doc]);
+      if (reecrite) throw new Error('version publiée réécrite après la suppression de son auteur');
+    },
+  },
+  {
+    titre: 'Migration 0014 rejouée : préfixes, numéros, montants et documents inchangés',
+    async jouer(db) {
+      const sql = migration('20261019000014');
+      if (!sql) return;
+      const photo = async () => JSON.stringify((await db.query(`select
+        (select string_agg(prefixe_facture, ',' order by id) from public.entreprises) as prefixes,
+        (select string_agg(numero || ':' || montant_ht_fcfa || ':' || exercice, ',' order by id) from public.factures) as factures,
+        (select string_agg(type || version || coalesce(publie_at::text, '-'), ',' order by id) from public.documents_legaux) as documents,
+        (select string_agg(entreprise_id || ':' || dernier, ',' order by entreprise_id) from public.factures_compteurs) as compteurs`)).rows[0]);
+      const avant = await photo();
+      await db.exec(sql);
+      await db.exec(sql);
+      const apres = await photo();
+      if (avant !== apres) throw new Error(`avant ${avant}\naprès ${apres}`);
     },
   },
 ];

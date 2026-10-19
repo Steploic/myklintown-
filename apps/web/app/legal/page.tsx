@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { SiteHeader } from '@/components/site-header';
 import { SiteFooter } from '@/components/site-footer';
 
@@ -27,6 +28,18 @@ export default function LegalPage() {
           <p className="text-body-sm">
             Application : Vercel Inc. Base de données, authentification et stockage des preuves : Supabase.
           </p>
+        </section>
+
+        <section className="card-soft space-y-2 p-6">
+          <h2>Charte et contrat du ménage</h2>
+          <p className="text-body-sm">
+            Le ménage abonné accepte la charte du ménage et le contrat d’abonnement, en ligne ou sur papier remis par
+            son précollecteur. Chaque acceptation est enregistrée avec sa date et la version acceptée.
+          </p>
+          <ul className="flex flex-wrap gap-2 text-body-sm">
+            <li><Link href="/legal/charte" className="btn-outline">Charte du ménage</Link></li>
+            <li><Link href="/legal/contrat" className="btn-outline">Contrat d’abonnement</Link></li>
+          </ul>
         </section>
 
         <section className="card-soft space-y-2 p-6">

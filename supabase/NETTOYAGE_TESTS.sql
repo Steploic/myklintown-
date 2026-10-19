@@ -10,7 +10,14 @@
 --
 -- Ne touche à AUCUN autre compte. Section 0 = aperçu (lecture seule) : lancez-la
 -- d'abord seule si vous voulez voir ce qui va partir.
+--
+-- Depuis la migration 20261019000014, une facture ne se supprime plus (ni le
+-- client qui en a) : le nettoyage tourne dans UNE transaction, avec le drapeau
+-- de maintenance des factures, qui ne vaut que le temps de cette transaction.
 -- =============================================================================
+
+begin;
+select set_config('myklintown.maintenance_factures', 'on', true);
 
 -- 0. Aperçu -------------------------------------------------------------------
 select u.email, p.role, e.nom as entreprise
@@ -52,6 +59,8 @@ delete from public.zones where nom like 'Zone test %';
 delete from auth.users
 where email like 'mkt.test.%@gmail.com'
    or email like 'smoketest.a-supprimer.%@gmail.com';
+
+commit;
 
 -- 5. Contrôle : doit renvoyer 0.
 select count(*) as comptes_de_test_restants

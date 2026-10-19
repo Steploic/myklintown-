@@ -7,7 +7,7 @@
  * Simulation : un numéro finissant par 000001 a un « solde insuffisant » ;
  * les autres paient au bout de 5 s (voir lib/paiement/regles.ts).
  */
-import { CLE_SERVICE, clientServiceTest, compte, iso, plans } from '../../apps/web/tests/support/fixtures';
+import { CLE_SERVICE, clientServiceTest, compte, iso, plans, supprimerClientsDeTest } from '../../apps/web/tests/support/fixtures';
 import { etat, expect, session, test } from './base';
 import { CODE_LIEN } from './global-setup';
 
@@ -32,7 +32,7 @@ test.describe('paiement en ligne (simulation)', () => {
     await service().from('clients').update({ user_id: M.id }).eq('code', CODE_LIEN);
     const [plan] = await plans(A.sb);
     for (const [nom, telephone] of [[FOYER_LIEN, '677000444'], [FOYER_TOURNEE, '699000555']] as const) {
-      await A.sb.from('clients').delete().eq('entreprise_id', e).eq('nom', nom);
+      await supprimerClientsDeTest(A.sb, e, { noms: [nom] });
       const { data } = await A.sb.from('clients').insert({ entreprise_id: e, nom, telephone, plan_id: plan!.id }).select('id').single();
       await A.sb.from('factures').insert({
         entreprise_id: e, client_id: (data as { id: string }).id, montant_fcfa: plan!.prix_fcfa,
@@ -45,7 +45,7 @@ test.describe('paiement en ligne (simulation)', () => {
     if (!pret()) return;
     const A = await compte('precoA', 'precollecteur');
     const e = etat().precoA;
-    await A.sb.from('clients').delete().eq('entreprise_id', e).in('nom', [FOYER_LIEN, FOYER_TOURNEE]);
+    await supprimerClientsDeTest(A.sb, e, { noms: [FOYER_LIEN, FOYER_TOURNEE] });
     await service().from('entreprises').update({ paiement_statut: 'inactif', paiement_compte_id: null }).eq('id', e);
   });
 

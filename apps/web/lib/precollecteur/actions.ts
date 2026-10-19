@@ -7,6 +7,8 @@ import { requireEntreprise } from './context';
 import { ajouterJours, ajouterMois, dateFr, estErreurReseau, fcfa, isoJour, MESSAGE_RESEAU, STATUTS_A_FACTURER } from '@/lib/format';
 import { cheminInterne, normaliserNom, periodeFacture } from '@/lib/metier';
 import { CATEGORIES_CHARGES, MONTANT_MAX, lireMontant, moisValide } from '@/lib/charges';
+import { enregistrerAcceptation } from '@/lib/acceptations';
+import { estTypeDocument } from '@/lib/documents';
 import type { ActionState, ClientStatut, Plan } from '@/lib/types';
 
 const txt = (fd: FormData, k: string) => {
@@ -60,9 +62,17 @@ export async function majEntrepriseAction(_p: ActionState, fd: FormData): Promis
   const { supabase, entreprise } = await requireEntreprise();
   const nom = txt(fd, 'nom');
   if (!nom) return { error: 'Le nom est obligatoire.' };
+  // Identité fiscale imprimée sur les factures émises ensuite (les factures
+  // déjà émises gardent celle du jour de leur émission).
+  const niu = txt(fd, 'niu')?.replace(/\s+/g, '').toUpperCase() ?? null;
+  const rccm = txt(fd, 'rccm')?.toUpperCase() ?? null;
+  const adresseFiscale = txt(fd, 'adresse_fiscale');
+  if (niu && niu.length > 30) return { error: 'NIU trop long (30 caractères au plus).' };
+  if (rccm && rccm.length > 60) return { error: 'Numéro RCCM trop long (60 caractères au plus).' };
+  if (adresseFiscale && adresseFiscale.length > 300) return { error: 'Adresse fiscale trop longue (300 caractères au plus).' };
   const { error } = await supabase
     .from('entreprises')
-    .update({ nom, telephone: txt(fd, 'telephone'), siege: txt(fd, 'siege') })
+    .update({ nom, telephone: txt(fd, 'telephone'), siege: txt(fd, 'siege'), niu, rccm, adresse_fiscale: adresseFiscale })
     .eq('id', entreprise.id);
   if (error) return { error: erreurLisible(error.message) };
   rafraichir();
@@ -168,15 +178,26 @@ export async function genererFacturesAction(_p: ActionState, _fd: FormData): Pro
     : { ok: 'Aucun abonnement à facturer pour le moment : tout le monde est couvert.' };
 }
 
-export async function annulerFactureAction(fd: FormData) {
+/**
+ * Une facture ne se supprime ni ne se corrige : elle s'annule, avec un motif
+ * (imprimé sur la facture annulée), puis on en émet une nouvelle.
+ */
+export async function annulerFactureAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   const { supabase, entreprise } = await requireEntreprise();
-  await supabase
+  const motif = txt(fd, 'motif');
+  if (!motif || motif.length < 3) return { error: 'Indiquez le motif de l’annulation : il figure sur la facture annulée.' };
+  const { data, error } = await supabase
     .from('factures')
-    .update({ statut: 'annulee' })
+    .update({ statut: 'annulee', motif_annulation: motif.slice(0, 300) })
     .eq('id', String(fd.get('facture_id')))
     .eq('entreprise_id', entreprise.id)
-    .eq('statut', 'emise');
+    .eq('statut', 'emise')
+    .select('numero');
+  if (error) return { error: erreurLisible(error.message) };
+  const f = rows<{ numero: string }>(data)[0];
+  if (!f) return { error: 'Cette facture n’est plus annulable : elle a été réglée ou annulée entre-temps.' };
   rafraichir();
+  return { ok: `Facture ${f.numero} annulée. Elle reste consultable, marquée « annulée ».` };
 }
 
 export async function enregistrerPaiementAction(_p: ActionState, fd: FormData): Promise<ActionState> {
@@ -296,11 +317,25 @@ export async function creerClientAction(_p: ActionState, fd: FormData): Promise<
   if (error) return { error: erreurLisible(error.message) };
   const id = row<{ id: string }>(data)!.id;
 
+  // Charte et contrat remis sur papier et acceptés : tracé au nom du gérant.
+  if (fd.get('charte_remise') === 'on') {
+    await enregistrerAcceptation(supabase, { clientId: id });
+  }
   if (fd.get('facturer') === 'on') {
     await emettreFacturePour(supabase, entreprise.id, id);
   }
   rafraichir();
   redirect(`/precollecteur/clients/${id}?cree=1`);
+}
+
+/** Fiche client : la charte et le contrat ont été remis sur papier et acceptés. */
+export async function enregistrerRemiseCharteAction(_p: ActionState, fd: FormData): Promise<ActionState> {
+  const { supabase } = await requireEntreprise();
+  const types = fd.getAll('type').filter(estTypeDocument);
+  const refus = await enregistrerAcceptation(supabase, { clientId: String(fd.get('client_id')), ...(types.length ? { types } : {}) });
+  if (refus) return { error: erreurLisible(refus) };
+  rafraichir();
+  return { ok: 'Remise enregistrée, à votre nom et à la date de ce jour.' };
 }
 
 export async function majClientAction(_p: ActionState, fd: FormData): Promise<ActionState> {

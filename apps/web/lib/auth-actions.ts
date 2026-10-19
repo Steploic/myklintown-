@@ -6,7 +6,8 @@ import { createServerSupabase } from '@myklintown/db/server';
 import { canAccessPath, homeForRole, isProtectedPath, isSelfServiceRole, type UserRole } from './roles';
 import { estErreurReseau, MESSAGE_RESEAU } from './format';
 import { cheminInterne, normaliserNom } from './metier';
-import { origineDemande } from './server';
+import { origineDemande, type Supa } from './server';
+import { enregistrerAcceptation } from './acceptations';
 
 export interface AuthState {
   error?: string;
@@ -69,6 +70,11 @@ export async function signUpAction(_prev: AuthState, formData: FormData): Promis
   if (password.length < 8) {
     return { error: 'Le mot de passe doit faire au moins 8 caractères.' };
   }
+  // Ménage : charte du ménage et contrat d'abonnement acceptés dès l'inscription.
+  const menage = role === 'citoyen';
+  if (menage && formData.get('documents') !== 'on') {
+    return { error: 'Cochez la case pour accepter la charte du ménage et le contrat d’abonnement.' };
+  }
 
   const supabase = createServerSupabase(await cookies());
   const { data, error } = await supabase.auth.signUp({
@@ -89,6 +95,10 @@ export async function signUpAction(_prev: AuthState, formData: FormData): Promis
 
   // Si la confirmation e-mail est désactivée, une session est créée → on entre directement.
   if (data.session) {
+    // Acceptation horodatée, au nom du compte qui vient d'être créé. Sans
+    // session (confirmation e-mail), le bandeau de l'espace ménage la
+    // redemandera à la première connexion.
+    if (menage) await enregistrerAcceptation(supabase as unknown as Supa);
     redirect(homeForRole(role as UserRole));
   }
 

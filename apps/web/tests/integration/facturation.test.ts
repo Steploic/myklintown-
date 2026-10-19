@@ -68,12 +68,21 @@ describe('fiche client', () => {
 });
 
 describe('factures', () => {
-  it('numérotation F<AAMM>-NNNNN, unique et croissante', async () => {
+  it('numérotation par émetteur <préfixe>-<année>-NNNNN, unique, sans trou (migration 0014)', async () => {
     const c = await nouveauClient('Numérotation');
     const f1 = await facture(c.id, 0, 29, 7);
     const f2 = await facture(c.id, 30, 59, 37);
-    expect(f1.numero).toMatch(/^F\d{4}-\d{5}$/);
-    expect(f2.numero > f1.numero).toBe(true);
+    // Avant la migration 20261019000014 : F<AAMM>-NNNNN (séquence commune à tous).
+    const ancien = /^F\d{4}-\d{5}$/.test(f1.numero);
+    if (ancien) {
+      expect(f2.numero > f1.numero).toBe(true);
+      return;
+    }
+    const m1 = /^([A-Z0-9]{2,8})-(\d{4})-(\d{5,})$/.exec(f1.numero);
+    const m2 = /^([A-Z0-9]{2,8})-(\d{4})-(\d{5,})$/.exec(f2.numero);
+    expect(m1, f1.numero).toBeTruthy();
+    expect(m2?.[1]).toBe(m1![1]);
+    expect(Number(m2![3])).toBe(Number(m1![3]) + 1);
   });
   it('refuse une période qui finit avant de commencer', async () => {
     const c = await nouveauClient('Période absurde');
