@@ -4,7 +4,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { compte, identifiants, iso, mairie, plans, precollecteur } from '../../apps/web/tests/support/fixtures';
+import { avecCommunesMairie, compte, identifiants, iso, mairie, plans, precollecteur } from '../../apps/web/tests/support/fixtures';
 import { genererVideoQr } from '../../apps/web/tests/support/y4m';
 
 export const CODE_SCAN = 'MKT-E2E0SCAN';
@@ -79,6 +79,8 @@ export default async function globalSetup() {
   const migration0011 = !(await A.sb.from('couts_exploitation').select('id').limit(1)).error;
   // Migration 20261013000012 (code d'agrément des précollecteurs) jouée ?
   const migration0012 = !(await A.sb.from('codes_agrement').select('id').limit(1)).error;
+  // Migration 20261019000016 (une Mairie par commune) jouée ?
+  const migration0016 = await avecCommunesMairie(A.sb);
   if (migration0011) await A.sb.from('couts_exploitation').delete().eq('entreprise_id', A.entrepriseId);
   if (migration0006) {
     // Rien ne reste « en attente » d'un essai précédent.
@@ -89,7 +91,7 @@ export default async function globalSetup() {
   genererVideoQr(CODE_SCAN, path.resolve(__dirname, '..', '.media', 'qr.y4m'));
   fs.writeFileSync(
     FICHIER_ETAT,
-    JSON.stringify({ precoA: A.entrepriseId, precoB: B.entrepriseId, clientScan: scan.id, clientLien: lien.id, mairiePromue: M.promue, mairieEmail: M.email, migration0006, migration0007, migration0008, migration0011, migration0012, adminPromu, adminEmail: ADM.email }, null, 2),
+    JSON.stringify({ precoA: A.entrepriseId, precoB: B.entrepriseId, clientScan: scan.id, clientLien: lien.id, mairiePromue: M.promue, mairieEmail: M.email, migration0006, migration0007, migration0008, migration0011, migration0012, migration0016, adminPromu, adminEmail: ADM.email }, null, 2),
   );
   if (!migration0006) {
     console.warn('\n⚠️  Tests « liste d’attente » et « accès Mairie » ignorés : exécuter supabase/migrations/20261004000006_retours_tests_equipe.sql\n');

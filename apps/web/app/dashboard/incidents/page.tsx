@@ -23,7 +23,7 @@ export default async function IncidentsMairiePage() {
 
   return (
     <PortalShell portalKey="mairie" currentPath="/dashboard/incidents">
-      <PageHeader titre="Incidents signalés" sousTitre="Terrain et ménages, toutes entreprises confondues, avec leurs preuves." />
+      <PageHeader titre="Incidents signalés" sousTitre="Terrain et ménages, chez les précollecteurs de votre territoire, avec leurs preuves." />
       {incidents.length === 0 ? (
         <div className="card-soft">
           <EmptyState icon={ShieldCheck} titre="Aucun incident" />

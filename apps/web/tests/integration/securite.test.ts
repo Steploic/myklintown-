@@ -82,6 +82,10 @@ describe('visiteur anonyme (clé publique seule)', () => {
     ['precollecteurs_du_point', { p_lat: 3.8, p_lng: 11.5 }],
     ['supervision_zones', {}],
     ['supervision_precollecteurs', {}],
+    // Une Mairie par commune (migration 20261019000016)
+    ['comptes_mairie', {}],
+    ['accorder_commune_mairie', { p_user: '00000000-0000-0000-0000-000000000000', p_commune: '00000000-0000-0000-0000-000000000000' }],
+    ['supervise_commune', { p_commune: '00000000-0000-0000-0000-000000000000' }],
   ])('ne peut pas appeler %s', async (fn, args) => {
     const { error } = await clientAnonyme().rpc(fn, args);
     expect(error).toBeTruthy();

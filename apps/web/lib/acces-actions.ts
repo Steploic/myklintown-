@@ -67,12 +67,32 @@ export async function annulerDemandeAccesAction() {
   redirect('/acces-mairie');
 }
 
-/** Validation par un administrateur MyKlinTown. */
+/** Validation par un administrateur MyKlinTown (l'acceptation rattache le compte à sa commune). */
 export async function traiterDemandeAccesAction(fd: FormData) {
   const supabase = await getSupabase();
   await rpc(supabase, 'traiter_demande_acces', {
     p_demande: String(fd.get('demande_id')),
     p_accepter: fd.get('decision') === 'accepter',
   });
+  revalidatePath('/dashboard/acces');
+}
+
+/**
+ * Communes d'un compte Mairie (migration 20261019000016) : l'administrateur en
+ * ajoute ou en retire une. La base vérifie le rôle d'administrateur.
+ */
+export async function accorderCommuneMairieAction(_p: ActionState, fd: FormData): Promise<ActionState> {
+  const commune = txt(fd, 'commune_id');
+  if (!commune) return { error: 'Choisissez la commune à rattacher.' };
+  const supabase = await getSupabase();
+  const { error } = await rpc(supabase, 'accorder_commune_mairie', { p_user: txt(fd, 'user_id'), p_commune: commune });
+  if (error) return { error: estErreurReseau(error) ? MESSAGE_RESEAU : error.message };
+  revalidatePath('/dashboard/acces');
+  return { ok: 'Commune rattachée : le compte la supervise dès maintenant.' };
+}
+
+export async function retirerCommuneMairieAction(fd: FormData) {
+  const supabase = await getSupabase();
+  await rpc(supabase, 'retirer_commune_mairie', { p_user: txt(fd, 'user_id'), p_commune: txt(fd, 'commune_id') });
   revalidatePath('/dashboard/acces');
 }

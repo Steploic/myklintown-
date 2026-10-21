@@ -1,5 +1,6 @@
-// Jeu de données (deux précollecteurs concurrents, la Mairie, un administrateur,
-// des ménages, un employé) puis le catalogue d'ATTAQUES et de PARCOURS normaux.
+// Jeu de données (deux précollecteurs concurrents à Yaoundé III, un troisième à
+// Douala I, la Mairie de chaque commune, un administrateur, des ménages, un
+// employé) puis le catalogue d'ATTAQUES et de PARCOURS normaux.
 //
 // Une attaque renvoie `true` si elle a RÉUSSI (faille présente), `false` si la
 // base l'a refusée. Un parcours lève une erreur s'il ne fonctionne plus.
@@ -8,9 +9,23 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { comme, creerCompte, creerEntreprise, DOSSIER_MIGRATIONS, promouvoir, valeur } from './banc.mjs';
 
+// Zone Z (Yaoundé III, confiée à A) et zone ZD (Douala I, confiée à D).
 const CONTOUR_Z = {
   type: 'Polygon',
   coordinates: [[[11.49, 3.84], [11.51, 3.84], [11.51, 3.86], [11.49, 3.86], [11.49, 3.84]]],
+};
+const CONTOUR_D = {
+  type: 'Polygon',
+  coordinates: [[[9.7, 4.04], [9.72, 4.04], [9.72, 4.06], [9.7, 4.06], [9.7, 4.04]]],
+};
+// Ailleurs dans Yaoundé III et dans Douala I (zones tracées puis effacées par les tests).
+const CONTOUR_Z2 = {
+  type: 'Polygon',
+  coordinates: [[[11.53, 3.84], [11.55, 3.84], [11.55, 3.86], [11.53, 3.86], [11.53, 3.84]]],
+};
+const CONTOUR_D2 = {
+  type: 'Polygon',
+  coordinates: [[[9.74, 4.04], [9.76, 4.04], [9.76, 4.06], [9.74, 4.06], [9.74, 4.04]]],
 };
 const aujourdhui = () => new Date().toISOString().slice(0, 10);
 
@@ -22,6 +37,32 @@ async function accepte(db, qui, sql, params = []) {
   } catch {
     return false;
   }
+}
+
+/** Joue `fn` comme `qui`, puis ANNULE tout ; renvoie ce que `fn` a constaté (false si refusé). */
+async function essaiAnnule(db, qui, fn) {
+  let constat = false;
+  await comme(db, qui, async (tx) => {
+    constat = await fn(tx);
+    throw new Error('annulation voulue');
+  }).catch(() => {});
+  return constat;
+}
+
+/** Migration 0016 (une Mairie par commune) présente dans la base ? */
+const avec0016 = (db) => valeur(db, `select to_regclass('public.mairie_communes') is not null`);
+const avecCodes = (db) => valeur(db, `select to_regclass('public.codes_agrement') is not null`);
+
+/**
+ * Précollecteur agréé par une Mairie pour sa commune (code d'agrément, depuis
+ * 20261013000012) ; avant les codes, l'espace est créé directement dans la commune.
+ */
+async function entrepriseAgreee(db, mairie, gerant, nom, commune) {
+  if (!(await avecCodes(db))) {
+    return comme(db, gerant, (tx) => valeur(tx, `select public.creer_mon_entreprise($1, p_commune => $2)`, [nom, commune]));
+  }
+  const code = await comme(db, mairie, (tx) => valeur(tx, `select public.creer_code_agrement($1, null, $2)`, [`Agrément de ${nom}`, commune]));
+  return comme(db, gerant, (tx) => valeur(tx, `select public.creer_mon_entreprise($1, p_code => $2)`, [nom, code]));
 }
 
 /** Texte d'une migration du dépôt (par son numéro), ou null si elle n'y est pas. */
@@ -46,20 +87,48 @@ export async function preparer(db) {
   s.demandeur = await creerCompte(db, 'demandeur@test.cm');
 
   s.plan = await valeur(db, `select id from public.plans_tarifaires where code = 'MENSUEL'`);
+  s.yde3 = await valeur(db, `select id from public.communes where code = 'YDE3'`);
+  s.dla1 = await valeur(db, `select id from public.communes where code = 'DLA1'`);
 
-  // Entreprises
-  s.entA = await creerEntreprise(db, s.gerantA, 'Entreprise A');
+  // La Mairie de Yaoundé III, promue depuis le SQL Editor, est rattachée à sa
+  // commune par l'administrateur (depuis 20261019000016).
+  if (await avec0016(db)) {
+    await comme(db, s.admin, (tx) => tx.query(`select public.accorder_commune_mairie($1, $2)`, [s.mairie, s.yde3]));
+  }
+  // La Mairie de Douala I passe par la demande d'accès, acceptée par l'administrateur.
+  s.mairieDouala = await creerCompte(db, 'mairie.douala@test.cm');
+  await comme(db, s.mairieDouala, (tx) =>
+    tx.query(`select public.demander_acces_mairie($1, 'Chef du service d''hygiène', null, null, null)`, [s.dla1]));
+  const demande = await valeur(db, `select id from public.demandes_acces where user_id = $1`, [s.mairieDouala]);
+  await comme(db, s.admin, (tx) => tx.query(`select public.traiter_demande_acces($1, true)`, [demande]));
+  s.gerantD = await creerCompte(db, 'gerant.d@test.cm', 'precollecteur');
+
+  // Entreprises : A agréée par la Mairie de Yaoundé III, B sans commune ni zone
+  // (comme les espaces créés avant les codes d'agrément), D agréée par la
+  // Mairie de Douala I.
+  s.entA = await entrepriseAgreee(db, s.mairie, s.gerantA, 'Entreprise A', s.yde3);
   s.entB = await creerEntreprise(db, s.gerantB, 'Entreprise B');
   s.entIntrus = await creerEntreprise(db, s.intrus, 'Intrus SARL');
+  s.entD = await entrepriseAgreee(db, s.mairieDouala, s.gerantD, 'Entreprise D', s.dla1);
 
-  // Territoire (Mairie) : zone Z confiée à A
+  // Territoire : chaque Mairie trace une zone dans sa commune et la confie.
   s.zone = await comme(db, s.mairie, (tx) =>
-    valeur(tx, `insert into public.zones (nom, contour) values ('Z', $1) returning id`, [JSON.stringify(CONTOUR_Z)]),
+    valeur(tx, `insert into public.zones (nom, commune_id, contour) values ('Z', $1, $2) returning id`, [s.yde3, JSON.stringify(CONTOUR_Z)]),
   );
   await comme(db, s.mairie, (tx) => tx.query(`insert into public.zone_affectations (zone_id, entreprise_id) values ($1, $2)`, [s.zone, s.entA]));
+  s.zoneD = await comme(db, s.mairieDouala, (tx) =>
+    valeur(tx, `insert into public.zones (nom, commune_id, contour) values ('ZD', $1, $2) returning id`, [s.dla1, JSON.stringify(CONTOUR_D)]),
+  );
+  await comme(db, s.mairieDouala, (tx) => tx.query(`insert into public.zone_affectations (zone_id, entreprise_id) values ($1, $2)`, [s.zoneD, s.entD]));
+
+  // Un code d'agrément de Yaoundé III, en attente.
+  if (await avecCodes(db)) {
+    await comme(db, s.mairie, (tx) => tx.query(`select public.creer_code_agrement('Propreté Nsam', null, $1)`, [s.yde3]));
+    s.codeYde3 = await valeur(db, `select id from public.codes_agrement where destinataire = 'Propreté Nsam'`);
+  }
 
   // Exploitation de chaque entreprise (écrite comme le fait l'application)
-  for (const [cle, gerant, ent] of [['A', s.gerantA, s.entA], ['B', s.gerantB, s.entB]]) {
+  for (const [cle, gerant, ent] of [['A', s.gerantA, s.entA], ['B', s.gerantB, s.entB], ['D', s.gerantD, s.entD]]) {
     await comme(db, gerant, async (tx) => {
       s[`client${cle}`] = await valeur(tx,
         `insert into public.clients (entreprise_id, nom, telephone, plan_id) values ($1, $2, '677112233', $3) returning id`,
@@ -97,6 +166,16 @@ export async function preparer(db) {
   await comme(db, s.demandeur, (tx) =>
     tx.query(`select public.deposer_demande_abonnement($1, 'Famille Ndzana', '699887766', 'Porte bleue, 3e maison après la boulangerie', 'Nsam', 3.851234, 11.501234)`, [s.plan]),
   );
+  // Et une autre dans la zone ZD (Douala I).
+  s.demandeurD = await creerCompte(db, 'demandeur.d@test.cm');
+  await comme(db, s.demandeurD, (tx) =>
+    tx.query(`select public.deposer_demande_abonnement($1, 'Famille Ekwalla', '699112244', 'Rue des palmiers', 'Bonanjo', 4.05, 9.71)`, [s.plan]),
+  );
+
+  // Les photos des incidents de A et de D, déposées dans le stockage des preuves.
+  for (const [ent, gerant] of [[s.entA, s.gerantA], [s.entD, s.gerantD]]) {
+    await db.query(`insert into storage.objects (bucket_id, name, owner) values ('preuves', $1, $2)`, [`${ent}/${gerant}/photo.jpg`, gerant]);
+  }
   return s;
 }
 
@@ -544,6 +623,167 @@ export const ATTAQUES = [
       return accepte(db, 'service', `select public.purger_donnees_de_test($1)`, [s.entB]);
     },
   },
+  // --- Chantier 4c : chaque Mairie sur sa commune (migration 0016)
+  {
+    id: 'mairie-zone-autre-commune',
+    titre: 'La Mairie de Douala I renomme, déplace, supprime une zone de Yaoundé III, ou en trace une dans Yaoundé III',
+    async jouer(db, s) {
+      const photo = () => valeur(db, `select nom || '|' || coalesce(commune_id::text, '-') from public.zones where id = $1`, [s.zone]);
+      const avant = await photo();
+      await accepte(db, s.mairieDouala, `update public.zones set nom = 'Z annexée' where id = $1`, [s.zone]);
+      await accepte(db, s.mairieDouala, `update public.zones set commune_id = $2 where id = $1`, [s.zone, s.dla1]);
+      const modifiee = (await photo()) !== avant;
+      if (modifiee) await db.query(`update public.zones set nom = 'Z', commune_id = $2 where id = $1`, [s.zone, s.yde3]);
+      const supprimee = await essaiAnnule(db, s.mairieDouala, async (tx) => {
+        await tx.query(`delete from public.zones where id = $1`, [s.zone]);
+        return (await tx.query(`select 1 from public.zones where id = $1`, [s.zone])).rows.length === 0;
+      });
+      const tracee = await accepte(db, s.mairieDouala,
+        `insert into public.zones (nom, commune_id, contour) values ('Zone pirate', $1, $2)`, [s.yde3, JSON.stringify(CONTOUR_Z2)]);
+      if (tracee) await db.query(`delete from public.zones where nom = 'Zone pirate'`);
+      return modifiee || supprimee || tracee;
+    },
+  },
+  {
+    id: 'mairie-affectation-autre-commune',
+    titre: 'La Mairie de Douala I retire le précollecteur d’une zone de Yaoundé III, y affecte le sien, ou confie sa zone à un précollecteur qu’elle ne supervise pas',
+    async jouer(db, s) {
+      const retiree = await essaiAnnule(db, s.mairieDouala, async (tx) => {
+        await tx.query(`delete from public.zone_affectations where zone_id = $1 and entreprise_id = $2`, [s.zone, s.entA]);
+        return (await tx.query(`select 1 from public.zone_affectations where zone_id = $1 and entreprise_id = $2`, [s.zone, s.entA])).rows.length === 0;
+      });
+      const intruse = await accepte(db, s.mairieDouala, `insert into public.zone_affectations (zone_id, entreprise_id) values ($1, $2)`, [s.zone, s.entD]);
+      const etrangere = await accepte(db, s.mairieDouala, `insert into public.zone_affectations (zone_id, entreprise_id) values ($1, $2)`, [s.zoneD, s.entB]);
+      await db.query(`delete from public.zone_affectations where (zone_id, entreprise_id) in (($1, $2), ($3, $4))`, [s.zone, s.entD, s.zoneD, s.entB]);
+      return retiree || intruse || etrangere;
+    },
+  },
+  {
+    id: 'mairie-lit-autre-commune',
+    titre: 'La Mairie de Douala I lit les données de Yaoundé III (précollecteur, membres, tournées, passages, incidents, preuves, codes d’agrément)',
+    async jouer(db, s) {
+      const codes = await avecCodes(db);
+      return comme(db, s.mairieDouala, async (tx) => {
+        const n = async (sql, p = []) => Number((await tx.query(sql, p)).rows[0].n);
+        const vus = [
+          await n(`select count(*) n from public.entreprises where id in ($1, $2)`, [s.entA, s.entB]),
+          await n(`select count(*) n from public.entreprise_membres where entreprise_id in ($1, $2)`, [s.entA, s.entB]),
+          await n(`select count(*) n from public.tournees_precollecte where entreprise_id in ($1, $2)`, [s.entA, s.entB]),
+          await n(`select count(*) n from public.collectes where entreprise_id in ($1, $2)`, [s.entA, s.entB]),
+          await n(`select count(*) n from public.incidents_precollecte where entreprise_id in ($1, $2)`, [s.entA, s.entB]),
+          await n(`select count(*) n from storage.objects where bucket_id = 'preuves' and name like $1`, [`${s.entA}/%`]),
+          codes ? await n(`select count(*) n from public.codes_agrement where commune_id is distinct from $1`, [s.dla1]) : 0,
+        ];
+        return vus.some((x) => x > 0);
+      });
+    },
+  },
+  {
+    id: 'mairie-supervision-autre-commune',
+    titre: 'La Mairie de Douala I voit Yaoundé III dans sa supervision (zones, précollecteurs, activité, ménages en attente)',
+    async jouer(db, s) {
+      const passagesD = await valeur(db, `select count(*)::int from public.collectes where entreprise_id = $1`, [s.entD]);
+      return comme(db, s.mairieDouala, async (tx) => {
+        const col = async (sql, c) => (await tx.query(sql)).rows.map((r) => r[c]);
+        const zones = await col(`select zone_id from public.supervision_zones()`, 'zone_id');
+        const precos = await col(`select entreprise_id from public.supervision_precollecteurs()`, 'entreprise_id');
+        const demandes = await col(`select zone_nom from public.supervision_demandes()`, 'zone_nom');
+        const attente = await col(`select zone_nom from public.demandes_ouvertes()`, 'zone_nom');
+        const activite = Number((await tx.query(`select coalesce(sum(prevues), 0) n from public.supervision_activite(4)`)).rows[0].n);
+        return zones.includes(s.zone) || precos.includes(s.entA) || precos.includes(s.entB)
+          || demandes.some((z) => z !== 'ZD') || attente.some((z) => z !== 'ZD') || activite > passagesD;
+      });
+    },
+  },
+  {
+    id: 'mairie-incident-autre-commune',
+    titre: 'La Mairie de Douala I clôt un incident d’un précollecteur de Yaoundé III',
+    async jouer(db, s) {
+      const avant = await valeur(db, `select statut from public.incidents_precollecte where id = $1`, [s.incidentA]);
+      await accepte(db, s.mairieDouala, `update public.incidents_precollecte set statut = 'resolu' where id = $1`, [s.incidentA]);
+      const apres = await valeur(db, `select statut from public.incidents_precollecte where id = $1`, [s.incidentA]);
+      if (apres !== avant) await db.query(`update public.incidents_precollecte set statut = $2 where id = $1`, [s.incidentA, avant]);
+      return apres !== avant;
+    },
+  },
+  {
+    id: 'mairie-code-autre-commune',
+    titre: 'La Mairie de Douala I délivre un code d’agrément pour Yaoundé III, ou révoque un code de Yaoundé III',
+    async jouer(db, s) {
+      if (!(await avecCodes(db))) return false;
+      const delivre = await accepte(db, s.mairieDouala, `select public.creer_code_agrement('Code pirate', null, $1)`, [s.yde3]);
+      const revoque = await accepte(db, s.mairieDouala, `select public.revoquer_code_agrement($1)`, [s.codeYde3]);
+      if (revoque) await db.query(`update public.codes_agrement set revoque_at = null where id = $1`, [s.codeYde3]);
+      return delivre || revoque;
+    },
+  },
+  {
+    id: 'mairie-sattribue-commune',
+    titre: 'Une Mairie s’ajoute une commune (directement ou par la fonction d’administration) ou retire celle d’une autre Mairie',
+    async jouer(db, s) {
+      if (!(await avec0016(db))) return false;
+      const lien = (u, c) => valeur(db, `select exists (select 1 from public.mairie_communes where user_id = $1 and commune_id = $2)`, [u, c]);
+      await accepte(db, s.mairieDouala, `insert into public.mairie_communes (user_id, commune_id) values ($1, $2)`, [s.mairieDouala, s.yde3]);
+      await accepte(db, s.mairieDouala, `select public.accorder_commune_mairie($1, $2)`, [s.mairieDouala, s.yde3]);
+      const ajoutee = await lien(s.mairieDouala, s.yde3);
+      if (ajoutee) await db.query(`delete from public.mairie_communes where user_id = $1 and commune_id = $2`, [s.mairieDouala, s.yde3]);
+      await accepte(db, s.mairieDouala, `delete from public.mairie_communes where user_id = $1`, [s.mairie]);
+      await accepte(db, s.mairieDouala, `select public.retirer_commune_mairie($1, $2)`, [s.mairie, s.yde3]);
+      await accepte(db, s.mairieDouala, `update public.mairie_communes set commune_id = $2 where user_id = $1`, [s.mairie, s.dla1]);
+      const retiree = !(await lien(s.mairie, s.yde3));
+      if (retiree) await db.query(`insert into public.mairie_communes (user_id, commune_id) values ($1, $2) on conflict do nothing`, [s.mairie, s.yde3]);
+      return ajoutee || retiree;
+    },
+  },
+  {
+    id: 'mairie-sans-commune',
+    titre: 'Un compte Mairie rattaché à aucune commune voit la supervision, trace une zone ou délivre un code',
+    async jouer(db, s) {
+      const email = `mairie.sans.commune.${Date.now()}@test.cm`;
+      const u = await creerCompte(db, email);
+      await promouvoir(db, email, 'mairie');
+      const voit = await comme(db, u, async (tx) =>
+        Number((await tx.query(`select count(*) n from public.supervision_zones()`)).rows[0].n) > 0
+        || Number((await tx.query(`select count(*) n from public.entreprises`)).rows[0].n) > 0);
+      const trace = await accepte(db, u, `insert into public.zones (nom, commune_id, contour) values ('Zone sans commune', $1, $2)`, [s.yde3, JSON.stringify(CONTOUR_Z2)]);
+      if (trace) await db.query(`delete from public.zones where nom = 'Zone sans commune'`);
+      const code = (await avecCodes(db)) && (await accepte(db, u, `select public.creer_code_agrement('Sans commune')`));
+      return voit || trace || code;
+    },
+  },
+  {
+    id: 'ancienne-mairie',
+    titre: 'Un compte qui n’est plus Mairie (rôle changé) garde ses communes et continue de superviser',
+    async jouer(db, s) {
+      if (!(await avec0016(db))) return false;
+      const email = `ancienne.mairie.${Date.now()}@test.cm`;
+      const u = await creerCompte(db, email);
+      await promouvoir(db, email, 'mairie');
+      await comme(db, s.admin, (tx) => tx.query(`select public.accorder_commune_mairie($1, $2)`, [u, s.dla1]));
+      await promouvoir(db, email, 'citoyen');
+      return comme(db, u, async (tx) =>
+        Number((await tx.query(`select count(*) n from public.supervision_zones()`)).rows[0].n) > 0
+        || Number((await tx.query(`select count(*) n from public.entreprises where id = $1`, [s.entD])).rows[0].n) > 0);
+    },
+  },
+  {
+    id: 'indicateurs-autre-commune',
+    titre: 'La Mairie de Douala I lit les indicateurs du pilote entier, de Yaoundé ou de Yaoundé III (calcul ou relevés figés)',
+    async jouer(db, s) {
+      if (!(await valeur(db, `select to_regprocedure('public.indicateurs_pilote(text)') is not null`))) return false;
+      for (const p of ['pilote', 'yaounde', 'YDE3']) {
+        if (await accepte(db, s.mairieDouala, `select public.indicateurs_pilote($1)`, [p])) return true;
+      }
+      const perimetres = (await avec0016(db)) ? ['pilote', 'YDE3'] : ['pilote'];
+      for (const p of perimetres) {
+        await db.query(`insert into public.kpi_releves (type_periode, debut, fin, perimetre, valeurs, mode)
+          values ('semaine', '2020-01-06', '2020-01-12', $1, '{}', 'auto') on conflict do nothing`, [p]);
+      }
+      const lus = await comme(db, s.mairieDouala, (tx) => valeur(tx, `select count(*)::int from public.kpi_releves where perimetre <> 'DLA1'`));
+      await db.query(`delete from public.kpi_releves where debut = '2020-01-06'`);
+      return lus > 0;
+    },
+  },
 ];
 
 /** Migration 0014 (facture inaltérable, charte) présente dans la base ? */
@@ -672,7 +912,10 @@ export const PARCOURS = [
         await tx.query(`update public.entreprises set nom = 'Entreprise A SARL' where id = $1`, [s.entA]);
         await tx.query(`update public.profiles set nom_complet = 'Gérant A' where id = $1`, [s.gerantA]);
       });
-      await comme(db, s.mairie, (tx) => tx.query(`update public.incidents_precollecte set statut = 'en_cours' where id = $1`, [s.incidentB]));
+      // La Mairie de Yaoundé III rouvre l'incident de A (précollecteur de sa commune).
+      const traite = await comme(db, s.mairie, (tx) =>
+        valeur(tx, `update public.incidents_precollecte set statut = 'en_cours' where id = $1 returning id`, [s.incidentA]));
+      if (traite !== s.incidentA) throw new Error('la Mairie n’a pas pu traiter l’incident de son précollecteur');
     },
   },
   {
@@ -744,7 +987,7 @@ export const PARCOURS = [
       const c = (await comme(db, s.mairie, (tx) => tx.query(`select id, utilise_par, entreprise_id from public.codes_agrement where code = $1`, [code]))).rows[0];
       if (c?.utilise_par !== u || c?.entreprise_id !== ent) throw new Error('code non consommé');
 
-      await comme(db, s.admin, (tx) => tx.query(`select public.creer_code_agrement('À révoquer')`));
+      await comme(db, s.admin, (tx) => tx.query(`select public.creer_code_agrement('À révoquer', null, $1)`, [s.yde3]));
       const id = await comme(db, s.mairie, (tx) => valeur(tx, `select id from public.codes_agrement where destinataire = 'À révoquer'`));
       await comme(db, s.mairie, (tx) => tx.query(`select public.revoquer_code_agrement($1)`, [id]));
       const utilise = await comme(db, s.mairie, (tx) => tx.query(`select public.revoquer_code_agrement($1)`, [c.id])).then(() => true, () => false);
@@ -786,18 +1029,169 @@ export const PARCOURS = [
       // Ménage sans position → Yaoundé.
       attendu('ménage', await centre(s.menage), (r) => r.origine === 'defaut');
 
-      // Mairie de Douala I (demande d'accès acceptée) → sa commune ; Mairie sans commune et admin → toutes les zones.
+      // Mairie de Douala I (demande d'accès acceptée) et de Yaoundé III → leur commune ;
+      // commune sans centre → les zones de SA commune ; Mairie sans commune → Yaoundé ;
+      // administrateur → toutes les zones.
       const u = await creerCompte(db, `mairie.douala.${Date.now()}@test.cm`);
       await comme(db, u, (tx) => tx.query(`select public.demander_acces_mairie((select id from public.communes where code = 'DLA1'), 'Chef de service hygiène', null, null, null)`));
       const d = await comme(db, s.admin, (tx) => valeur(tx, `select id from public.demandes_acces where user_id = $1`, [u]));
       await comme(db, s.admin, (tx) => tx.query(`select public.traiter_demande_acces($1, true)`, [d]));
       attendu('Mairie de Douala I', await centre(u), (r) => r.origine === 'commune' && r.lat === 4.05 && r.lng === 9.7);
-      attendu('Mairie sans commune', await centre(s.mairie), (r) => r.origine === 'zones');
-      attendu('administrateur', await centre(s.admin), (r) => r.origine === 'zones');
+      attendu('Mairie de Yaoundé III', await centre(s.mairie), (r) => r.origine === 'commune' && r.lat === 3.848 && r.lng === 11.502);
+      const centreYde3 = (await db.query(`select centre_lat, centre_lng, zoom from public.communes where code = 'YDE3'`)).rows[0];
+      await db.query(`update public.communes set centre_lat = null, centre_lng = null where code = 'YDE3'`);
+      try {
+        attendu('Mairie de Yaoundé III (commune sans centre)', await centre(s.mairie),
+          (r) => r.origine === 'zones' && r.lat_min === 3.84 && r.lat_max === 3.86 && r.lng_min === 11.49 && r.lng_max === 11.51);
+      } finally {
+        await db.query(`update public.communes set centre_lat = $1, centre_lng = $2, zoom = $3 where code = 'YDE3'`,
+          [centreYde3.centre_lat, centreYde3.centre_lng, centreYde3.zoom]);
+      }
+      const sansCommune = `mairie.carte.${Date.now()}@test.cm`;
+      const m = await creerCompte(db, sansCommune);
+      await promouvoir(db, sansCommune, 'mairie');
+      attendu('Mairie sans commune', await centre(m), (r) => r.origine === 'defaut');
+      attendu('administrateur', await centre(s.admin), (r) => r.origine === 'zones' && r.lng_min === 9.7 && r.lng_max === 11.51);
 
       // L'administrateur affine le centre d'une commune.
       await comme(db, s.admin, (tx) => tx.query(`update public.communes set centre_lat = 4.061, centre_lng = 9.736 where code = 'DLA1'`));
       attendu('Mairie de Douala I (centre affiné)', await centre(u), (r) => r.lat === 4.061 && r.lng === 9.736);
+    },
+  },
+  // --- Chantier 4c : chaque Mairie sur sa commune (migration 0016)
+  {
+    titre: 'Mairie de Douala I : trace, renomme et supprime une zone de sa commune, y affecte son précollecteur puis le retire',
+    async jouer(db, s) {
+      if (!(await avec0016(db))) return;
+      await comme(db, s.mairieDouala, async (tx) => {
+        const z = await valeur(tx, `insert into public.zones (nom, commune_id, contour) values ('ZD bis', $1, $2) returning id`, [s.dla1, JSON.stringify(CONTOUR_D2)]);
+        const fait = {
+          renommee: await valeur(tx, `update public.zones set nom = 'ZD bis renommée' where id = $1 returning id`, [z]),
+          affectee: await valeur(tx, `insert into public.zone_affectations (zone_id, entreprise_id) values ($1, $2) returning zone_id`, [z, s.entD]),
+          retiree: await valeur(tx, `delete from public.zone_affectations where zone_id = $1 returning zone_id`, [z]),
+          supprimee: await valeur(tx, `delete from public.zones where id = $1 returning id`, [z]),
+        };
+        if (Object.values(fait).some((x) => x !== z)) throw new Error(JSON.stringify(fait));
+      });
+    },
+  },
+  {
+    titre: 'Supervision de chaque Mairie limitée à sa commune ; les contours des autres restent lisibles (chevauchements)',
+    async jouer(db, s) {
+      if (!(await avec0016(db))) return;
+      await comme(db, s.mairieDouala, async (tx) => {
+        const zones = (await tx.query(`select zone_id, commune from public.supervision_zones()`)).rows;
+        if (zones.length !== 1 || zones[0].zone_id !== s.zoneD || zones[0].commune !== 'Douala I') throw new Error(`zones : ${JSON.stringify(zones)}`);
+        const precos = (await tx.query(`select entreprise_id from public.supervision_precollecteurs()`)).rows.map((r) => r.entreprise_id);
+        if (precos.join() !== s.entD) throw new Error(`précollecteurs : ${precos.join()}`);
+        const attente = (await tx.query(`select zone_nom from public.demandes_ouvertes()`)).rows.map((r) => r.zone_nom);
+        const demandes = (await tx.query(`select zone_nom from public.supervision_demandes()`)).rows.map((r) => r.zone_nom);
+        if (attente.join() !== 'ZD' || demandes.join() !== 'ZD') throw new Error(`ménages en attente : ${attente.join()} / ${demandes.join()}`);
+        const activite = Number((await tx.query(`select coalesce(sum(prevues), 0) n from public.supervision_activite(4)`)).rows[0].n);
+        if (activite < 1) throw new Error('activité de Douala I vide');
+        const lisible = await valeur(tx, `select count(*)::int from public.zones where id = $1`, [s.zone]);
+        const conflits = (await tx.query(`select id from public.zones_en_conflit($1)`, [JSON.stringify(CONTOUR_Z)])).rows.map((r) => r.id);
+        if (lisible !== 1 || !conflits.includes(s.zone)) throw new Error('contour de Yaoundé III illisible : chevauchement non détecté');
+      });
+      await comme(db, s.mairie, async (tx) => {
+        const zones = (await tx.query(`select zone_id from public.supervision_zones()`)).rows.map((r) => r.zone_id);
+        const precos = (await tx.query(`select entreprise_id from public.supervision_precollecteurs()`)).rows.map((r) => r.entreprise_id);
+        if (!zones.includes(s.zone) || zones.includes(s.zoneD)) throw new Error(`zones de Yaoundé III : ${zones.join()}`);
+        if (!precos.includes(s.entA) || precos.includes(s.entD) || precos.includes(s.entB)) throw new Error(`précollecteurs de Yaoundé III : ${precos.join()}`);
+        if ((await valeur(tx, `select count(*)::int from public.mairie_communes`)) !== 1) throw new Error('la Mairie lit les rattachements des autres');
+      });
+    },
+  },
+  {
+    titre: 'Mairie de Douala I : lit son précollecteur, ses incidents et leurs preuves, en traite un ; délivre un code (sa commune par défaut), le révoque',
+    async jouer(db, s) {
+      if (!(await avec0016(db))) return;
+      await comme(db, s.mairieDouala, async (tx) => {
+        const n = async (sql, p) => Number((await tx.query(sql, p)).rows[0].n);
+        const vus = {
+          entreprise: await n(`select count(*) n from public.entreprises where id = $1`, [s.entD]),
+          membres: await n(`select count(*) n from public.entreprise_membres where entreprise_id = $1`, [s.entD]),
+          tournees: await n(`select count(*) n from public.tournees_precollecte where entreprise_id = $1`, [s.entD]),
+          passages: await n(`select count(*) n from public.collectes where entreprise_id = $1`, [s.entD]),
+          incidents: await n(`select count(*) n from public.incidents_precollecte where entreprise_id = $1`, [s.entD]),
+          preuves: await n(`select count(*) n from storage.objects where bucket_id = 'preuves' and name like $1`, [`${s.entD}/%`]),
+        };
+        if (Object.values(vus).some((x) => x < 1)) throw new Error(JSON.stringify(vus));
+        const traite = await valeur(tx, `update public.incidents_precollecte set statut = 'en_cours' where id = $1 returning id`, [s.incidentD]);
+        if (traite !== s.incidentD) throw new Error('incident de son précollecteur non traité');
+        const code = await valeur(tx, `select public.creer_code_agrement('Propreté Bonanjo', '699000000')`);
+        const ligne = (await tx.query(`select id, commune_id from public.codes_agrement where code = $1`, [code])).rows[0];
+        if (ligne?.commune_id !== s.dla1) throw new Error(`code délivré pour ${ligne?.commune_id}`);
+        await tx.query(`select public.revoquer_code_agrement($1)`, [ligne.id]);
+      });
+    },
+  },
+  {
+    titre: 'Précollecteur agréé : son espace prend la commune du code ; seul l’administrateur change cette commune',
+    async jouer(db, s) {
+      if (!(await avec0016(db))) return;
+      const g = await creerCompte(db, `agree.akwa.${Date.now()}@test.cm`, 'precollecteur');
+      const code = await comme(db, s.mairieDouala, (tx) => valeur(tx, `select public.creer_code_agrement('Propreté Akwa')`));
+      const ent = await comme(db, g, (tx) => valeur(tx, `select public.creer_mon_entreprise('Propreté Akwa', p_commune => $1, p_code => $2)`, [s.yde3, code]));
+      if ((await valeur(db, `select commune_id from public.entreprises where id = $1`, [ent])) !== s.dla1) throw new Error('commune du formulaire retenue au lieu de celle du code');
+      const vu = await comme(db, s.mairieDouala, (tx) => valeur(tx, `select count(*)::int from public.supervision_precollecteurs() where entreprise_id = $1`, [ent]));
+      if (vu !== 1) throw new Error('précollecteur agréé (sans zone encore) invisible de sa Mairie');
+      if (await accepte(db, g, `update public.entreprises set commune_id = $2 where id = $1`, [ent, s.yde3])) throw new Error('le gérant a changé sa commune');
+      await comme(db, s.admin, (tx) => tx.query(`update public.entreprises set commune_id = $2 where id = $1`, [ent, s.yde3]));
+    },
+  },
+  {
+    titre: 'Administrateur : toutes les communes ; comptes Mairie listés (sans commune d’abord), commune ajoutée puis retirée ; demande refusée sans rattachement',
+    async jouer(db, s) {
+      if (!(await avec0016(db))) return;
+      const zonesDe = async (qui) => (await comme(db, qui, (tx) => tx.query(`select zone_id from public.supervision_zones()`))).rows.map((r) => r.zone_id);
+      await comme(db, s.admin, async (tx) => {
+        const precos = (await tx.query(`select entreprise_id from public.supervision_precollecteurs()`)).rows.map((r) => r.entreprise_id);
+        if (![s.entA, s.entB, s.entD].every((e) => precos.includes(e))) throw new Error('l’administrateur ne voit pas tous les précollecteurs');
+        const comptes = (await tx.query(`select user_id, email, communes from public.comptes_mairie()`)).rows;
+        const codes = (u) => comptes.find((c) => c.user_id === u)?.communes.map((c) => c.code).join();
+        if (codes(s.mairie) !== 'YDE3' || codes(s.mairieDouala) !== 'DLA1') throw new Error(JSON.stringify(comptes));
+        if (comptes.find((c) => c.user_id === s.mairieDouala).email !== 'mairie.douala@test.cm') throw new Error('e-mail du compte attendu');
+        const premierAvec = comptes.findIndex((c) => c.communes.length > 0);
+        if (comptes.slice(premierAvec).some((c) => c.communes.length === 0)) throw new Error('comptes sans commune pas en tête');
+      });
+      const tout = await zonesDe(s.admin);
+      if (!tout.includes(s.zone) || !tout.includes(s.zoneD)) throw new Error('l’administrateur ne voit pas toutes les zones');
+
+      // Une Mairie peut suivre deux communes : elle choisit alors celle d'un code.
+      await comme(db, s.admin, (tx) => tx.query(`select public.accorder_commune_mairie($1, $2)`, [s.mairieDouala, s.yde3]));
+      const deux = await zonesDe(s.mairieDouala);
+      if (!deux.includes(s.zone) || !deux.includes(s.zoneD)) throw new Error('commune ajoutée sans effet');
+      if (await accepte(db, s.mairieDouala, `select public.creer_code_agrement('Deux communes')`)) throw new Error('code sans commune pour une Mairie de deux communes');
+      await comme(db, s.admin, (tx) => tx.query(`select public.retirer_commune_mairie($1, $2)`, [s.mairieDouala, s.yde3]));
+      if ((await zonesDe(s.mairieDouala)).includes(s.zone)) throw new Error('commune retirée encore supervisée');
+
+      if (await accepte(db, s.admin, `select public.accorder_commune_mairie($1, $2)`, [s.menage, s.yde3])) throw new Error('commune accordée à un compte ménage');
+      if (await accepte(db, s.admin, `select public.retirer_commune_mairie($1, $2)`, [s.mairieDouala, s.yde3])) throw new Error('retrait d’une commune absente accepté');
+      if ((await comme(db, s.mairie, (tx) => valeur(tx, `select count(*)::int from public.comptes_mairie()`))) !== 0) throw new Error('une Mairie liste les comptes Mairie');
+
+      const r = await creerCompte(db, `refusee.${Date.now()}@test.cm`);
+      await comme(db, r, (tx) => tx.query(`select public.demander_acces_mairie($1, 'Agent', null, null, null)`, [s.dla1]));
+      const d = await valeur(db, `select id from public.demandes_acces where user_id = $1`, [r]);
+      await comme(db, s.admin, (tx) => tx.query(`select public.traiter_demande_acces($1, false)`, [d]));
+      if (await valeur(db, `select exists (select 1 from public.mairie_communes where user_id = $1)`, [r])) throw new Error('demande refusée, compte rattaché');
+    },
+  },
+  {
+    titre: 'Indicateurs : chaque Mairie suit sa commune (calcul en direct et relevés) ; l’administrateur, tout le pilote',
+    async jouer(db, s) {
+      if (!(await avec0016(db))) return;
+      const perimetre = async (qui, p) => (await comme(db, qui, (tx) => valeur(tx, `select public.indicateurs_pilote($1)`, [p]))).perimetre;
+      const lus = [await perimetre(s.mairieDouala, 'DLA1'), await perimetre(s.mairie, 'YDE3'), await perimetre(s.admin, 'pilote'), await perimetre(s.admin, 'DLA1')];
+      if (lus.join() !== 'DLA1,YDE3,pilote,DLA1') throw new Error(lus.join());
+      await db.query(`insert into public.kpi_releves (type_periode, debut, fin, perimetre, valeurs, mode)
+        values ('semaine', '2020-01-06', '2020-01-12', 'DLA1', '{}', 'auto'), ('semaine', '2020-01-06', '2020-01-12', 'YDE3', '{}', 'auto')`);
+      try {
+        const vus = (await comme(db, s.mairieDouala, (tx) => tx.query(`select distinct perimetre from public.kpi_releves`))).rows.map((r) => r.perimetre);
+        if (vus.join() !== 'DLA1') throw new Error(`relevés lus par la Mairie de Douala I : ${vus.join()}`);
+      } finally {
+        await db.query(`delete from public.kpi_releves where debut = '2020-01-06'`);
+      }
     },
   },
   {
@@ -1140,6 +1534,53 @@ export const PARCOURS = [
       await db.exec(sql);
       const apres = await photo();
       if (avant !== apres) throw new Error(`avant ${avant}\naprès ${apres}`);
+    },
+  },
+  // En dernier : rétablit aussi ce que les rejeux de 0014 et 0015 ci-dessus ont remis à leur version.
+  {
+    titre: 'Migration 0016 rejouée : une commune retirée n’est pas rendue ; sur une table vide, reprise des demandes acceptées ; le contrôle liste les Mairies sans commune',
+    async jouer(db, s) {
+      const sql = migration('20261019000016');
+      if (!sql) return;
+      const photo = async () => (await db.query(
+        `select string_agg(user_id || ':' || commune_id, ',' order by user_id, commune_id) as p from public.mairie_communes`)).rows[0].p;
+      // Une Mairie acceptée pour Douala I, dont l'administrateur a ensuite retiré la commune.
+      const u = await creerCompte(db, `commune.retiree.${Date.now()}@test.cm`);
+      await comme(db, u, (tx) => tx.query(`select public.demander_acces_mairie($1, 'Agent', null, null, null)`, [s.dla1]));
+      const d = await valeur(db, `select id from public.demandes_acces where user_id = $1`, [u]);
+      await comme(db, s.admin, (tx) => tx.query(`select public.traiter_demande_acces($1, true)`, [d]));
+      await comme(db, s.admin, (tx) => tx.query(`select public.retirer_commune_mairie($1, $2)`, [u, s.dla1]));
+      // Un précollecteur sans commune, créé avec un code qui en porte une.
+      await db.query(`update public.entreprises set commune_id = null where id = $1`, [s.entD]);
+
+      const avant = await photo();
+      await db.exec(sql);
+      const resultats = await db.exec(sql);
+      if ((await photo()) !== avant) throw new Error('rejeu : rattachements modifiés (commune retirée rendue ?)');
+      if ((await valeur(db, `select commune_id from public.entreprises where id = $1`, [s.entD])) !== s.dla1) throw new Error('commune du précollecteur non reprise de son code');
+      const controle = resultats.at(-1).rows;
+      const sansCommune = controle.find((r) => r.controle.startsWith('Comptes Mairie SANS commune'));
+      if (sansCommune?.resultat !== 'À VÉRIFIER' || !sansCommune.detail.includes(`commune.retiree.`)) throw new Error(JSON.stringify(sansCommune));
+      // Lignes 1, 6 à 9 : la structure (les autres listent ce qui reste à rattacher).
+      const autres = controle.filter((r, i) => [1, 6, 7, 8, 9].includes(i + 1) && r.resultat !== 'OK');
+      if (autres.length) throw new Error(JSON.stringify(autres));
+
+      // Première exécution (table vide) : chaque demande acceptée redonne sa commune.
+      const sauvegarde = (await db.query(`select * from public.mairie_communes`)).rows;
+      await db.query(`delete from public.mairie_communes`);
+      try {
+        await db.exec(sql);
+        const repris = (await db.query(`select user_id || ':' || commune_id as l from public.mairie_communes order by 1`)).rows.map((r) => r.l);
+        const attendus = (await db.query(`select distinct user_id || ':' || commune_id as l from public.demandes_acces
+          where statut = 'acceptee' and commune_id is not null order by 1`)).rows.map((r) => r.l);
+        if (repris.join() !== attendus.join() || !repris.includes(`${s.mairieDouala}:${s.dla1}`)) throw new Error(`repris ${repris.join()} / attendus ${attendus.join()}`);
+      } finally {
+        await db.query(`delete from public.mairie_communes`);
+        for (const r of sauvegarde) {
+          await db.query(`insert into public.mairie_communes (user_id, commune_id, accorde_at, accorde_par) values ($1, $2, $3, $4)`,
+            [r.user_id, r.commune_id, r.accorde_at, r.accorde_par]);
+        }
+      }
     },
   },
 ];

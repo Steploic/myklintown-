@@ -151,7 +151,24 @@ export async function compte(cle: string, roleDemande: 'citoyen' | 'precollecteu
   return { sb, id: userId, email, role };
 }
 
-const ROLES_PROMUS: Record<string, 'admin' | 'mairie'> = { admin: 'admin', mairie: 'mairie' };
+const ROLES_PROMUS: Record<string, 'admin' | 'mairie'> = { admin: 'admin', mairie: 'mairie', mairieDouala: 'mairie' };
+
+/**
+ * Commune des comptes de test (Mairie, précollecteurs) : Yaoundé III. Depuis la
+ * migration 20261019000016, une Mairie ne supervise que sa commune.
+ */
+export const COMMUNE_TEST = 'YDE3';
+
+/** Identifiant d'une commune par son code (référentiel lisible sans compte). */
+export async function communeId(code: string = COMMUNE_TEST): Promise<string | null> {
+  const { data } = await clientAnonyme().from('communes').select('id').eq('code', code).maybeSingle();
+  return (data as { id: string } | null)?.id ?? null;
+}
+
+/** La base cloisonne-t-elle la Mairie par commune (migration 20261019000016) ? */
+export async function avecCommunesMairie(sb: SupabaseClient): Promise<boolean> {
+  return !(await sb.from('mairie_communes').select('commune_id').limit(1)).error;
+}
 
 /** Client « service » du projet de TEST. Refusé sur la production. */
 function serviceBaseDeTest(): SupabaseClient {
@@ -191,14 +208,14 @@ export interface Precollecteur extends Compte {
   entrepriseId: string;
 }
 
-/** Compte précollecteur de test avec son entreprise, données remises à zéro. */
-export async function precollecteur(cle: string, nomEntreprise: string): Promise<Precollecteur> {
+/** Compte précollecteur de test avec son entreprise (commune de test par défaut), données remises à zéro. */
+export async function precollecteur(cle: string, nomEntreprise: string, communeEntreprise: string = COMMUNE_TEST): Promise<Precollecteur> {
   const c = await compte(cle, 'precollecteur');
   if (c.role !== 'precollecteur') throw new Error(`${cle} devrait être précollecteur, il est ${c.role}`);
   let { data } = await c.sb.from('entreprise_membres').select('entreprise_id').eq('user_id', c.id).maybeSingle();
   if (!data) {
     // Depuis la migration 20261013000012, un code d'agrément de la Mairie est exigé.
-    const code = await codeAgrementDeTest(nomEntreprise);
+    const code = await codeAgrementDeTest(nomEntreprise, communeEntreprise);
     const r = await c.sb.rpc('creer_mon_entreprise', {
       p_nom: nomEntreprise,
       p_telephone: '690000001',
@@ -209,21 +226,30 @@ export async function precollecteur(cle: string, nomEntreprise: string): Promise
     data = { entreprise_id: r.data as string };
   }
   const entrepriseId = (data as { entreprise_id: string }).entreprise_id;
+  // Rattachée à la commune de test : la Mairie de test la supervise (migration
+  // 20261019000016). Seule la clé de service la change (colonne « système »).
+  if (BASE === 'test' && ENV_TESTS.SUPABASE_SECRET_KEY) {
+    const commune = await communeId(communeEntreprise);
+    if (commune) {
+      await serviceBaseDeTest().from('entreprises').update({ commune_id: commune }).eq('id', entrepriseId).is('commune_id', null);
+    }
+  }
   await reinitialiser(c.sb, entrepriseId);
   return { ...c, entrepriseId };
 }
 
 /**
  * Code d'agrément délivré sur la base de TEST (clé secrète), comme le ferait la
- * Mairie. null si la base ne connaît pas encore les codes, ou hors base de test.
+ * Mairie de la commune de test. null si la base ne connaît pas encore les
+ * codes, ou hors base de test.
  */
-export async function codeAgrementDeTest(destinataire: string): Promise<string | null> {
+export async function codeAgrementDeTest(destinataire: string, codeCommune: string = COMMUNE_TEST): Promise<string | null> {
   if (BASE !== 'test' || !ENV_TESTS.SUPABASE_SECRET_KEY) return null;
   const alphabet = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
   const code = Array.from(crypto.randomBytes(10), (o) => alphabet[o % 32]).join('');
   const { error } = await serviceBaseDeTest()
     .from('codes_agrement')
-    .insert({ code, destinataire: `Test ${destinataire}`.slice(0, 120) });
+    .insert({ code, destinataire: `Test ${destinataire}`.slice(0, 120), commune_id: await communeId(codeCommune) });
   return error ? null : code;
 }
 
@@ -282,14 +308,28 @@ export async function supprimerClientsDeTest(sb: SupabaseClient, entrepriseId: s
   await purgerDonneesDeTest(sb, entrepriseId, ((data ?? []) as { id: string }[]).map((c) => c.id));
 }
 
-/** Compte Mairie de test : n'existe qu'après promotion SQL (voir tests/README.md). */
-export async function mairie(): Promise<Compte & { promue: boolean }> {
-  const c = await compte('mairie', 'citoyen');
+/**
+ * Compte Mairie de test : n'existe qu'après promotion SQL (voir tests/README.md).
+ * Sur la base de test, il est rattaché à SA commune (`code`, Yaoundé III par
+ * défaut) et à elle seule, par la clé secrète : depuis la migration
+ * 20261019000016, une Mairie sans commune ne voit rien. Sur la vraie base, son
+ * rattachement se fait à la main (écran « Demandes d'accès »).
+ * `communeId` : la commune à donner aux zones qu'il trace.
+ */
+export async function mairie(cle = 'mairie', code: string = COMMUNE_TEST): Promise<Compte & { promue: boolean; communeId: string | null }> {
+  const c = await compte(cle, 'citoyen');
   const promue = c.role === 'mairie' || c.role === 'admin';
+  const commune = await communeId(code);
+  if (promue && BASE === 'test' && ENV_TESTS.SUPABASE_SECRET_KEY && commune && (await avecCommunesMairie(c.sb))) {
+    const service = serviceBaseDeTest();
+    await service.from('mairie_communes').delete().eq('user_id', c.id).neq('commune_id', commune);
+    const { error } = await service.from('mairie_communes').upsert({ user_id: c.id, commune_id: commune }, { onConflict: 'user_id,commune_id', ignoreDuplicates: true });
+    if (error) throw new Error(`Rattachement de ${cle} à ${code} : ${error.message}`);
+  }
   if (promue) {
     await c.sb.from('zones').delete().like('nom', 'Zone test%');
   }
-  return { ...c, promue };
+  return { ...c, promue, communeId: commune };
 }
 
 export async function plans(sb: SupabaseClient) {

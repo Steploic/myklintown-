@@ -6,7 +6,10 @@ import { SelecteurEspace } from './selecteur-espace';
 import { navPourRole, PORTALS, type PortalKey, type PortalNavItem } from '@/lib/portal-config';
 import { signOutAction } from '@/lib/auth-actions';
 import { getCurrentProfile } from '@/lib/get-profile';
+import { mairieSansCommune } from '@/lib/mairie/communes';
+import { getSupabase } from '@/lib/server';
 import { EnvoiTerrainGlobal } from './precollecteur/envoi-terrain-global';
+import { AvisSansCommune } from './mairie/avis-sans-commune';
 
 export type { PortalKey, PortalNavItem };
 
@@ -39,6 +42,7 @@ export async function PortalShell({ portalKey, user, titre, currentPath, childre
   const sousTitre = titre ?? display.nom;
   // Barre d'onglets mobile : les 4 destinations les plus fréquentes, au pouce.
   const onglets = nav.slice(0, 4);
+  const avisCommune = portalKey === 'mairie' && profile?.role === 'mairie' && (await mairieSansCommune(await getSupabase()));
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -122,6 +126,7 @@ export async function PortalShell({ portalKey, user, titre, currentPath, childre
         <main className="flex-1 px-4 pb-28 pt-5 sm:px-6 lg:px-8 lg:pb-10 lg:pt-8">
           <div className="mx-auto max-w-6xl">
             {(portalKey === 'precollecteur' || portalKey === 'employe') && !/\/tournees\/[^/]+/.test(currentPath) && <EnvoiTerrainGlobal />}
+            {avisCommune && <AvisSansCommune />}
             {children}
           </div>
         </main>

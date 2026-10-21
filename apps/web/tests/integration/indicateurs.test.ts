@@ -9,7 +9,17 @@
  * Ignorés, avec la consigne, tant que la migration n'est pas exécutée.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { clientAnonyme, compte, mairie, plans, precollecteur, type Compte, type Precollecteur } from '../support/fixtures';
+import {
+  avecCommunesMairie,
+  clientAnonyme,
+  COMMUNE_TEST,
+  compte,
+  mairie,
+  plans,
+  precollecteur,
+  type Compte,
+  type Precollecteur,
+} from '../support/fixtures';
 import type { TableauIndicateurs } from '@/lib/indicateurs';
 
 let A: Precollecteur;
@@ -17,6 +27,8 @@ let B: Precollecteur;
 let M: Compte & { promue: boolean };
 let menage: Compte;
 let migration = false;
+/** Ce que suit la Mairie de test : sa commune (migration 20261019000016), sinon tout le pilote. */
+let perimetreMairie = 'pilote';
 
 /** Aujourd'hui à Yaoundé (la base raisonne en jours de Yaoundé). */
 const aujourdhui = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Douala' }).format(new Date());
@@ -33,14 +45,16 @@ beforeAll(async () => {
     return;
   }
   await A.sb.from('couts_exploitation').delete().eq('entreprise_id', A.entrepriseId);
+  if (await avecCommunesMairie(A.sb)) perimetreMairie = COMMUNE_TEST;
 });
 
 describe('tableau des indicateurs', () => {
-  it('la Mairie le lit : 3 mois, les cibles du livrable, les relevés hebdomadaires', async ({ skip }) => {
+  it('la Mairie le lit (sa commune) : 3 mois, les cibles du livrable, les relevés hebdomadaires', async ({ skip }) => {
     if (!migration || !M.promue) skip();
-    const { data, error } = await M.sb.rpc('indicateurs_pilote', { p_perimetre: 'pilote' });
+    const { data, error } = await M.sb.rpc('indicateurs_pilote', { p_perimetre: perimetreMairie });
     expect(error).toBeNull();
     const t = data as TableauIndicateurs;
+    expect(t.perimetre).toBe(perimetreMairie);
     expect(t.pilote).toEqual({ debut: '2026-10-01', fin: '2026-12-31' });
     expect(t.mois.map((m) => m.debut)).toEqual(['2026-10-01', '2026-11-01', '2026-12-01']);
     expect(t.cibles?.abonnes_actifs).toEqual([800, 1500, 2000]);
@@ -66,9 +80,19 @@ describe('tableau des indicateurs', () => {
     expect(error?.message).toMatch(/Périmètre inconnu/);
   });
 
+  it('la Mairie ne lit ni tout le pilote, ni les villes, ni une autre commune (ses relevés seulement)', async ({ skip }) => {
+    if (!migration || !M.promue || M.role !== 'mairie' || perimetreMairie === 'pilote') skip();
+    for (const p of ['pilote', 'yaounde', 'douala', 'DLA1']) {
+      const { error } = await M.sb.rpc('indicateurs_pilote', { p_perimetre: p });
+      expect(error?.message, p).toMatch(/Périmètre réservé/);
+    }
+    const { data } = await M.sb.from('kpi_releves').select('perimetre');
+    expect([...new Set(((data ?? []) as { perimetre: string }[]).map((r) => r.perimetre))].filter((p) => p !== COMMUNE_TEST)).toEqual([]);
+  });
+
   it('un passage réalisé aujourd’hui entre dans la semaine en cours', async ({ skip }) => {
     if (!migration || !M.promue) skip();
-    const avant = ((await M.sb.rpc('indicateurs_pilote', { p_perimetre: 'pilote' })).data as TableauIndicateurs).semaine_en_cours;
+    const avant = ((await M.sb.rpc('indicateurs_pilote', { p_perimetre: perimetreMairie })).data as TableauIndicateurs).semaine_en_cours;
     if (!avant) skip(); // hors de la période du pilote
 
     const [mensuel] = await plans(A.sb);
@@ -79,7 +103,7 @@ describe('tableau des indicateurs', () => {
       .insert({ entreprise_id: A.entrepriseId, tournee_id: t.data!.id, client_id: c.data!.id, date_prevue: aujourdhui(), statut: 'realisee' });
     expect(co.error).toBeNull();
 
-    const apres = ((await M.sb.rpc('indicateurs_pilote', { p_perimetre: 'pilote' })).data as TableauIndicateurs).semaine_en_cours!;
+    const apres = ((await M.sb.rpc('indicateurs_pilote', { p_perimetre: perimetreMairie })).data as TableauIndicateurs).semaine_en_cours!;
     expect(apres.taux_execution.num).toBe(avant!.taux_execution.num + 1);
     expect(apres.taux_execution.den).toBe(avant!.taux_execution.den + 1);
     expect(apres.menages_inscrits).toBe(avant!.menages_inscrits + 1);

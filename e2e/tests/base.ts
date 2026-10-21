@@ -19,6 +19,7 @@ export const etat = () =>
     migration0008: boolean;
     migration0011: boolean;
     migration0012: boolean;
+    migration0016: boolean;
     adminPromu: boolean;
     adminEmail: string;
   };

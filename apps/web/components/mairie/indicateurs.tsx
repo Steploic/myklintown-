@@ -16,6 +16,7 @@ import {
   valeurDe,
   type DefIndicateur,
   type MoisPilote,
+  type OptionPerimetre,
   type Perimetre,
   type TableauIndicateurs,
   type ValeursKpi,
@@ -29,10 +30,10 @@ export function referenceIncidents(t: TableauIndicateurs): number | null {
   return t.mois[0]?.valeurs?.incidents_1000.valeur ?? null;
 }
 
-export function OngletsPerimetre({ actif }: { actif: Perimetre }) {
+export function OngletsPerimetre({ actif, options = PERIMETRES }: { actif: Perimetre; options?: OptionPerimetre[] }) {
   return (
     <nav aria-label="Périmètre" className="no-print mb-5 inline-flex flex-wrap gap-1 rounded-lg border border-border bg-surface p-1">
-      {PERIMETRES.map((p) => (
+      {options.map((p) => (
         <Link
           key={p.cle}
           href={p.cle === 'pilote' ? '/dashboard/indicateurs' : `/dashboard/indicateurs?perimetre=${p.cle}`}
@@ -278,7 +279,12 @@ export function Methode({ t, grace }: { t: TableauIndicateurs; grace: number | n
         </dl>
         <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
           <li>Délai de grâce appliqué : {grace == null ? '—' : `${nombre(grace)} jours`} (paramètre de la plateforme).</li>
-          <li>Les données de démonstration sont exclues. Un précollecteur est rattaché à Yaoundé ou à Douala par la commune de ses zones, à défaut par celle de son siège.</li>
+          <li>
+            Les données de démonstration sont exclues. Un précollecteur compte dans une seule commune — celle de ses zones (la première par
+            code), à défaut celle de son siège — et donc à Yaoundé ou à Douala. Un compte Mairie suit les indicateurs de sa commune ; tout le
+            pilote et les deux villes sont réservés à l’équipe MyKlinTown.
+          </li>
+          <li>Les cibles du livrable portent sur tout le pilote : pour une ville ou une commune, une cible en nombre (abonnés actifs) n’est qu’un repère.</li>
           <li>
             Les mois clos et les semaines terminées sont <strong>figés</strong> : la plateforme garde ce qu’elle savait à la date du relevé ; une
             correction ultérieure ne les réécrit pas. Le mois et la semaine en cours sont calculés en direct.

@@ -2,6 +2,7 @@ import { Truck } from 'lucide-react';
 import { PortalShell } from '@/components/portal-shell';
 import { EmptyState, PageHeader } from '@/components/ui/blocks';
 import { CodesAgrement } from '@/components/mairie/codes-agrement';
+import { accesCommunes, nomsCommunes } from '@/lib/mairie/communes';
 import { getSupabase, origineDemande, rows, rpc } from '@/lib/server';
 import type { CodeAgrement } from '@/lib/agrement';
 import { nombre, pct, telLisible } from '@/lib/format';
@@ -30,21 +31,24 @@ const STATUT: Record<string, { label: string; chip: string }> = {
 
 export default async function PrecollecteursPage() {
   const supabase = await getSupabase();
-  const [{ data }, co, cm, origine] = await Promise.all([
+  const [{ data }, co, acces, origine] = await Promise.all([
     rpc(supabase, 'supervision_precollecteurs'),
     supabase
       .from('codes_agrement')
       .select('id, code, destinataire, telephone, created_at, expire_at, revoque_at, utilise_at, communes(nom), entreprises(nom)')
       .order('created_at', { ascending: false })
       .limit(50),
-    supabase.from('communes').select('id, nom').order('nom'),
+    accesCommunes(supabase),
     origineDemande(),
   ]);
   const liste = rows<Ligne>(data);
+  // L'administrateur délivre pour n'importe quelle commune (ou sans) ; une Mairie, pour les siennes.
+  const choixLibre = acces.estAdmin || !acces.cloisonne;
+  const territoire = choixLibre ? 'sur le territoire' : `à ${nomsCommunes(acces.communes) || 'votre commune'}`;
 
   return (
     <PortalShell portalKey="mairie" currentPath="/dashboard/precollecteurs">
-      <PageHeader titre="Précollecteurs" sousTitre="Entreprises actives sur le territoire et leur performance sur 30 jours." />
+      <PageHeader titre="Précollecteurs" sousTitre={`Entreprises actives ${territoire} et leur performance sur 30 jours.`} />
       {liste.length === 0 ? (
         <div className="card-soft">
           <EmptyState icon={Truck} titre="Aucun précollecteur inscrit" texte="Un précollecteur crée son espace depuis la page d’accueil MyKlinTown, avec un code d’agrément délivré ci-dessous." />
@@ -88,7 +92,7 @@ export default async function PrecollecteursPage() {
         </div>
       )}
       {/* Sans la migration 20261013000012, la table n'existe pas : la section ne s'affiche pas. */}
-      {!co.error && <CodesAgrement codes={rows<CodeAgrement>(co.data)} communes={rows<{ id: string; nom: string }>(cm.data)} origine={origine} />}
+      {!co.error && <CodesAgrement codes={rows<CodeAgrement>(co.data)} communes={acces.communes} choixLibre={choixLibre} origine={origine} />}
     </PortalShell>
   );
 }

@@ -33,13 +33,24 @@ export interface ZoneEdit {
   nb_clients: number;
 }
 
+/** Zone d'une autre commune : affichée pour éviter les chevauchements, non modifiable. */
+export interface ZoneVoisine {
+  id: string;
+  nom: string;
+  contour: GeoPolygon;
+  commune: string | null;
+}
+
 export function ZoneEditor({
   zones,
+  voisines = [],
   entreprises,
   communes,
 }: {
   zones: ZoneEdit[];
+  voisines?: ZoneVoisine[];
   entreprises: { id: string; nom: string }[];
+  /** Communes où ce compte peut tracer (les siennes ; toutes pour l'administrateur). */
   communes: { id: string; nom: string }[];
 }) {
   const router = useRouter();
@@ -68,6 +79,10 @@ export function ZoneEditor({
           etiquette: z.entreprises.length ? z.entreprises.map((e) => e.nom).join(', ') : 'Non attribuée',
         })),
     [zones, dessin],
+  );
+  const autres = useMemo(
+    () => voisines.map((z) => ({ id: z.id, nom: z.nom, contour: z.contour, etiquette: `${z.commune ?? 'Sans commune'} · consultation seule` })),
+    [voisines],
   );
   const nonAttribuees = zones.filter((z) => z.entreprises.length === 0).length;
 
@@ -140,8 +155,11 @@ export function ZoneEditor({
           <p className="text-body-sm text-muted-foreground">
             <span className="mr-3 inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm bg-brand-teal" /> attribuée</span>
             <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm border-2 border-dashed border-[#8A96A3]" /> non attribuée ({nonAttribuees})</span>
+            {voisines.length > 0 && (
+              <span className="ml-3 inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm border border-dotted border-[#5B6670]" /> autre commune (consultation)</span>
+            )}
           </p>
-          {!dessin && (
+          {!dessin && communes.length > 0 && (
             <button type="button" className="btn-primary" onClick={() => commencer()}>
               <Plus size={16} /> Dessiner une zone
             </button>
@@ -163,7 +181,7 @@ export function ZoneEditor({
             </span>
           </div>
         )}
-        <ZoneMap zones={carte} selection={selection} onSelect={setSelection} dessin={!!dessin} points={points} onPoint={ajouterPoint} />
+        <ZoneMap zones={carte} voisines={autres} selection={selection} onSelect={setSelection} dessin={!!dessin} points={points} onPoint={ajouterPoint} />
       </div>
 
       <aside className="space-y-4">
@@ -295,7 +313,9 @@ export function ZoneEditor({
             <p className="text-h2-sm font-semibold text-brand-ink">Zones ({zones.length})</p>
             <p className="mb-3 text-small text-muted-foreground">Touchez une zone sur la carte ou dans la liste.</p>
             {zones.length === 0 ? (
-              <p className="text-body-sm text-muted-foreground">Aucune zone : commencez par « Dessiner une zone ».</p>
+              <p className="text-body-sm text-muted-foreground">
+                {communes.length ? 'Aucune zone : commencez par « Dessiner une zone ».' : 'Aucune commune n’est rattachée à votre compte : vous ne pouvez pas encore tracer de zone.'}
+              </p>
             ) : (
               <ul className="space-y-1">
                 {zones.map((z) => (

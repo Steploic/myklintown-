@@ -8,16 +8,44 @@
 
 import { fcfa, nombre } from './format';
 
-export type Perimetre = 'pilote' | 'yaounde' | 'douala';
+/**
+ * 'pilote', 'yaounde', 'douala' (administrateur), ou le code d'une commune
+ * (« YDE3 », « DLA1 »… : migration 20261019000016, un compte Mairie suit SA commune).
+ */
+export type Perimetre = string;
 
-export const PERIMETRES: { cle: Perimetre; label: string }[] = [
+export interface OptionPerimetre {
+  cle: Perimetre;
+  label: string;
+}
+
+export const PERIMETRES: OptionPerimetre[] = [
   { cle: 'pilote', label: 'Tout le pilote' },
   { cle: 'yaounde', label: 'Yaoundé' },
   { cle: 'douala', label: 'Douala' },
 ];
 
-export function perimetreValide(p: string | null | undefined): Perimetre {
-  return PERIMETRES.some((x) => x.cle === p) ? (p as Perimetre) : 'pilote';
+/** Code de commune accepté comme périmètre par la base. */
+export const estCodeCommune = (p: string) => /^[A-Z0-9]{2,12}$/.test(p);
+
+/**
+ * Périmètres que ce compte peut lire : l'administrateur, le pilote, les deux
+ * villes et chaque commune ; un compte Mairie, ses communes. Sans le
+ * cloisonnement en base (migration non jouée), les trois périmètres d'avant.
+ */
+export function perimetresDisponibles(acces: {
+  estAdmin: boolean;
+  cloisonne: boolean;
+  communes: { code: string; nom: string }[];
+}): OptionPerimetre[] {
+  if (!acces.cloisonne) return PERIMETRES;
+  const communes = acces.communes.filter((c) => estCodeCommune(c.code)).map((c) => ({ cle: c.code, label: c.nom }));
+  return acces.estAdmin ? [...PERIMETRES, ...communes] : communes;
+}
+
+/** Le périmètre demandé s'il est permis, sinon le premier permis (le pilote par défaut). */
+export function perimetreValide(p: string | null | undefined, disponibles: OptionPerimetre[] = PERIMETRES): Perimetre {
+  return disponibles.some((x) => x.cle === p) ? p! : (disponibles[0]?.cle ?? 'pilote');
 }
 
 export interface Ratio {

@@ -7,6 +7,7 @@ import {
   evaluer,
   libelleCible,
   moisCourant as moisMesure,
+  perimetresDisponibles,
   perimetreValide,
   pourcent,
   rangMois,
@@ -69,6 +70,29 @@ describe('les 8 indicateurs du livrable', () => {
     expect(perimetreValide('douala')).toBe('douala');
     expect(perimetreValide("douala' or 1=1")).toBe('pilote');
     expect(perimetreValide(undefined)).toBe('pilote');
+  });
+
+  it('un compte Mairie ne suit que ses communes ; l’administrateur, tout (migration 20261019000016)', () => {
+    const communes = [
+      { code: 'YDE3', nom: 'Yaoundé III' },
+      { code: 'DLA1', nom: 'Douala I' },
+    ];
+    const mairie = perimetresDisponibles({ estAdmin: false, cloisonne: true, communes: [communes[0]!] });
+    expect(mairie).toEqual([{ cle: 'YDE3', label: 'Yaoundé III' }]);
+    expect(perimetreValide(undefined, mairie)).toBe('YDE3');
+    expect(perimetreValide('pilote', mairie)).toBe('YDE3');
+    expect(perimetreValide('DLA1', mairie)).toBe('YDE3');
+
+    const admin = perimetresDisponibles({ estAdmin: true, cloisonne: true, communes });
+    expect(admin.map((p) => p.cle)).toEqual(['pilote', 'yaounde', 'douala', 'YDE3', 'DLA1']);
+    expect(perimetreValide('DLA1', admin)).toBe('DLA1');
+    expect(perimetreValide(undefined, admin)).toBe('pilote');
+
+    // Compte Mairie sans commune : aucun périmètre. Base sans la migration : comme avant.
+    expect(perimetresDisponibles({ estAdmin: false, cloisonne: true, communes: [] })).toEqual([]);
+    expect(perimetresDisponibles({ estAdmin: false, cloisonne: false, communes }).map((p) => p.cle)).toEqual(['pilote', 'yaounde', 'douala']);
+    // Un code inattendu dans le référentiel n'est jamais proposé (la base le refuserait).
+    expect(perimetresDisponibles({ estAdmin: false, cloisonne: true, communes: [{ code: "x' or 1=1", nom: 'Pirate' }] })).toEqual([]);
   });
 });
 

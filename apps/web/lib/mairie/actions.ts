@@ -10,6 +10,10 @@ function rafraichir() {
   revalidatePath('/dashboard', 'layout');
 }
 
+/** Refus de la base (RLS) : depuis 20261019000016, une Mairie n'agit que sur sa commune. */
+const refusRls = (message: string) => /row-level|42501/.test(message);
+const HORS_COMMUNE_ZONE = 'Cette zone n’est pas dans une commune rattachée à votre compte : une Mairie ne découpe que le territoire de sa commune.';
+
 export interface Conflit {
   id: string;
   nom: string;
@@ -52,7 +56,8 @@ export async function enregistrerZoneAction(input: {
     ? await supabase.from('zones').update(ligne).eq('id', input.id).select('id').single()
     : await supabase.from('zones').insert(ligne).select('id').single();
   if (error) {
-    return { error: /row-level|42501/.test(error.message) ? 'Seuls les comptes Mairie peuvent découper le territoire.' : error.message };
+    // Hors de ses communes, la base refuse (ou, en modification, ne trouve pas la ligne).
+    return { error: refusRls(error.message) || error.code === 'PGRST116' ? HORS_COMMUNE_ZONE : error.message };
   }
   rafraichir();
   return { ok: input.id ? 'Zone mise à jour.' : 'Zone créée.', id: (data as { id: string }).id };
@@ -60,8 +65,9 @@ export async function enregistrerZoneAction(input: {
 
 export async function supprimerZoneAction(id: string): Promise<ActionState> {
   const supabase = await getSupabase();
-  const { error } = await supabase.from('zones').delete().eq('id', id);
+  const { data, error } = await supabase.from('zones').delete().eq('id', id).select('id');
   if (error) return { error: error.message };
+  if (!data?.length) return { error: HORS_COMMUNE_ZONE };
   rafraichir();
   return { ok: 'Zone supprimée.' };
 }
@@ -69,15 +75,22 @@ export async function supprimerZoneAction(id: string): Promise<ActionState> {
 export async function affecterZoneAction(zoneId: string, entrepriseId: string): Promise<ActionState> {
   const supabase = await getSupabase();
   const { error } = await supabase.from('zone_affectations').upsert({ zone_id: zoneId, entreprise_id: entrepriseId });
-  if (error) return { error: error.message };
+  if (error) {
+    return {
+      error: refusRls(error.message)
+        ? 'Affectation refusée : la zone et le précollecteur doivent relever de votre commune. Un précollecteur agréé ailleurs est rattaché par l’équipe MyKlinTown.'
+        : error.message,
+    };
+  }
   rafraichir();
   return { ok: 'Précollecteur affecté.' };
 }
 
 export async function retirerAffectationAction(zoneId: string, entrepriseId: string): Promise<ActionState> {
   const supabase = await getSupabase();
-  const { error } = await supabase.from('zone_affectations').delete().eq('zone_id', zoneId).eq('entreprise_id', entrepriseId);
+  const { data, error } = await supabase.from('zone_affectations').delete().eq('zone_id', zoneId).eq('entreprise_id', entrepriseId).select('zone_id');
   if (error) return { error: error.message };
+  if (!data?.length) return { error: HORS_COMMUNE_ZONE };
   rafraichir();
   return { ok: 'Affectation retirée.' };
 }

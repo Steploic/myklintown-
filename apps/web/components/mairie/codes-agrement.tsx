@@ -7,46 +7,58 @@ import { ETATS_CODE, etatCode, formaterCode, type CodeAgrement } from '@/lib/agr
 
 /**
  * La Mairie délivre les codes d'agrément : sans lui, un précollecteur ne peut
- * pas créer son espace. Un code sert une fois, 30 jours au plus.
+ * pas créer son espace. Un code sert une fois, 30 jours au plus. Il est
+ * délivré pour une commune de la Mairie, et l'espace créé y est rattaché.
  */
 export function CodesAgrement({
   codes,
   communes,
+  choixLibre,
   origine,
 }: {
   codes: CodeAgrement[];
+  /** Communes pour lesquelles ce compte délivre (les siennes ; toutes pour l'administrateur). */
   communes: { id: string; nom: string }[];
+  /** Administrateur : commune facultative. */
+  choixLibre: boolean;
   origine: string;
 }) {
+  const unique = !choixLibre && communes.length === 1;
   return (
     <Section
       titre="Codes d’agrément"
-      sousTitre="Un précollecteur ne crée son espace qu’avec un code délivré ici : une seule fois, valable 30 jours."
+      sousTitre="Un précollecteur ne crée son espace qu’avec un code délivré ici : une seule fois, valable 30 jours, rattaché à la commune du code."
       className="mt-6"
       flush
     >
-      <ActionForm action={creerCodeAgrementAction} resetOnSuccess className="grid gap-3 border-b border-border p-5 md:grid-cols-[1.4fr_1fr_1fr_auto] md:items-end">
-        <div>
-          <label htmlFor="ca-destinataire" className="field-label">Précollecteur agréé *</label>
-          <input id="ca-destinataire" name="destinataire" required minLength={2} maxLength={120} className="field" placeholder="ex. Propreté Mvog-Ada" />
-        </div>
-        <div>
-          <label htmlFor="ca-telephone" className="field-label">Téléphone</label>
-          <input id="ca-telephone" name="telephone" type="tel" className="field" placeholder="6 XX XX XX XX" />
-        </div>
-        <div>
-          <label htmlFor="ca-commune" className="field-label">Commune</label>
-          <select id="ca-commune" name="commune_id" className="field" defaultValue="">
-            <option value="">—</option>
-            {communes.map((c) => (
-              <option key={c.id} value={c.id}>{c.nom}</option>
-            ))}
-          </select>
-        </div>
-        <SubmitButton pendingLabel="Création…">
-          <KeyRound size={16} /> Délivrer un code
-        </SubmitButton>
-      </ActionForm>
+      {!choixLibre && communes.length === 0 ? (
+        <p className="border-b border-border px-5 py-4 text-body-sm text-muted-foreground">
+          Aucune commune n’est rattachée à votre compte : vous ne pouvez pas encore délivrer de code.
+        </p>
+      ) : (
+        <ActionForm action={creerCodeAgrementAction} resetOnSuccess className="grid gap-3 border-b border-border p-5 md:grid-cols-[1.4fr_1fr_1fr_auto] md:items-end">
+          <div>
+            <label htmlFor="ca-destinataire" className="field-label">Précollecteur agréé *</label>
+            <input id="ca-destinataire" name="destinataire" required minLength={2} maxLength={120} className="field" placeholder="ex. Propreté Mvog-Ada" />
+          </div>
+          <div>
+            <label htmlFor="ca-telephone" className="field-label">Téléphone</label>
+            <input id="ca-telephone" name="telephone" type="tel" className="field" placeholder="6 XX XX XX XX" />
+          </div>
+          <div>
+            <label htmlFor="ca-commune" className="field-label">Commune{choixLibre ? '' : ' *'}</label>
+            <select id="ca-commune" name="commune_id" className="field" defaultValue={unique ? communes[0]!.id : ''} required={!choixLibre}>
+              {!unique && <option value="">{choixLibre ? '—' : '— Choisir —'}</option>}
+              {communes.map((c) => (
+                <option key={c.id} value={c.id}>{c.nom}</option>
+              ))}
+            </select>
+          </div>
+          <SubmitButton pendingLabel="Création…">
+            <KeyRound size={16} /> Délivrer un code
+          </SubmitButton>
+        </ActionForm>
+      )}
 
       {codes.length === 0 ? (
         <p className="px-5 py-6 text-body-sm text-muted-foreground">Aucun code délivré pour le moment.</p>
