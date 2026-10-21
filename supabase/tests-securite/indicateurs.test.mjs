@@ -250,6 +250,24 @@ describe('Les huit indicateurs, au chiffre près', () => {
     assert.deepEqual(tout.incidents_1000, { valeur: 500, num: 2, den: 4 });
   });
 
+  test('Périmètre d’une commune : Yaoundé III = Yaoundé (A seul) ; Douala I et Douala II font Douala', async () => {
+    const yde = await kpi(D - 6, D, 'yaounde');
+    const yde3 = await kpi(D - 6, D, 'YDE3');
+    assert.equal(yde3.perimetre, 'YDE3');
+    for (const k of ['precollecteurs_actifs', 'menages_inscrits', 'abonnes_actifs', 'taux_paiement', 'taux_execution', 'retention',
+      'delai_signalement_h', 'part_mobile_money', 'incidents_1000', 'especes']) {
+      assert.deepEqual(yde3[k], yde[k], k);
+    }
+    const dla = await kpi(D - 6, D, 'douala');
+    const dla1 = await kpi(D - 6, D, 'DLA1');
+    const dla2 = await kpi(D - 6, D, 'DLA2');
+    assert.equal(dla1.menages_inscrits, 2, 'b1, b2 (B, siège à Douala I)');
+    assert.equal(dla2.menages_inscrits, 1, 'e1 (E, siège à Douala II)');
+    for (const k of ['menages_inscrits', 'precollecteurs_actifs']) assert.equal(dla1[k] + dla2[k], dla[k], k);
+    assert.equal(dla1.taux_execution.num + dla2.taux_execution.num, dla.taux_execution.num);
+    assert.equal((await kpi(D - 6, D, 'YDE4')).menages_inscrits, 0, 'commune sans précollecteur');
+  });
+
   test('Coût par ménage servi : relevé mensuel seulement, chez ceux qui ont saisi leurs charges', async () => {
     const fin = await un(`select (date_trunc('month', $1::date) + interval '1 month - 1 day')::date::text`, [d.M]);
     const v = await un(`select public.kpi_calculer($1::date, $2::date, 'douala', 'mois')`, [d.M, fin]);
@@ -294,23 +312,44 @@ describe('Relevés historisés', () => {
     const derniere = semaines.at(-1);
     assert.equal(derniere.mode, derniere.fin >= jour(-1) ? 'auto' : 'rattrapage');
     assert.equal(semaines[0].mode, 'rattrapage');
+    const communes = await un(`select count(*)::int from public.communes where code ~ '^[A-Z0-9]{2,12}$'`);
+    assert.ok(communes >= 13, 'les 13 communes de Yaoundé et Douala');
     assert.equal(
       await un(`select count(*)::int from public.kpi_releves where type_periode = 'semaine'`),
-      semaines.length * 3,
-      'trois périmètres par semaine',
+      semaines.length * (3 + communes),
+      'trois périmètres et chaque commune, par semaine',
     );
   });
 
-  test('la Mairie lit le tableau ; un ménage, un précollecteur, un visiteur ne le lisent pas', async () => {
+  test('la Mairie lit le tableau DE SA COMMUNE ; un ménage, un précollecteur, un visiteur ne le lisent pas', async () => {
     const mairie = await creerCompte(db, 'mairie.kpi@test.cm');
     await promouvoir(db, 'mairie.kpi@test.cm', 'mairie');
-    const t = await comme(db, mairie, (tx) => valeur(tx, `select public.indicateurs_pilote('yaounde')`));
-    assert.equal(t.perimetre, 'yaounde');
+    // Sans commune, la Mairie ne voit rien, et le message le dit.
+    await assert.rejects(comme(db, mairie, (tx) => tx.query(`select public.indicateurs_pilote('YDE3')`)), /aucune commune/);
+    assert.equal(await comme(db, mairie, (tx) => valeur(tx, `select count(*)::int from public.kpi_releves`)), 0);
+
+    // Rattachée à Yaoundé III (comme le fait l'administrateur depuis le SQL Editor).
+    await db.query(`insert into public.mairie_communes (user_id, commune_id) select $1, id from public.communes where code = 'YDE3'`, [mairie]);
+    const t = await comme(db, mairie, (tx) => valeur(tx, `select public.indicateurs_pilote('YDE3')`));
+    assert.equal(t.perimetre, 'YDE3');
     assert.ok(Array.isArray(t.mois) && t.mois.length >= 3);
     assert.equal(t.cibles.abonnes_actifs[0], 800);
     assert.equal(t.releve_planifie, false, 'pas de pg_cron sur le banc');
     assert.ok(t.semaines.length > 0);
     assert.ok(t.semaine_en_cours, 'semaine en cours calculée en direct');
+    for (const p of ['pilote', 'yaounde', 'douala', 'DLA1']) {
+      await assert.rejects(comme(db, mairie, (tx) => tx.query(`select public.indicateurs_pilote($1)`, [p])), /Périmètre réservé/, p);
+    }
+    const lus = (await comme(db, mairie, (tx) => tx.query(`select distinct perimetre from public.kpi_releves`))).rows.map((r) => r.perimetre);
+    assert.deepEqual(lus, ['YDE3'], 'relevés de sa commune seulement');
+
+    // L'administrateur lit tous les périmètres.
+    const admin = await creerCompte(db, 'admin.lecteur.kpi@test.cm');
+    await promouvoir(db, 'admin.lecteur.kpi@test.cm', 'admin');
+    for (const p of ['pilote', 'yaounde', 'DLA1']) {
+      assert.equal((await comme(db, admin, (tx) => valeur(tx, `select public.indicateurs_pilote($1)`, [p]))).perimetre, p);
+    }
+    assert.ok((await comme(db, admin, (tx) => valeur(tx, `select count(distinct perimetre)::int from public.kpi_releves`))) > 3);
 
     const menage = await creerCompte(db, 'menage.kpi@test.cm');
     const gerant = await creerCompte(db, 'gerant.kpi@test.cm', 'precollecteur');

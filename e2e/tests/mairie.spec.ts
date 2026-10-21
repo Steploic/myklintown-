@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { mairie } from '../../apps/web/tests/support/fixtures';
+import { communeId, mairie } from '../../apps/web/tests/support/fixtures';
 import { expect, etat, SANS_MIGRATION_0011, SANS_MIGRATION_0012, session, test } from './base';
 
 test.describe.configure({ mode: 'serial' });
@@ -37,12 +37,24 @@ test('indicateurs du pilote : les 8 indicateurs, les périmètres, les exports',
   await expect(mensuel.getByRole('columnheader', { name: /décembre 2026/ })).toBeVisible();
   await expect(page.getByText('Critères de réussite au 31 décembre')).toBeVisible();
 
-  await page.getByRole('link', { name: 'Douala' }).click();
-  await expect(page).toHaveURL(/perimetre=douala/);
-  await expect(page.getByRole('link', { name: 'Douala' })).toHaveAttribute('aria-current', 'page');
+  const onglets = page.getByRole('navigation', { name: 'Périmètre' });
+  let perimetre = 'douala';
+  if (etat().migration0016) {
+    // Une Mairie suit SA commune (migration 20261019000016) : un seul onglet, ni le pilote ni les villes.
+    perimetre = 'YDE3';
+    await expect(onglets.getByRole('link')).toHaveCount(1);
+    await expect(onglets.getByRole('link', { name: 'Yaoundé III' })).toHaveAttribute('aria-current', 'page');
+    // Demander une ville la ramène à sa commune.
+    await page.goto('/dashboard/indicateurs?perimetre=douala');
+    await expect(onglets.getByRole('link', { name: 'Yaoundé III' })).toHaveAttribute('aria-current', 'page');
+  } else {
+    await onglets.getByRole('link', { name: 'Douala' }).click();
+    await expect(page).toHaveURL(/perimetre=douala/);
+    await expect(onglets.getByRole('link', { name: 'Douala' })).toHaveAttribute('aria-current', 'page');
+  }
 
   const [mois] = await Promise.all([page.waitForEvent('download'), page.getByRole('link', { name: /Tableau mensuel \(CSV\)/ }).click()]);
-  expect(mois.suggestedFilename()).toMatch(/^indicateurs-pilote-mois-douala-/);
+  expect(mois.suggestedFilename()).toMatch(new RegExp(`^indicateurs-pilote-mois-${perimetre}-`));
   const csv = fs.readFileSync((await mois.path())!, 'utf8');
   expect(csv).toContain('Indicateur;Définition;octobre 2026 — valeur');
   expect(csv).toContain('Taux de paiement effectif');
@@ -77,6 +89,10 @@ test('l’ancienne page « rapports » mène aux indicateurs', async ({ page }) 
 
 test('dessiner une zone, vérifier, enregistrer, affecter, supprimer', async ({ page }) => {
   await page.goto('/dashboard/zones');
+  if (etat().migration0016) {
+    // Le territoire de SA commune ; la zone y est rattachée d'office.
+    await expect(page.getByText(/Découpez le territoire de Yaoundé III/)).toBeVisible();
+  }
   await page.getByRole('button', { name: 'Dessiner une zone' }).click();
   const carte = page.locator('.leaflet-container');
   for (const [x, y] of [[300, 200], [420, 200], [420, 320], [300, 320]]) {
@@ -87,6 +103,7 @@ test('dessiner une zone, vérifier, enregistrer, affecter, supprimer', async ({ 
   await expect(page.getByText(/\(3 points\)/)).toBeVisible();
   await carte.click({ position: { x: 300, y: 320 } });
   await page.getByLabel('Nom').fill('Zone test UI');
+  if (etat().migration0016) await expect(page.getByLabel('Commune')).toHaveValue((await communeId())!);
   await page.getByRole('button', { name: 'Vérifier les chevauchements' }).click();
   // « Aucun chevauchement. » ou « Chevauche : » (et non « chevauchements » du bouton ou du sous-titre).
   await expect(page.getByText(/Aucun chevauchement\.|Chevauche :/)).toBeVisible();
@@ -110,6 +127,7 @@ test('un chevauchement non autorisé est refusé à l’enregistrement', async (
   const M = await mairie();
   await M.sb.from('zones').insert({
     nom: 'Zone test existante',
+    commune_id: M.communeId,
     contour: { type: 'Polygon', coordinates: [[[11.4, 3.7], [11.6, 3.7], [11.6, 3.95], [11.4, 3.95], [11.4, 3.7]]] },
   });
   await page.goto('/dashboard/zones');

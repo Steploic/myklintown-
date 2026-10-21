@@ -3,6 +3,7 @@ import { AlertTriangle, CheckCircle2, Download, Map as MapIcon, Shapes, Truck, U
 import { PortalShell } from '@/components/portal-shell';
 import { EmptyState, Kpi, PageHeader, Section } from '@/components/ui/blocks';
 import { CarteCouverture, EvolutionChart } from '@/components/mairie/supervision-bits';
+import { accesCommunes, nomsCommunes } from '@/lib/mairie/communes';
 import { getSupabase, rows, rpc } from '@/lib/server';
 import { dateFr, nombre, pct } from '@/lib/format';
 import type { GeoPolygon } from '@/lib/types';
@@ -30,12 +31,15 @@ interface LigneZone {
  */
 export default async function SupervisionPage() {
   const supabase = await getSupabase();
-  const [z, p, a, dm] = await Promise.all([
+  const [z, p, a, dm, acces] = await Promise.all([
     rpc(supabase, 'supervision_zones'),
     rpc(supabase, 'supervision_precollecteurs'),
     rpc(supabase, 'supervision_activite', { p_semaines: 12 }),
     rpc(supabase, 'supervision_demandes'),
+    accesCommunes(supabase),
   ]);
+  // Une Mairie ne voit que ses communes (migration 20261019000016) : on le dit.
+  const territoire = acces.estAdmin || !acces.cloisonne || !acces.communes.length ? 'le territoire' : nomsCommunes(acces.communes);
   const zones = rows<LigneZone>(z.data);
   const precos = rows<{ entreprise_id: string; statut: string; zones: string[]; nb_clients: number }>(p.data);
   const activite = rows<{ semaine: string; prevues: number; realisees: number; non_realisees: number }>(a.data);
@@ -53,7 +57,7 @@ export default async function SupervisionPage() {
     <PortalShell portalKey="mairie" currentPath="/dashboard">
       <PageHeader
         titre="Supervision de la précollecte"
-        sousTitre="Activité agrégée sur le territoire, mise à jour en temps réel."
+        sousTitre={`Activité agrégée sur ${territoire}, mise à jour en temps réel.`}
         actions={
           <>
             <a href="/dashboard/export" className="btn-outline"><Download size={16} /> Exporter (CSV)</a>

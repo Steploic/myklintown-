@@ -182,7 +182,7 @@ test.describe('nouveau ménage : souscription en ligne', () => {
     test.skip(!etat().mairiePromue, `Compte Mairie non promu (${etat().mairieEmail})`);
     const M = await mairie();
     const A = await compte('precoA', 'precollecteur');
-    const z = await M.sb.from('zones').insert({ nom: 'Zone test souscription', contour: carreEnMer(0) }).select('id').single();
+    const z = await M.sb.from('zones').insert({ nom: 'Zone test souscription', commune_id: M.communeId, contour: carreEnMer(0) }).select('id').single();
     await M.sb.from('zone_affectations').insert({ zone_id: z.data!.id, entreprise_id: etat().precoA });
     try {
       await context.setGeolocation({ latitude: POINT_EN_MER.lat, longitude: POINT_EN_MER.lng });

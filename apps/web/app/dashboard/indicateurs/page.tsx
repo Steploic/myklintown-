@@ -2,21 +2,27 @@ import { BarChart3, Download } from 'lucide-react';
 import { PortalShell } from '@/components/portal-shell';
 import { EmptyState, PageHeader, Section } from '@/components/ui/blocks';
 import { Criteres, GrilleMoisCourant, Methode, OngletsPerimetre, SuiviHebdo, TableauMensuel } from '@/components/mairie/indicateurs';
+import { accesCommunes } from '@/lib/mairie/communes';
 import { getSupabase, row, rpc } from '@/lib/server';
 import { dateFr, nombre } from '@/lib/format';
-import { moisCourant, perimetreValide, rangMois, type TableauIndicateurs } from '@/lib/indicateurs';
+import { moisCourant, perimetresDisponibles, perimetreValide, rangMois, type TableauIndicateurs } from '@/lib/indicateurs';
 
 export const metadata = { title: 'Indicateurs du pilote' };
 
 /**
  * Les huit indicateurs promis au Technipole (livrable du 2 septembre 2026,
  * chapitre 8), calculés par la base sur les données réelles et relevés chaque
- * semaine. Agrégats seulement : aucun ménage n'est nommé.
+ * semaine. Agrégats seulement : aucun ménage n'est nommé. Un compte Mairie
+ * suit sa commune ; l'équipe MyKlinTown, tout le pilote.
  */
 export default async function IndicateursPage({ searchParams }: { searchParams: Promise<{ perimetre?: string }> }) {
-  const perimetre = perimetreValide((await searchParams).perimetre);
   const supabase = await getSupabase();
-  const { data, error } = await rpc(supabase, 'indicateurs_pilote', { p_perimetre: perimetre });
+  const options = perimetresDisponibles(await accesCommunes(supabase));
+  const perimetre = perimetreValide((await searchParams).perimetre, options);
+  // Compte Mairie rattaché à aucune commune : rien à demander à la base.
+  const { data, error } = options.length
+    ? await rpc(supabase, 'indicateurs_pilote', { p_perimetre: perimetre })
+    : { data: null, error: { message: 'Aucune commune n’est rattachée à votre compte Mairie.' } };
   const t = row<TableauIndicateurs>(data);
   const courant = t ? moisCourant(t) : null;
   const exportHref = (type: string) => `/dashboard/indicateurs/export?perimetre=${perimetre}&type=${type}`;
@@ -50,15 +56,17 @@ export default async function IndicateursPage({ searchParams }: { searchParams: 
             icon={BarChart3}
             titre="Indicateurs indisponibles"
             texte={
-              error?.message?.includes('indicateurs_pilote')
-                ? 'La base n’a pas encore le calcul des indicateurs : la migration 20261013000011 doit être exécutée.'
-                : `La base n’a pas répondu (${error?.message ?? 'réponse vide'}). Réessayez dans un instant.`
+              !options.length
+                ? 'Les indicateurs d’un compte Mairie sont ceux de sa commune : demandez à l’équipe MyKlinTown de rattacher votre compte à la vôtre.'
+                : error?.message?.includes('indicateurs_pilote')
+                  ? 'La base n’a pas encore le calcul des indicateurs : la migration 20261013000011 doit être exécutée.'
+                  : `La base n’a pas répondu (${error?.message ?? 'réponse vide'}). Réessayez dans un instant.`
             }
           />
         </div>
       ) : (
         <>
-          <OngletsPerimetre actif={perimetre} />
+          <OngletsPerimetre actif={perimetre} options={options} />
 
           {courant?.valeurs ? (
             <Section

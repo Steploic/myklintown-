@@ -197,5 +197,16 @@ test.describe('Changer d’espace (administrateurs)', () => {
       // La page de validation des accès reste dans le menu de l'espace Mairie.
       await expect(barre.getByRole('link', { name: 'Demandes d’accès' })).toBeVisible();
     });
+
+    test('voit les comptes Mairie et la commune de chacun (migration 20261019000016)', async ({ page }) => {
+      test.skip(!etat().adminPromu, `Compte administrateur de test non promu (${etat().adminEmail})`);
+      test.skip(!etat().migration0016 || !etat().mairiePromue, 'Migration 20261019000016 non exécutée, ou compte Mairie de test non promu');
+      await page.goto('/dashboard/acces');
+      await expect(page.getByRole('heading', { name: 'Comptes Mairie et leurs communes' })).toBeVisible();
+      const ligne = page.getByTestId('comptes-mairie').getByRole('listitem').filter({ hasText: etat().mairieEmail });
+      await expect(ligne.getByText('Yaoundé III', { exact: true })).toBeVisible();
+      await expect(ligne.getByRole('button', { name: /^Retirer Yaoundé III/ })).toBeVisible();
+      await expect(ligne.getByRole('button', { name: 'Rattacher' })).toBeVisible();
+    });
   });
 });

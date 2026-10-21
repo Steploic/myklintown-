@@ -151,7 +151,8 @@ describe('Mairie : zones, souscription, supervision', () => {
 
   it('crée une zone (en mer)', async ({ skip }) => {
     if (!siMairie()) skip();
-    const r = await M.sb.from('zones').insert({ nom: 'Zone test Nord', contour: carreEnMer(0) }).select('id').single();
+    // Dans SA commune : depuis la migration 20261019000016, une Mairie ne trace que là.
+    const r = await M.sb.from('zones').insert({ nom: 'Zone test Nord', commune_id: M.communeId, contour: carreEnMer(0) }).select('id').single();
     expect(r.error).toBeNull();
     zoneId = r.data!.id;
   });

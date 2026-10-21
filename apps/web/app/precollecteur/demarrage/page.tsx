@@ -104,6 +104,7 @@ export default async function DemarragePage() {
                     <option key={c.id} value={c.id}>{c.nom}</option>
                   ))}
                 </select>
+                <p className="field-hint">Si votre code d’agrément est délivré pour une commune, c’est elle qui est retenue : sa Mairie vous supervise.</p>
               </div>
               <div>
                 <label htmlFor="siege" className="field-label">Quartier / siège</label>

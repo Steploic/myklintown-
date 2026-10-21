@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { accesCommunes } from '@/lib/mairie/communes';
 import { getSupabase, row, rpc } from '@/lib/server';
 import { documentCsv } from '@/lib/csv';
 import { dateFr } from '@/lib/format';
@@ -8,6 +9,7 @@ import {
   cibleDe,
   evaluer,
   libelleCible,
+  perimetresDisponibles,
   perimetreValide,
   rangMois,
   valeurDe,
@@ -26,10 +28,10 @@ const dec = (v: number | null | undefined, facteur = 1) =>
  */
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const perimetre = perimetreValide(url.searchParams.get('perimetre'));
+  const supabase = await getSupabase();
+  const perimetre = perimetreValide(url.searchParams.get('perimetre'), perimetresDisponibles(await accesCommunes(supabase)));
   const type = url.searchParams.get('type') === 'semaines' ? 'semaines' : 'mois';
 
-  const supabase = await getSupabase();
   const { data, error } = await rpc(supabase, 'indicateurs_pilote', { p_perimetre: perimetre });
   const t = row<TableauIndicateurs>(data);
   if (error || !t) {

@@ -41,6 +41,7 @@ function Cadrage({ zones }: { zones: ZoneCarte[] }) {
 
 export default function ZoneMap({
   zones,
+  voisines = [],
   selection,
   onSelect,
   dessin,
@@ -49,6 +50,8 @@ export default function ZoneMap({
   hauteur = 560,
 }: {
   zones: ZoneCarte[];
+  /** Zones des autres communes : contour seul, ni sélection ni cadrage. */
+  voisines?: { id: string; nom: string; contour: GeoPolygon; etiquette: string }[];
   selection?: string | null;
   onSelect?: (id: string) => void;
   dessin?: boolean;
@@ -71,6 +74,20 @@ export default function ZoneMap({
         {/* Aucune zone encore : la commune de la Mairie plutôt que Yaoundé. */}
         <CentrageCompte vide={zones.length === 0 && !points?.length} />
         <Clics actif={!!dessin} onPoint={(p) => onPoint?.(p)} />
+        {/* Sans gestionnaire de clic : en dessin, le clic remonte à la carte et pose un sommet. */}
+        {voisines.map((z) => (
+          <Polygon
+            key={`voisine-${z.id}`}
+            positions={z.contour.coordinates[0]!.map(([lng, lat]) => [lat, lng] as [number, number])}
+            pathOptions={{ color: '#5B6670', weight: 1.5, dashArray: '2 6', fillColor: '#5B6670', fillOpacity: 0.05 }}
+          >
+            <Tooltip sticky>
+              <strong>{z.nom}</strong>
+              <br />
+              {z.etiquette}
+            </Tooltip>
+          </Polygon>
+        ))}
         {zones.map((z) => {
           const sel = z.id === selection;
           return (
