@@ -2,11 +2,10 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { getSupabase, origineDemande, row, rpc, utilisateurCourant } from '@/lib/server';
+import { getSupabase, row, rpc, utilisateurCourant } from '@/lib/server';
 import { clientService } from '@/lib/supabase-service';
 import { estErreurReseau, MESSAGE_RESEAU } from '@/lib/format';
-import { fournisseurActif } from './fournisseur';
-import { actualiserPaiement, demarrerPaiement, PAIEMENT_INDISPONIBLE } from './service';
+import { actualiserPaiement, demarrerPaiement, PAIEMENT_INDISPONIBLE, paiementEnLigneDisponible } from './service';
 import type { Canal, StatutPaiementEnLigne } from './regles';
 
 export interface ResultatDemande {
@@ -94,47 +93,47 @@ export async function creerLienPaiementAction(fd: FormData) {
 }
 
 // -----------------------------------------------------------------------------
-// Ouverture du paiement en ligne pour une entreprise (compte connecté Notch Pay)
+// Ouverture du paiement en ligne pour une entreprise : MyKlinTown encaisse sur
+// son compte Notch Pay, puis reverse au précollecteur.
 // -----------------------------------------------------------------------------
+
+const PAGE_PAIEMENT = '/precollecteur/paiement-en-ligne';
 
 async function gerantConnecte() {
   const supabase = await getSupabase();
   const user = await utilisateurCourant(supabase);
-  if (!user) redirect('/login?next=/precollecteur/paiement-en-ligne');
+  if (!user) redirect(`/login?next=${PAGE_PAIEMENT}`);
   const { data } = await supabase
     .from('entreprise_membres')
-    .select('entreprise_id, role_membre, entreprises(id, nom, email, telephone, paiement_compte_id, paiement_statut)')
+    .select('entreprise_id, role_membre, entreprises(id)')
     .eq('user_id', user.id)
     .limit(1)
     .maybeSingle();
-  const m = row<{
-    role_membre: string;
-    entreprises: { id: string; nom: string; email: string | null; telephone: string | null; paiement_compte_id: string | null; paiement_statut: string } | null;
-  }>(data);
+  const m = row<{ role_membre: string; entreprises: { id: string } | null }>(data);
   if (!m?.entreprises || m.role_membre !== 'gerant') redirect('/precollecteur');
   return m.entreprises;
 }
 
-/** Ouvre le compte connecté chez Notch Pay puis envoie le gérant faire sa vérification d'identité. */
-export async function activerPaiementEnLigneAction() {
+/** Statut modifiable par le serveur seulement (déclencheur de la migration 0008) : passe par le client service. */
+async function changerStatutPaiement(statut: 'actif' | 'inactif') {
   const ent = await gerantConnecte();
   const admin = clientService();
-  const fournisseur = fournisseurActif();
-  const page = '/precollecteur/paiement-en-ligne';
-  if (!admin || !fournisseur) redirect(`${page}?erreur=${encodeURIComponent(PAIEMENT_INDISPONIBLE)}`);
-  let url: string;
-  try {
-    let compte = ent.paiement_compte_id;
-    if (!compte) {
-      compte = await fournisseur.creerCompte({ nom: ent.nom, email: ent.email, telephone: ent.telephone, entrepriseId: ent.id });
-      await admin
-        .from('entreprises')
-        .update({ paiement_compte_id: compte, paiement_statut: 'en_verification', paiement_maj_at: new Date().toISOString() })
-        .eq('id', ent.id);
-    }
-    url = await fournisseur.lienVerification(compte, `${await origineDemande()}${page}?retour=1`);
-  } catch (e) {
-    redirect(`${page}?erreur=${encodeURIComponent(e instanceof Error ? e.message : 'Notch Pay indisponible.')}`);
-  }
-  redirect(url);
+  if (!admin || !paiementEnLigneDisponible()) redirect(`${PAGE_PAIEMENT}?erreur=${encodeURIComponent(PAIEMENT_INDISPONIBLE)}`);
+  const { error } = await admin
+    .from('entreprises')
+    .update({ paiement_statut: statut, paiement_maj_at: new Date().toISOString() })
+    .eq('id', ent.id);
+  if (error) redirect(`${PAGE_PAIEMENT}?erreur=${encodeURIComponent('Le changement n’a pas pu être enregistré. Réessayez.')}`);
+  revalidatePath('/precollecteur', 'layout');
+  redirect(PAGE_PAIEMENT);
+}
+
+/** Le gérant ouvre le paiement Mobile Money à ses clients. */
+export async function activerPaiementEnLigneAction() {
+  await changerStatutPaiement('actif');
+}
+
+/** Le gérant le referme (les paiements déjà lancés suivent leur cours). */
+export async function desactiverPaiementEnLigneAction() {
+  await changerStatutPaiement('inactif');
 }

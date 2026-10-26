@@ -7,7 +7,10 @@ import {
   statutSimule,
   telephoneMobileMoney,
 } from '@/lib/paiement/regles';
-import { fournisseurActif, notchPay, signatureValide } from '@/lib/paiement/fournisseur';
+import { cleCompatibleAvecBase, fournisseurActif, notchPay, signatureValide } from '@/lib/paiement/fournisseur';
+
+const BASE_PROD = 'https://xglomngvjsgbwobiwfqp.supabase.co';
+const BASE_TEST = 'https://projet-de-test.supabase.co';
 
 describe('numéro Mobile Money', () => {
   it('normalise les écritures courantes', () => {
@@ -106,9 +109,34 @@ describe('choix du fournisseur', () => {
     vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://xglomngvjsgbwobiwfqp.supabase.co');
     expect(fournisseurActif()).toBeNull();
   });
-  it('Notch Pay dès que sa clé est là', () => {
-    vi.stubEnv('NOTCHPAY_PUBLIC_KEY', 'pk_test_x');
+  it('Notch Pay dès que sa clé est là, si elle va avec la base', () => {
+    vi.stubEnv('NOTCHPAY_PUBLIC_KEY', 'pk_test.x');
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', BASE_TEST);
     expect(fournisseurActif()?.nom).toBe('notchpay');
+    vi.stubEnv('NOTCHPAY_PUBLIC_KEY', 'pk.live_x');
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', BASE_PROD);
+    expect(fournisseurActif()?.nom).toBe('notchpay');
+  });
+  it('aucun paiement si la clé ne va pas avec la base (test sur la vraie, réelle sur une autre)', () => {
+    vi.stubEnv('NOTCHPAY_PUBLIC_KEY', 'pk_test.x');
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', BASE_PROD);
+    expect(fournisseurActif()).toBeNull();
+    vi.stubEnv('NOTCHPAY_PUBLIC_KEY', 'pk.live_x');
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', BASE_TEST);
+    expect(fournisseurActif()).toBeNull();
+  });
+});
+
+describe('clé Notch Pay et base', () => {
+  it('clé de test : toute base sauf la production', () => {
+    expect(cleCompatibleAvecBase('pk_test.abc', BASE_TEST)).toBe(true);
+    expect(cleCompatibleAvecBase('pk_test_abc', BASE_TEST)).toBe(true);
+    expect(cleCompatibleAvecBase('pk_test.abc', BASE_PROD)).toBe(false);
+  });
+  it('clé réelle : la production seulement', () => {
+    expect(cleCompatibleAvecBase('pk.abc', BASE_PROD)).toBe(true);
+    expect(cleCompatibleAvecBase('pk.abc', BASE_TEST)).toBe(false);
+    expect(cleCompatibleAvecBase('pk.abc', '')).toBe(false);
   });
 });
 
@@ -118,7 +146,7 @@ describe('requêtes envoyées à Notch Pay', () => {
     vi.unstubAllGlobals();
   });
 
-  it('initialise avec le compte du précollecteur et la commission, puis envoie sur MTN', async () => {
+  it('initialise sur le compte MyKlinTown (sans compte connecté), puis envoie sur MTN', async () => {
     vi.stubEnv('NOTCHPAY_PUBLIC_KEY', 'pk_test_abc');
     const appels: { url: string; init: RequestInit }[] = [];
     vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
@@ -131,8 +159,6 @@ describe('requêtes envoyées à Notch Pay', () => {
     const r = await notchPay.demander({
       reference: 'MKTREF1',
       montant: 3500,
-      commission: 350,
-      compteConnecte: 'acct_123',
       description: 'Test Propreté A — facture F2610-00001',
       client: { nom: 'Famille Test', email: null },
       canal: 'cm.mtn',
@@ -147,8 +173,6 @@ describe('requêtes envoyées à Notch Pay', () => {
       customer: { name: 'Famille Test', phone: '+237677123456' },
       description: 'Test Propreté A — facture F2610-00001',
       reference: 'MKTREF1',
-      application_fee: 350,
-      destination: { account: 'acct_123', amount: 3150 },
     });
     expect(appels[1]!.url).toBe('https://api.notchpay.co/payments/trx.42');
     expect(JSON.parse(appels[1]!.init.body as string)).toEqual({ channel: 'cm.mtn', data: { phone: '+237677123456' } });
@@ -159,7 +183,7 @@ describe('requêtes envoyées à Notch Pay', () => {
     vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ message: 'Invalid phone number' }), { status: 422 }));
     await expect(
       notchPay.demander({
-        reference: 'X', montant: 100, commission: 10, compteConnecte: null, description: 'x',
+        reference: 'X', montant: 100, description: 'x',
         client: { nom: 'x' }, canal: 'cm.orange', telephone: '+237699000000',
       }),
     ).rejects.toThrow('Invalid phone number');

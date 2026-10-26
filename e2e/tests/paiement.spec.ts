@@ -51,14 +51,15 @@ test.describe('paiement en ligne (simulation)', () => {
 
   test.describe('gérant', () => {
     test.use({ storageState: session('precoA') });
-    test('ouvre le paiement en ligne (vérification simulée)', async ({ page }) => {
+    test('ouvre le paiement en ligne (MyKlinTown encaisse, sans compte connecté)', async ({ page }) => {
       test.skip(!pret(), RAISON);
       await page.goto('/precollecteur/facturation');
       await page.getByRole('link', { name: /Paiement en ligne/ }).click();
       await expect(page).toHaveURL(/\/precollecteur\/paiement-en-ligne/);
       await page.getByRole('button', { name: 'Activer le paiement en ligne' }).click();
       await expect(page.getByText('Paiement en ligne actif')).toBeVisible();
-      await expect(page.getByText(/Commission MyKlinTown de 10 %/)).toBeVisible();
+      await expect(page.getByText(/moins sa commission de 10 %/)).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Désactiver le paiement en ligne' })).toBeVisible();
     });
   });
 
