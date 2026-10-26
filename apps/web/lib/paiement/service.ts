@@ -32,7 +32,7 @@ interface FactureAPayer {
   entreprise_id: string;
   client_id: string;
   clients: { nom: string; email: string | null } | null;
-  entreprises: { nom: string; paiement_statut: string; paiement_compte_id: string | null } | null;
+  entreprises: { nom: string; paiement_statut: string } | null;
 }
 
 /** Ce qu'il reste à payer sur une facture (paiements validés et espèces en attente déduits). */
@@ -41,7 +41,7 @@ export async function resteAPayer(factureId: string): Promise<{ facture: Facture
   if (!admin) return null;
   const { data } = await admin
     .from('factures')
-    .select('id, numero, montant_fcfa, statut, entreprise_id, client_id, clients(nom, email), entreprises(nom, paiement_statut, paiement_compte_id)')
+    .select('id, numero, montant_fcfa, statut, entreprise_id, client_id, clients(nom, email), entreprises(nom, paiement_statut)')
     .eq('id', factureId)
     .maybeSingle();
   const facture = row<FactureAPayer>(data);
@@ -75,7 +75,7 @@ export async function demarrerPaiement(input: {
   const { facture, reste } = r;
   if (facture.statut !== 'emise' || reste <= 0) return { error: 'Cette facture est déjà réglée.' };
   const ent = facture.entreprises;
-  if (!ent || ent.paiement_statut !== 'actif' || !ent.paiement_compte_id) {
+  if (!ent || ent.paiement_statut !== 'actif') {
     return { error: `${ent?.nom ?? 'Ce précollecteur'} n’accepte pas encore le paiement en ligne.` };
   }
 
@@ -116,8 +116,6 @@ export async function demarrerPaiement(input: {
     const { fournisseurReference } = await fournisseur.demander({
       reference,
       montant: reste,
-      commission,
-      compteConnecte: ent.paiement_compte_id,
       description: `${ent.nom} — facture ${facture.numero}`,
       client: { nom: facture.clients?.nom ?? 'Client', email: facture.clients?.email },
       canal: input.canal,
@@ -201,20 +199,4 @@ export async function traiterNotification(evenement: { type?: string; data?: Rec
     reference = row<{ reference: string }>(data)?.reference ?? null;
   }
   if (reference) await actualiserPaiement(reference);
-}
-
-/** Relit chez Notch Pay l'état de la vérification du compte connecté (sans rien invalider : appelé à l'affichage). */
-export async function rafraichirEtatCompte(ent: { id: string; paiement_compte_id: string | null; paiement_statut: string }): Promise<string> {
-  const admin = clientService();
-  const fournisseur = fournisseurActif();
-  if (!admin || !fournisseur || !ent.paiement_compte_id) return ent.paiement_statut;
-  try {
-    const statut = await fournisseur.etatCompte(ent.paiement_compte_id);
-    if (statut !== ent.paiement_statut) {
-      await admin.from('entreprises').update({ paiement_statut: statut, paiement_maj_at: new Date().toISOString() }).eq('id', ent.id);
-    }
-    return statut;
-  } catch {
-    return ent.paiement_statut; // Notch Pay injoignable : dernier état connu
-  }
 }

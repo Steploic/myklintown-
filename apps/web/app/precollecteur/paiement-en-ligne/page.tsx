@@ -1,10 +1,10 @@
-import { CheckCircle2, Clock, Link2, ShieldCheck, Smartphone, Wallet, XCircle } from 'lucide-react';
+import { CheckCircle2, Link2, ShieldCheck, Smartphone, Wallet } from 'lucide-react';
 import { PrecoShell } from '@/components/precollecteur/shell';
 import { EmptyState, PageHeader, Section } from '@/components/ui/blocks';
 import { SubmitButton } from '@/components/ui/action-form';
 import { requireEntreprise } from '@/lib/precollecteur/context';
-import { activerPaiementEnLigneAction } from '@/lib/paiement/actions';
-import { paiementEnLigneDisponible, rafraichirEtatCompte } from '@/lib/paiement/service';
+import { activerPaiementEnLigneAction, desactiverPaiementEnLigneAction } from '@/lib/paiement/actions';
+import { paiementEnLigneDisponible } from '@/lib/paiement/service';
 import { CANAUX, type Canal } from '@/lib/paiement/regles';
 import { parametre, rows } from '@/lib/server';
 import { dateHeureFr, fcfa } from '@/lib/format';
@@ -22,18 +22,14 @@ const STATUT_TRANSACTION: Record<string, { label: string; chip: string }> = {
 const ORIGINE: Record<string, string> = { menage: 'Espace du ménage', lien: 'Lien WhatsApp', tournee: 'Pendant la tournée' };
 
 /**
- * Ouverture du paiement en ligne pour le précollecteur : compte « connecté »
- * chez Notch Pay (vérification d'identité), l'argent arrive directement sur ce
- * compte, la commission MyKlinTown est prélevée à la source.
+ * Ouverture du paiement en ligne pour le précollecteur : MyKlinTown encaisse
+ * sur son compte Notch Pay, puis lui reverse les paiements, commission déduite.
  */
 export default async function PaiementEnLignePage({ searchParams }: { searchParams: Promise<{ erreur?: string }> }) {
   const { erreur } = await searchParams;
   const { supabase, entreprise } = await requireEntreprise();
   const disponible = paiementEnLigneDisponible();
-  let statut = entreprise.paiement_statut ?? 'inactif';
-  if (disponible && statut === 'en_verification') {
-    statut = (await rafraichirEtatCompte({ id: entreprise.id, paiement_compte_id: entreprise.paiement_compte_id ?? null, paiement_statut: statut })) as typeof statut;
-  }
+  const statut = entreprise.paiement_statut ?? 'inactif';
   const [taux, tx] = await Promise.all([
     parametre(supabase, 'commission_taux', 0.1),
     supabase
@@ -53,7 +49,7 @@ export default async function PaiementEnLignePage({ searchParams }: { searchPara
     <PrecoShell path="/precollecteur/facturation">
       <PageHeader
         titre="Paiement en ligne"
-        sousTitre="Vos clients paient par MTN Mobile Money ou Orange Money ; l’argent arrive directement sur votre compte."
+        sousTitre="Vos clients paient par MTN Mobile Money ou Orange Money, depuis leur téléphone."
         retour={{ href: '/precollecteur/facturation', label: 'Factures & relances' }}
       />
 
@@ -78,31 +74,25 @@ export default async function PaiementEnLignePage({ searchParams }: { searchPara
             <li className="rounded-lg bg-surface p-3"><Wallet size={16} className="mb-1 text-brand-blue" /> En tournée : « Encaisser » → Mobile Money, le client valide sur son téléphone.</li>
           </ul>
           <p className="mt-3 text-small text-muted-foreground">
-            Commission MyKlinTown de {pct} prélevée automatiquement sur chaque paiement ; le reste est versé sur votre compte Notch Pay.
+            MyKlinTown encaisse ces paiements puis vous les reverse, moins sa commission de {pct}.
           </p>
+          <form action={desactiverPaiementEnLigneAction} className="mt-3">
+            <SubmitButton variant="outline" pendingLabel="Fermeture…">Désactiver le paiement en ligne</SubmitButton>
+          </form>
         </section>
       ) : (
         <section className="card-soft mb-6 p-5 sm:p-6">
-          {statut === 'en_verification' ? (
-            <p className="flex items-center gap-2 text-h2-sm font-semibold text-terrain-relance"><Clock size={20} /> Vérification en cours chez Notch Pay</p>
-          ) : statut === 'refuse' ? (
-            <p className="flex items-center gap-2 text-h2-sm font-semibold text-terrain-stop"><XCircle size={20} /> Vérification refusée par Notch Pay</p>
-          ) : (
-            <p className="flex items-center gap-2 text-h2-sm font-semibold text-brand-ink"><ShieldCheck size={20} /> Activer le paiement en ligne</p>
-          )}
+          <p className="flex items-center gap-2 text-h2-sm font-semibold text-brand-ink"><ShieldCheck size={20} /> Activer le paiement en ligne</p>
           <ol className="mt-3 list-decimal space-y-1 pl-5 text-body-sm text-muted-foreground">
-            <li>Votre compte de paiement est créé chez Notch Pay, au nom de votre entreprise.</li>
-            <li>Notch Pay vérifie votre identité (pièce d’identité, coordonnées) : c’est la loi pour recevoir de l’argent.</li>
-            <li>Ensuite, chaque paiement d’un client arrive sur ce compte, moins la commission MyKlinTown ({pct}).</li>
+            <li>Vos clients paient leur facture par MTN Mobile Money ou Orange Money.</li>
+            <li>MyKlinTown encaisse le paiement : la facture passe aussitôt à « Payée ».</li>
+            <li>MyKlinTown vous reverse ces paiements, moins sa commission ({pct}).</li>
           </ol>
           <form action={activerPaiementEnLigneAction} className="mt-4">
             <SubmitButton pendingLabel="Ouverture…">
-              <ShieldCheck size={16} /> {statut === 'inactif' ? 'Activer le paiement en ligne' : 'Continuer la vérification'}
+              <ShieldCheck size={16} /> Activer le paiement en ligne
             </SubmitButton>
           </form>
-          {statut === 'refuse' && (
-            <p className="mt-3 text-small text-muted-foreground">Corrigez les informations demandées par Notch Pay, ou contactez l’équipe MyKlinTown.</p>
-          )}
         </section>
       )}
 

@@ -7,31 +7,22 @@ import { statutDepuisNotchPay, statutSimule, type Canal, type StatutPaiementEnLi
  *
  * Variables d'environnement (serveur uniquement, jamais NEXT_PUBLIC_) :
  *   NOTCHPAY_PUBLIC_KEY   clé publique (pk_…) — initialiser et suivre un paiement
- *   NOTCHPAY_PRIVATE_KEY  clé privée (sk_…) — comptes connectés (en-tête X-Grant)
+ *   NOTCHPAY_PRIVATE_KEY  clé privée (sk_…) — en-tête X-Grant (virements de reversement, à venir)
  *   NOTCHPAY_WEBHOOK_HASH clé de signature des notifications
  *   PAIEMENT_SIMULATION=1 mode simulation (poste local seulement, ignoré sur Vercel)
  *
- * Documentation suivie : developer.notchpay.co (paiement direct Mobile Money,
- * Sync pour les comptes connectés, notifications signées HMAC SHA-256).
- * ⚠️ Quelques points de cette documentation varient d'une page à l'autre
- * (désignation du compte connecté, chemin des comptes) : à confirmer en mode
- * test dès l'ouverture du compte Notch Pay.
+ * L'argent est encaissé sur le compte Notch Pay de MyKlinTown : Notch Pay a
+ * supprimé les comptes connectés (`/accounts` répond 410 « X-Sync and
+ * sub-accounts are no longer supported », constaté en sandbox le 26/10/2026).
  */
 
 export interface DemandePaiement {
   reference: string;
   montant: number;
-  commission: number;
-  compteConnecte: string | null;
   description: string;
   client: { nom: string; email?: string | null };
   canal: Canal;
   telephone: string;
-}
-
-export interface CompteConnecte {
-  id: string;
-  statut: 'en_verification' | 'actif' | 'refuse';
 }
 
 export interface Fournisseur {
@@ -39,9 +30,6 @@ export interface Fournisseur {
   /** Crée le paiement chez le fournisseur puis l'envoie sur le téléphone du payeur. */
   demander(d: DemandePaiement): Promise<{ fournisseurReference: string }>;
   statut(fournisseurReference: string, ctx: { telephone: string; creeLe: string }): Promise<{ statut: StatutPaiementEnLigne; message?: string }>;
-  creerCompte(e: { nom: string; email: string | null; telephone: string | null; entrepriseId: string }): Promise<string>;
-  lienVerification(compteId: string, retour: string): Promise<string>;
-  etatCompte(compteId: string): Promise<CompteConnecte['statut']>;
 }
 
 const API = 'https://api.notchpay.co';
@@ -72,18 +60,13 @@ export const notchPay: Fournisseur = {
   nom: 'notchpay',
 
   async demander(d) {
-    const corps: Record<string, unknown> = {
+    const corps = {
       amount: d.montant,
       currency: 'XAF',
       customer: { name: d.client.nom, phone: d.telephone, ...(d.client.email ? { email: d.client.email } : {}) },
       description: d.description,
       reference: d.reference,
     };
-    // Argent versé au précollecteur, commission MyKlinTown prélevée à la source.
-    if (d.compteConnecte) {
-      corps.application_fee = d.commission;
-      corps.destination = { account: d.compteConnecte, amount: d.montant - d.commission };
-    }
     const init = await appel('/payments', { method: 'POST', body: corps });
     const trx = init.transaction as { reference?: string } | undefined;
     if (!trx?.reference) throw new ErreurFournisseur('Réponse inattendue de Notch Pay (référence absente).');
@@ -99,41 +82,6 @@ export const notchPay: Fournisseur = {
     const trx = r.transaction as { status?: string } | undefined;
     return { statut: statutDepuisNotchPay(trx?.status) };
   },
-
-  async creerCompte(e) {
-    const r = await appel('/accounts', {
-      method: 'POST',
-      prive: true,
-      body: {
-        type: 'express',
-        business_profile: { name: e.nom, category: 'services' },
-        ...(e.email ? { email: e.email } : {}),
-        ...(e.telephone ? { phone: e.telephone } : {}),
-        metadata: { entreprise_id: e.entrepriseId },
-      },
-    });
-    const id = (r.account as { id?: string } | undefined)?.id ?? (r.id as string | undefined);
-    if (!id) throw new ErreurFournisseur('Réponse inattendue de Notch Pay (compte absent).');
-    return id;
-  },
-
-  async lienVerification(compteId, retour) {
-    const r = await appel(`/accounts/${encodeURIComponent(compteId)}/onboarding`, {
-      method: 'POST',
-      prive: true,
-      body: { callback: retour },
-    });
-    const url = (r.url as string | undefined) ?? (r.onboarding as { url?: string } | undefined)?.url;
-    if (!url) throw new ErreurFournisseur('Réponse inattendue de Notch Pay (lien de vérification absent).');
-    return url;
-  },
-
-  async etatCompte(compteId) {
-    const r = await appel(`/accounts/${encodeURIComponent(compteId)}`, { method: 'GET', prive: true });
-    const compte = (r.account ?? r) as { verification?: { status?: string } };
-    const s = compte.verification?.status;
-    return s === 'verified' ? 'actif' : s === 'rejected' ? 'refuse' : 'en_verification';
-  },
 };
 
 export const simulation: Fournisseur = {
@@ -144,23 +92,26 @@ export const simulation: Fournisseur = {
   async statut(_ref, ctx) {
     return statutSimule(ctx.telephone, Date.now() - new Date(ctx.creeLe).getTime());
   },
-  async creerCompte(e) {
-    return `sim_compte_${e.entrepriseId}`;
-  },
-  async lienVerification(_compteId, retour) {
-    return retour;
-  },
-  async etatCompte() {
-    return 'actif';
-  },
 };
 
 /** Référence du projet Supabase de production (publique : elle figure dans son adresse). */
 const REF_BASE_PRODUCTION = 'xglomngvjsgbwobiwfqp';
 
+/**
+ * Clé de TEST seulement hors de la vraie base, clé réelle seulement sur elle :
+ * sinon un paiement de test « réussi » réglerait une vraie facture, ou de
+ * l'argent réel serait enregistré dans une base de test.
+ */
+export function cleCompatibleAvecBase(cle: string, urlSupabase: string): boolean {
+  const cleDeTest = /^pk_test[._]/.test(cle);
+  const vraieBase = urlSupabase.includes(REF_BASE_PRODUCTION);
+  return cleDeTest ? !vraieBase : vraieBase;
+}
+
 /** Le fournisseur en service, ou null si le paiement en ligne n'est pas configuré. */
 export function fournisseurActif(): Fournisseur | null {
-  if (process.env.NOTCHPAY_PUBLIC_KEY) return notchPay;
+  const cle = process.env.NOTCHPAY_PUBLIC_KEY;
+  if (cle) return cleCompatibleAvecBase(cle, process.env.NEXT_PUBLIC_SUPABASE_URL ?? '') ? notchPay : null;
   // La simulation ne s'allume jamais sur Vercel, ni en production NI sur une
   // préversion : une préversion partage la vraie base, et de faux paiements y
   // régleraient de vraies factures (audit du 11/10/2026). Poste local seulement,
