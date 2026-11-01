@@ -8,7 +8,7 @@
     "avant-apres": "node avant-apres.mjs"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "0.5.8",
-    "@electric-sql/pglite-postgis": "0.2.8"
+    "@electric-sql/pglite": "0.5.13",
+    "@electric-sql/pglite-postgis": "0.2.13"
   }
 }
