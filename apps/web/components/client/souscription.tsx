@@ -129,7 +129,7 @@ export function Souscription({ plans, nomDefaut, telDefaut }: { plans: Plan[]; n
             <h2>Où habitez-vous ?</h2>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="field-label" htmlFor="s-nom">Nom du foyer</label>
+                <label className="field-label" htmlFor="s-nom">Votre nom ou celui de la structure</label>
                 <input id="s-nom" value={nom} onChange={(e) => setNom(e.target.value)} className="field" />
               </div>
               <div>
@@ -195,7 +195,7 @@ export function Souscription({ plans, nomDefaut, telDefaut }: { plans: Plan[]; n
                       key={t.entreprise_id}
                       className="flex cursor-pointer items-center gap-4 rounded-xl border border-input p-4 has-[:checked]:border-brand-green has-[:checked]:bg-brand-green/5"
                     >
-                      <input type="radio" name="precollecteur" value={t.entreprise_id} checked={choix === t.entreprise_id} onChange={() => setChoix(t.entreprise_id)} className="h-5 w-5 accent-[#3E9A5E]" />
+                      <input type="radio" name="precollecteur" value={t.entreprise_id} checked={choix === t.entreprise_id} onChange={() => setChoix(t.entreprise_id)} className="h-5 w-5 accent-[#30823A]" />
                       <span className="grid h-10 w-10 place-content-center rounded-lg bg-brand-teal/10 text-brand-teal"><Truck size={20} /></span>
                       <span className="flex-1">
                         <span className="block font-semibold text-brand-ink">{t.entreprise_nom}</span>

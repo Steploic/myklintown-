@@ -1,5 +1,6 @@
 /**
- * Charte du ménage et contrat d'abonnement (migration 20261019000014).
+ * Textes à accepter : charte et contrat de l'abonné (migration 20261019000014),
+ * conditions d'utilisation et charte du précollecteur (20261109000017).
  *
  * Le texte d'un document est du texte simple, découpé ici en blocs rendus en
  * nœuds texte React : jamais de HTML injecté (un texte saisi par un
@@ -12,14 +13,22 @@
  */
 import type { Supa } from './server';
 
-export type TypeDocument = 'charte_menage' | 'contrat_menage';
+export type TypeDocument = 'charte_menage' | 'contrat_menage' | 'cgu_precollecteur' | 'charte_precollecteur';
 
-export const TYPES_DOCUMENTS: readonly TypeDocument[] = ['charte_menage', 'contrat_menage'];
+export const TYPES_DOCUMENTS: readonly TypeDocument[] = ['charte_menage', 'contrat_menage', 'cgu_precollecteur', 'charte_precollecteur'];
 
 export const DOCUMENTS: Record<TypeDocument, { libelle: string; chemin: string }> = {
-  charte_menage: { libelle: 'Charte du ménage', chemin: '/legal/charte' },
+  charte_menage: { libelle: 'Charte de l’abonné', chemin: '/legal/charte' },
   contrat_menage: { libelle: 'Contrat d’abonnement', chemin: '/legal/contrat' },
+  cgu_precollecteur: { libelle: 'Conditions d’utilisation (précollecteurs)', chemin: '/legal/conditions-precollecteur' },
+  charte_precollecteur: { libelle: 'Charte du précollecteur', chemin: '/legal/charte-precollecteur' },
 };
+
+/** Textes que l'abonné accepte (en ligne, ou sur papier remis par son précollecteur). */
+export const TYPES_DOCUMENTS_ABONNE: readonly TypeDocument[] = ['charte_menage', 'contrat_menage'];
+
+/** Textes que le gérant accepte en créant son espace précollecteur. */
+export const DOCUMENTS_PRECOLLECTEUR: readonly TypeDocument[] = ['cgu_precollecteur', 'charte_precollecteur'];
 
 export function estTypeDocument(v: unknown): v is TypeDocument {
   return typeof v === 'string' && (TYPES_DOCUMENTS as readonly string[]).includes(v);

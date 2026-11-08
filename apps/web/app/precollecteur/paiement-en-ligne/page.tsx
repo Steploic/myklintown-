@@ -19,7 +19,7 @@ const STATUT_TRANSACTION: Record<string, { label: string; chip: string }> = {
   annule: { label: 'Annulé', chip: 'chip-neutre' },
   expire: { label: 'Expiré', chip: 'chip-neutre' },
 };
-const ORIGINE: Record<string, string> = { menage: 'Espace du ménage', lien: 'Lien WhatsApp', tournee: 'Pendant la tournée' };
+const ORIGINE: Record<string, string> = { menage: 'Espace de l’abonné', lien: 'Lien WhatsApp', tournee: 'Pendant la tournée' };
 
 /**
  * Ouverture du paiement en ligne pour le précollecteur : MyKlinTown encaisse

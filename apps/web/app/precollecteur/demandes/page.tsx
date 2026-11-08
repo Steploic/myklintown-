@@ -36,7 +36,7 @@ export default async function DemandesPage({ searchParams }: { searchParams: Pro
     <PrecoShell path="/precollecteur/demandes">
       <PageHeader
         titre="Demandes en attente"
-        sousTitre="Des ménages veulent être collectés là où aucun précollecteur n’est encore attitré. Prenez-les en charge : ils deviennent vos clients. Position approximative (à 100 m près) : le nom, le téléphone et l’adresse exacte s’affichent dans la fiche client, une fois la demande prise."
+        sousTitre="Des abonnés veulent être collectés là où aucun précollecteur n’est encore attitré. Prenez-les en charge : ils deviennent vos clients. Position approximative (à 100 m près) : le nom, le téléphone et l’adresse exacte s’affichent dans la fiche client, une fois la demande prise."
       />
       {erreur && (
         <p role="alert" className="mb-4 flex items-start gap-2 rounded-md border border-terrain-stop/25 bg-terrain-stop/5 px-3 py-2 text-body-sm text-terrain-stop">
@@ -45,7 +45,7 @@ export default async function DemandesPage({ searchParams }: { searchParams: Pro
       )}
       {demandes.length === 0 ? (
         <div className="card-soft">
-          <EmptyState icon={Inbox} titre="Aucune demande en attente" texte="Les ménages hors zone qui demandent un précollecteur apparaîtront ici." />
+          <EmptyState icon={Inbox} titre="Aucune demande en attente" texte="Les abonnés hors zone qui demandent un précollecteur apparaîtront ici." />
         </div>
       ) : (
         <div className="grid gap-6 lg:grid-cols-[1fr_24rem]">
@@ -58,7 +58,7 @@ export default async function DemandesPage({ searchParams }: { searchParams: Pro
                   lng: d.lng,
                   ton: 'info',
                   picto: 'demande',
-                  titre: d.quartier ?? 'Ménage en attente',
+                  titre: d.quartier ?? 'Abonné en attente',
                   lignes: [[d.plan_nom, d.plan_prix != null ? fcfa(d.plan_prix) : null].filter(Boolean).join(' · ')],
                 }))}
                 legende={[{ ton: 'info', label: 'Demandes en attente' }]}

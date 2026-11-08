@@ -7,6 +7,7 @@ import { creerEntrepriseAction } from '@/lib/precollecteur/actions';
 import { ActionForm, SubmitButton } from '@/components/ui/action-form';
 import { rows } from '@/lib/server';
 import { getCurrentProfile } from '@/lib/get-profile';
+import { DOCUMENTS } from '@/lib/documents';
 import { SelecteurEspace } from '@/components/selecteur-espace';
 
 export const metadata = { title: 'Créer mon entreprise' };
@@ -34,28 +35,35 @@ export default async function DemarragePage() {
             </div>
           )}
         </div>
-        <div className="mt-10 grid gap-10 lg:grid-cols-[1fr_28rem] lg:items-start">
+        <div className="mt-10 grid gap-10 lg:grid-cols-[1fr_30rem] lg:items-start">
           <div className="space-y-5">
-            <p className="text-small font-semibold uppercase tracking-wider text-brand-leaf">Étape 1 sur 1</p>
+            <p className="text-small font-semibold uppercase tracking-wider text-brand-leaf">Étape 1 sur 2</p>
             <h1 className="text-[2rem] font-bold leading-tight text-white md:text-[2.5rem]">
               Votre entreprise de précollecte, dans votre poche.
             </h1>
             <p className="max-w-lg text-body text-white/75">
-              Donnez un nom à votre activité : c’est lui que verront vos clients sur leurs factures et
-              leurs reçus. Vous pourrez ensuite enregistrer vos ménages, votre flotte et vos tournées.
+              Créez votre espace gratuitement, sans engagement. Déposez ensuite les pièces de votre dossier : une fois
+              vérifié par MyKlinTown, vous apparaissez dans l’annuaire des abonnés de vos quartiers.
             </p>
             <ul className="space-y-2 text-body-sm text-white/85">
               {[
                 'Vos clients, leurs abonnements et leurs paiements au même endroit',
                 'Relances d’impayés en un geste (WhatsApp, SMS, appel)',
                 'Preuves photo et vidéo prises sur le terrain',
-                'Tableau de bord : clients actifs, chiffre d’affaires, collectes',
+                'Une vitrine dans l’annuaire : nom, logo et devise, dans vos quartiers',
               ].map((t) => (
                 <li key={t} className="flex items-start gap-2">
                   <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-brand-leaf" /> {t}
                 </li>
               ))}
             </ul>
+            <div className="max-w-lg rounded-xl border border-white/15 bg-white/5 p-4 text-body-sm text-white/80">
+              <p className="font-semibold text-white">Étape 2 : votre dossier</p>
+              <p className="mt-1">
+                NIU, adresse du siège social, autorisation territoriale de chaque commune d’activité, permis
+                environnemental. Vous pouvez les déposer plus tard, depuis votre espace.
+              </p>
+            </div>
           </div>
 
           <ActionForm action={creerEntrepriseAction} className="rounded-2xl bg-surface p-6 text-foreground shadow-elevated">
@@ -70,25 +78,6 @@ export default async function DemarragePage() {
             </div>
             <div className="space-y-4">
               <div>
-                <label htmlFor="code" className="field-label">
-                  Code d’agrément {estAdmin ? <span className="font-normal text-muted-foreground">(facultatif pour un administrateur)</span> : '*'}
-                </label>
-                <input
-                  id="code"
-                  name="code"
-                  required={!estAdmin}
-                  autoComplete="off"
-                  autoCapitalize="characters"
-                  spellCheck={false}
-                  className="field num uppercase tracking-widest"
-                  placeholder="ABCDE-FGHJK"
-                />
-                <p className="field-hint">
-                  Délivré par la Mairie de votre commune : exercer sur son territoire demande son autorisation. Vous n’en avez pas ?
-                  Demandez-le-lui.
-                </p>
-              </div>
-              <div>
                 <label htmlFor="nom" className="field-label">Nom de l’entreprise *</label>
                 <input id="nom" name="nom" required className="field" placeholder="ex. Propreté Nsam SARL" />
               </div>
@@ -96,20 +85,46 @@ export default async function DemarragePage() {
                 <label htmlFor="telephone" className="field-label">Téléphone de contact</label>
                 <input id="telephone" name="telephone" type="tel" className="field" placeholder="6 XX XX XX XX" />
               </div>
-              <div>
-                <label htmlFor="commune_id" className="field-label">Commune d’activité</label>
-                <select id="commune_id" name="commune_id" className="field" defaultValue="">
-                  <option value="">— Choisir —</option>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="niu" className="field-label">NIU</label>
+                  <input id="niu" name="niu" maxLength={30} autoCapitalize="characters" className="field num uppercase" placeholder="ex. M012345678901A" />
+                </div>
+                <div>
+                  <label htmlFor="siege" className="field-label">Adresse du siège social</label>
+                  <input id="siege" name="siege" className="field" placeholder="ex. Nsam, face pharmacie" />
+                </div>
+              </div>
+              <p className="field-hint -mt-2">NIU et siège social sont exigés pour la vérification du dossier.</p>
+              <fieldset>
+                <legend className="field-label">Communes d’activité</legend>
+                <div className="grid max-h-44 gap-1.5 overflow-y-auto rounded-md border border-input p-2 sm:grid-cols-2">
                   {communes.map((c) => (
-                    <option key={c.id} value={c.id}>{c.nom}</option>
+                    <label key={c.id} className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-body-sm hover:bg-muted">
+                      <input type="checkbox" name="communes" value={c.id} className="h-4 w-4 accent-[#30823A]" /> {c.nom}
+                    </label>
                   ))}
-                </select>
-                <p className="field-hint">Si votre code d’agrément est délivré pour une commune, c’est elle qui est retenue : sa Mairie vous supervise.</p>
+                </div>
+                <p className="field-hint">Une autorisation territoriale sera demandée pour chacune.</p>
+              </fieldset>
+              <div>
+                <label htmlFor="quartiers" className="field-label">Quartiers desservis</label>
+                <textarea id="quartiers" name="quartiers" rows={2} className="field" placeholder="ex. Nsam, Efoulan, Mvan" />
+                <p className="field-hint">Séparés par des virgules : c’est là que les abonnés vous trouveront dans l’annuaire.</p>
               </div>
               <div>
-                <label htmlFor="siege" className="field-label">Quartier / siège</label>
-                <input id="siege" name="siege" className="field" placeholder="ex. Nsam, face pharmacie" />
+                <label htmlFor="devise" className="field-label">Devise de l’entreprise</label>
+                <input id="devise" name="devise" maxLength={120} className="field" placeholder="ex. Votre quartier propre, chaque semaine" />
               </div>
+              <label className="flex items-start gap-3 rounded-lg border border-input p-3 text-body-sm">
+                <input type="checkbox" name="conditions" required className="mt-0.5 h-5 w-5 shrink-0 accent-[#30823A]" />
+                <span>
+                  J’ai lu et j’accepte les{' '}
+                  <Link href={DOCUMENTS.cgu_precollecteur.chemin} target="_blank" className="font-semibold text-brand-blue underline">conditions d’utilisation</Link>{' '}
+                  et la{' '}
+                  <Link href={DOCUMENTS.charte_precollecteur.chemin} target="_blank" className="font-semibold text-brand-blue underline">charte du précollecteur</Link>.
+                </span>
+              </label>
               <SubmitButton className="w-full" pendingLabel="Création…">
                 Créer mon espace
               </SubmitButton>

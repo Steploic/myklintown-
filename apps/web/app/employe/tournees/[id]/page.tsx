@@ -133,7 +133,7 @@ export default async function TourneeEmploye({
           <EmptyState
             icon={Flag}
             titre="Aucun passage prévu"
-            texte="Scannez le QR code d’un foyer : son passage s’ajoute à la tournée."
+            texte="Scannez le QR code d’un abonné : son passage s’ajoute à la tournée."
           />
         </div>
       )}

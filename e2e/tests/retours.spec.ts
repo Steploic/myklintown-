@@ -76,7 +76,7 @@ test.describe('précollecteur : retours de test', () => {
     const A = await compte('precoA', 'precollecteur');
     try {
       await page.goto('/precollecteur/clients/nouveau');
-      await page.getByLabel('Nom du client / du foyer *').fill('  famille   NGONO-ESSO ');
+      await page.getByLabel('Nom de l’abonné (personne ou structure) *').fill('  famille   NGONO-ESSO ');
       await page.getByLabel('Téléphone').fill('677 11 22 33');
       await page.getByLabel('Quartier').fill('mvog-ada');
       await page.getByRole('radio', { name: /Mensuel/ }).check({ force: true });
@@ -117,8 +117,9 @@ test.describe('connexion et déconnexion', () => {
 
 test.describe('R1 — accès Mairie sur demande', () => {
   test('page publique : explication et formulaire complet', async ({ page }) => {
+    // L'encart Mairies a quitté l'accueil (retours de l'équipe, 08/11/2026) : l'accès reste au pied de page.
     await page.goto('/');
-    await page.getByRole('link', { name: 'Demander un accès' }).first().click();
+    await page.locator('footer').getByRole('link', { name: 'Mairie (sur demande)' }).click();
     await expect(page).toHaveURL(/\/acces-mairie$/);
     await expect(page.getByRole('heading', { name: 'Accès Mairie' })).toBeVisible();
     for (const champ of ['Nom complet *', 'E-mail professionnel *', 'Mot de passe *', 'Commune *', 'Fonction *']) {

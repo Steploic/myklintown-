@@ -134,10 +134,10 @@ export function EmptyState({
 export function PixelDots({ className }: { className?: string }) {
   return (
     <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden className={className}>
-      <rect x="0" y="4" width="4" height="4" fill="#2B6CB0" opacity="0.85" />
-      <rect x="6" y="0" width="3" height="3" fill="#2B6CB0" opacity="0.6" />
-      <rect x="5" y="10" width="3" height="3" fill="#2E7F8E" opacity="0.55" />
-      <rect x="11" y="5" width="2" height="2" fill="#2E7F8E" opacity="0.45" />
+      <rect x="0" y="4" width="4" height="4" fill="#2563EB" opacity="0.85" />
+      <rect x="6" y="0" width="3" height="3" fill="#2563EB" opacity="0.6" />
+      <rect x="5" y="10" width="3" height="3" fill="#17B8A4" opacity="0.55" />
+      <rect x="11" y="5" width="2" height="2" fill="#17B8A4" opacity="0.45" />
     </svg>
   );
 }

@@ -1,5 +1,5 @@
 import { rpc, type Supa } from './server';
-import { fonctionAbsente, TYPES_DOCUMENTS, type TypeDocument } from './documents';
+import { fonctionAbsente, TYPES_DOCUMENTS_ABONNE, type TypeDocument } from './documents';
 
 /**
  * Enregistre l'acceptation de la dernière version publiée de la charte et du
@@ -11,7 +11,7 @@ import { fonctionAbsente, TYPES_DOCUMENTS, type TypeDocument } from './documents
  */
 export async function enregistrerAcceptation(
   supabase: Supa,
-  { types = TYPES_DOCUMENTS, clientId = null }: { types?: readonly TypeDocument[]; clientId?: string | null } = {},
+  { types = TYPES_DOCUMENTS_ABONNE, clientId = null }: { types?: readonly TypeDocument[]; clientId?: string | null } = {},
 ): Promise<string | null> {
   if (!types.length) return null;
   const { error } = await rpc(supabase, 'accepter_documents', { p_types: [...types], p_client: clientId });

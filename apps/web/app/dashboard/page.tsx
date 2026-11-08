@@ -69,7 +69,7 @@ export default async function SupervisionPage() {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <Kpi label="Précollecteurs actifs" valeur={nombre(actifs)} detail={`${precos.length} inscrits`} icon={Truck} ton="info" href="/dashboard/precollecteurs" />
         <Kpi label="Zones couvertes" valeur={`${couvertes} / ${zones.length}`} detail={`${zones.length - couvertes} sans précollecteur`} icon={MapIcon} ton={zones.length - couvertes > 0 ? 'relance' : 'ok'} href="/dashboard/zones" />
-        <Kpi label="Ménages abonnés" valeur={nombre(clients)} detail="actifs, toutes zones" icon={Users} ton="ok" />
+        <Kpi label="Abonnés" valeur={nombre(clients)} detail="actifs, toutes zones" icon={Users} ton="ok" />
         <Kpi label="Collectes (30 j)" valeur={nombre(realisees)} detail={`sur ${nombre(prevues)} prévues · ${pct(realisees, prevues)}`} icon={CheckCircle2} ton="ok" />
         <Kpi label="Incidents ouverts" valeur={nombre(incidents)} detail="avec preuves" icon={AlertTriangle} ton={incidents ? 'stop' : 'neutre'} href="/dashboard/incidents" />
       </div>
@@ -79,7 +79,7 @@ export default async function SupervisionPage() {
           <EmptyState
             icon={Shapes}
             titre="Le territoire n’est pas encore découpé"
-            texte="Tracez les zones de collecte de la commune, puis affectez-y les précollecteurs. Les ménages seront automatiquement orientés vers le précollecteur de leur zone."
+            texte="Tracez les zones de collecte de la commune, puis affectez-y les précollecteurs. Les abonnés seront automatiquement orientés vers le précollecteur de leur zone."
             action={<Link href="/dashboard/zones" className="btn-primary">Dessiner la première zone</Link>}
           />
         </div>
@@ -94,7 +94,7 @@ export default async function SupervisionPage() {
                   couleur: x.couleur,
                   contour: x.contour,
                   attribuee: x.precollecteurs.length > 0,
-                  etiquette: `${x.precollecteurs.join(', ') || 'Non attribuée'} · ${x.nb_clients_actifs} ménages`,
+                  etiquette: `${x.precollecteurs.join(', ') || 'Non attribuée'} · ${x.nb_clients_actifs} abonnés`,
                 }))}
               />
             </Section>
@@ -115,7 +115,7 @@ export default async function SupervisionPage() {
 
           {nbDemandes > 0 && (
             <Section
-              titre={`${nbDemandes} ménage${nbDemandes > 1 ? 's' : ''} sans précollecteur`}
+              titre={`${nbDemandes} abonné${nbDemandes > 1 ? 's' : ''} sans précollecteur`}
               sousTitre="Demandes d’abonnement là où aucun précollecteur n’est attitré : zones à créer ou à attribuer."
               className="mt-6"
               flush
@@ -144,7 +144,7 @@ export default async function SupervisionPage() {
                   <tr>
                     <th>Zone</th>
                     <th>Précollecteur(s)</th>
-                    <th className="text-right">Ménages actifs</th>
+                    <th className="text-right">Abonnés actifs</th>
                     <th className="text-right">Collectes 30 j</th>
                     <th className="text-right">Exécution</th>
                     <th className="text-right">Incidents</th>

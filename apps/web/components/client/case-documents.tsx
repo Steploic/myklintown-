@@ -23,12 +23,12 @@ export function CaseDocuments({
         type="checkbox"
         required
         {...(onChange ? { checked: !!checked, onChange: (e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.checked) } : {})}
-        className="mt-0.5 h-5 w-5 shrink-0 accent-[#3E9A5E]"
+        className="mt-0.5 h-5 w-5 shrink-0 accent-[#30823A]"
       />
       <span>
         J’ai lu et j’accepte la{' '}
         <a href={DOCUMENTS.charte_menage.chemin} target="_blank" rel="noreferrer" className="font-semibold text-brand-blue underline">
-          charte du ménage
+          charte de l’abonné
         </a>{' '}
         et le{' '}
         <a href={DOCUMENTS.contrat_menage.chemin} target="_blank" rel="noreferrer" className="font-semibold text-brand-blue underline">

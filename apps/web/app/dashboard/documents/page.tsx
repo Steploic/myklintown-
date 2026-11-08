@@ -14,7 +14,7 @@ import { DOCUMENTS, TYPES_DOCUMENTS, type DocumentLegal } from '@/lib/documents'
 import { getSupabase, row, rows, utilisateurCourant } from '@/lib/server';
 import { dateFr, nombre } from '@/lib/format';
 
-export const metadata = { title: 'Charte et contrat' };
+export const metadata = { title: 'Textes à accepter' };
 
 const AIDE_FORMAT = 'Texte simple : « ## Titre » pour une section, « - » en début de ligne pour une liste, une ligne vide entre deux paragraphes.';
 
@@ -36,8 +36,8 @@ export default async function DocumentsPage() {
   return (
     <PortalShell portalKey="mairie" currentPath="/dashboard/documents">
       <PageHeader
-        titre="Charte et contrat"
-        sousTitre="Textes que chaque ménage accepte (en ligne, ou sur papier remis par son précollecteur). Une version publiée ne se modifie plus : on en publie une nouvelle, que les ménages acceptent à leur tour."
+        titre="Textes à accepter"
+        sousTitre="Charte et contrat de l’abonné (acceptés en ligne, ou sur papier remis par son précollecteur) ; conditions d’utilisation et charte du précollecteur (acceptées à la création de son espace). Une version publiée ne se modifie plus : on en publie une nouvelle, présentée de nouveau pour acceptation."
       />
       <div className="grid gap-6">
         {TYPES_DOCUMENTS.map((type) => {
@@ -88,8 +88,8 @@ export default async function DocumentsPage() {
                       <ActionForm action={publierVersionAction} className="flex-1 space-y-2">
                         <input type="hidden" name="id" value={b.id} />
                         <label className="flex items-start gap-2 text-body-sm">
-                          <input type="checkbox" name="confirmer" required className="mt-0.5 h-5 w-5 shrink-0 accent-[#3E9A5E]" />
-                          <span>J’ai relu cette version. Publiée, elle ne se modifie plus et chaque ménage devra l’accepter.</span>
+                          <input type="checkbox" name="confirmer" required className="mt-0.5 h-5 w-5 shrink-0 accent-[#30823A]" />
+                          <span>J’ai relu cette version. Publiée, elle ne se modifie plus et chaque abonné devra l’accepter.</span>
                         </label>
                         <SubmitButton pendingLabel="Publication…">Publier la version {b.version}</SubmitButton>
                       </ActionForm>
@@ -135,8 +135,8 @@ function ChampsTexte({ titre, contenu, provisoire, prefixe }: { titre: string; c
         <p className="field-hint">{AIDE_FORMAT}</p>
       </div>
       <label className="flex items-center gap-2 text-body-sm">
-        <input type="checkbox" name="provisoire" defaultChecked={provisoire} className="h-5 w-5 accent-[#3E9A5E]" />
-        Version provisoire (signalée aux ménages comme telle)
+        <input type="checkbox" name="provisoire" defaultChecked={provisoire} className="h-5 w-5 accent-[#30823A]" />
+        Version provisoire (signalée aux abonnés comme telle)
       </label>
     </>
   );

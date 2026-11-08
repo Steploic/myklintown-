@@ -52,6 +52,8 @@ async function essaiAnnule(db, qui, fn) {
 /** Migration 0016 (une Mairie par commune) présente dans la base ? */
 const avec0016 = (db) => valeur(db, `select to_regclass('public.mairie_communes') is not null`);
 const avecCodes = (db) => valeur(db, `select to_regclass('public.codes_agrement') is not null`);
+/** Migration 0017 (dossier du précollecteur, annuaire) présente dans la base ? */
+const avec0017 = (db) => valeur(db, `select to_regclass('public.entreprise_communes') is not null`);
 
 /**
  * Précollecteur agréé par une Mairie pour sa commune (code d'agrément, depuis
@@ -784,6 +786,98 @@ export const ATTAQUES = [
       return lus > 0;
     },
   },
+  {
+    id: 'dossier-auto-validation',
+    titre: 'Un gérant valide lui-même son dossier (mise à jour directe ou fonction de l’administrateur)',
+    async jouer(db, s) {
+      if (!(await avec0017(db))) return false;
+      const direct = await accepte(db, s.gerantA, `update public.entreprises set dossier_statut = 'valide' where id = $1`, [s.entA]);
+      const fonction = await accepte(db, s.gerantA, `select public.statuer_dossier($1, 'valide')`, [s.entA]);
+      return direct || fonction;
+    },
+  },
+  {
+    id: 'vitrine-autrui',
+    titre: 'Un précollecteur change la devise ou les quartiers d’un autre',
+    async jouer(db, s) {
+      if (!(await avec0017(db))) return false;
+      await accepte(db, s.gerantB, `update public.entreprises set devise = 'Piraté', quartiers = '{Partout}' where id = $1`, [s.entA]);
+      return (await valeur(db, `select devise from public.entreprises where id = $1`, [s.entA])) === 'Piraté';
+    },
+  },
+  {
+    id: 'annuaire-non-verifie',
+    titre: 'L’annuaire public montre un précollecteur dont le dossier n’est pas vérifié',
+    async jouer(db, s) {
+      if (!(await avec0017(db))) return false;
+      await db.query(`update public.entreprises set quartiers = '{Nsam}', dossier_statut = 'soumis' where id = $1`, [s.entB]);
+      const ids = await comme(db, 'anon', async (tx) => (await tx.query(`select id from public.annuaire_precollecteurs('nsam')`)).rows.map((r) => r.id));
+      await db.query(`update public.entreprises set quartiers = '{}', dossier_statut = 'incomplet' where id = $1`, [s.entB]);
+      return ids.includes(s.entB);
+    },
+  },
+  {
+    id: 'annuaire-fuite',
+    titre: 'L’annuaire public révèle autre chose que le nom, le logo et la devise (téléphone, NIU, adresse…)',
+    async jouer(db, s) {
+      if (!(await avec0017(db))) return false;
+      await db.query(`update public.entreprises set quartiers = '{Nsam}', dossier_statut = 'valide', niu = 'M012345678901A' where id = $1`, [s.entA]);
+      const lignes = await comme(db, 'anon', async (tx) => (await tx.query(`select * from public.annuaire_precollecteurs('NSAM')`)).rows);
+      await db.query(`update public.entreprises set quartiers = '{}', dossier_statut = 'incomplet', niu = null where id = $1`, [s.entA]);
+      const a = lignes.find((l) => l.id === s.entA);
+      return !!a && Object.keys(a).sort().join() !== 'devise,id,logo_path,nom';
+    },
+  },
+  {
+    id: 'annuaire-joker',
+    titre: 'Un joker dans la recherche (« % », « _ ») liste tout l’annuaire',
+    async jouer(db, s) {
+      if (!(await avec0017(db))) return false;
+      await db.query(`update public.entreprises set quartiers = '{Bastos}', dossier_statut = 'valide' where id = $1`, [s.entA]);
+      let trouve = false;
+      for (const q of ['%%', '%_%', '__', '% %']) {
+        const n = await comme(db, 'anon', (tx) => valeur(tx, `select count(*)::int from public.annuaire_precollecteurs($1)`, [q]));
+        if (n > 0) trouve = true;
+      }
+      await db.query(`update public.entreprises set quartiers = '{}', dossier_statut = 'incomplet' where id = $1`, [s.entA]);
+      return trouve;
+    },
+  },
+  {
+    id: 'dossier-pieces-autrui',
+    titre: 'Un autre précollecteur, la Mairie, un employé ou un abonné lit les pièces du dossier d’un précollecteur',
+    async jouer(db, s) {
+      if (!(await avec0017(db))) return false;
+      await db.query(`insert into storage.objects (bucket_id, name, owner) values ('dossiers', $1, $2)`, [`${s.entA}/permis-test.pdf`, s.gerantA]);
+      for (const qui of [s.gerantB, s.mairie, s.employe, s.menage]) {
+        const n = await comme(db, qui, (tx) => valeur(tx, `select count(*)::int from storage.objects where bucket_id = 'dossiers' and name like $1`, [`${s.entA}/%`]));
+        if (n > 0) return true;
+      }
+      return false;
+    },
+  },
+  {
+    id: 'dossier-depot-autrui',
+    titre: 'Un précollecteur dépose une pièce ou un logo dans le dossier d’un autre, ou enregistre comme sienne une pièce d’un autre',
+    async jouer(db, s) {
+      if (!(await avec0017(db))) return false;
+      for (const bucket of ['dossiers', 'logos']) {
+        if (await accepte(db, s.gerantB, `insert into storage.objects (bucket_id, name) values ($1, $2)`, [bucket, `${s.entA}/faux-${bucket}.png`])) return true;
+      }
+      return accepte(db, s.gerantB, `select public.enregistrer_piece_dossier('permis', $1)`, [`${s.entA}/permis-test.pdf`]);
+    },
+  },
+  {
+    id: 'conditions-precollecteur-hors-gerant',
+    titre: 'Un abonné ou un employé accepte les conditions du précollecteur au nom d’une entreprise',
+    async jouer(db, s) {
+      if (!(await avec0017(db))) return false;
+      for (const qui of [s.menage, s.employe]) {
+        if (await accepte(db, qui, `select public.accepter_documents(array['cgu_precollecteur'])`)) return true;
+      }
+      return false;
+    },
+  },
 ];
 
 /** Migration 0014 (facture inaltérable, charte) présente dans la base ? */
@@ -1195,6 +1289,83 @@ export const PARCOURS = [
     },
   },
   {
+    titre: 'Précollecteur inscrit sans code d’agrément : dossier complété, soumis, refusé puis validé, visible dans l’annuaire ; un NIU changé le renvoie en vérification',
+    async jouer(db, s) {
+      if (!(await avec0017(db))) return;
+      const g = await creerCompte(db, `dossier.${Date.now()}@test.cm`, 'precollecteur');
+      if (await accepte(db, g, `select public.inscrire_mon_entreprise('Propreté Ekounou', p_conditions_acceptees => false)`)) {
+        throw new Error('inscription acceptée sans la case des conditions');
+      }
+      const ent = await comme(db, g, (tx) => valeur(tx,
+        `select public.inscrire_mon_entreprise('Propreté Ekounou', '690112233', null, 'm 0123-45678901a', 'Votre quartier, propre',
+                                               $1::uuid[], array['Ékounou', 'ekounou ', 'Nkolndongo'], true)`, [[s.yde3]]));
+      const e = (await db.query(`select niu, quartiers, dossier_statut, commune_id from public.entreprises where id = $1`, [ent])).rows[0];
+      if (e.niu !== 'M012345678901A' || e.quartiers.join() !== 'Ékounou,Nkolndongo' || e.dossier_statut !== 'incomplet' || e.commune_id !== s.yde3) {
+        throw new Error(JSON.stringify(e));
+      }
+      const acceptes = await valeur(db, `select count(*)::int from public.acceptations_documents a join public.documents_legaux d on d.id = a.document_id
+        where a.user_id = $1 and a.entreprise_id = $2 and d.type in ('cgu_precollecteur', 'charte_precollecteur')`, [g, ent]);
+      if (acceptes !== 2) throw new Error(`conditions acceptées : ${acceptes}`);
+
+      const visible = () => comme(db, 'anon', async (tx) =>
+        (await tx.query(`select id from public.annuaire_precollecteurs('ekounou')`)).rows.some((r) => r.id === ent));
+      if (await visible()) throw new Error('visible avant vérification');
+      let message = '';
+      await comme(db, g, (tx) => tx.query(`select public.soumettre_mon_dossier()`)).catch((er) => { message = er.message; });
+      if (!/siège social/.test(message) || !/autorisation/.test(message) || !/permis/.test(message)) throw new Error(`pièces manquantes : ${message}`);
+
+      // Comme l'application : le fichier dans le stockage, puis son enregistrement.
+      await comme(db, g, async (tx) => {
+        await tx.query(`insert into storage.objects (bucket_id, name) values ('dossiers', $1), ('dossiers', $2), ('logos', $3)`,
+          [`${ent}/autorisation-yde3.jpg`, `${ent}/permis.pdf`, `${ent}/logo.png`]);
+        await tx.query(`update public.entreprises set siege = 'Ekounou, face à l''école publique' where id = $1`, [ent]);
+        await tx.query(`select public.enregistrer_piece_dossier('autorisation', $1, $2)`, [`${ent}/autorisation-yde3.jpg`, s.yde3]);
+        await tx.query(`select public.enregistrer_piece_dossier('permis', $1)`, [`${ent}/permis.pdf`]);
+        await tx.query(`select public.enregistrer_piece_dossier('logo', $1)`, [`${ent}/logo.png`]);
+        await tx.query(`select public.soumettre_mon_dossier()`);
+      });
+      if ((await valeur(db, `select dossier_statut from public.entreprises where id = $1`, [ent])) !== 'soumis') throw new Error('dossier non soumis');
+      const lisible = await comme(db, s.admin, (tx) => valeur(tx, `select count(*)::int from storage.objects where bucket_id = 'dossiers' and name like $1`, [`${ent}/%`]));
+      if (lisible !== 2) throw new Error(`pièces lisibles par l’administrateur : ${lisible}`);
+
+      if (await accepte(db, s.admin, `select public.statuer_dossier($1, 'refuse')`, [ent])) throw new Error('refus sans motif accepté');
+      await comme(db, s.admin, (tx) => tx.query(`select public.statuer_dossier($1, 'refuse', 'Permis illisible')`, [ent]));
+      if ((await valeur(db, `select dossier_motif from public.entreprises where id = $1`, [ent])) !== 'Permis illisible') throw new Error('motif perdu');
+      await comme(db, g, (tx) => tx.query(`select public.soumettre_mon_dossier()`));
+      await comme(db, s.admin, (tx) => tx.query(`select public.statuer_dossier($1, 'valide')`, [ent]));
+      if (!(await visible())) throw new Error('invisible après validation');
+
+      const ligne = await comme(db, 'anon', async (tx) => (await tx.query(`select * from public.annuaire_precollecteurs('Ékounou')`)).rows.find((r) => r.id === ent));
+      if (ligne?.devise !== 'Votre quartier, propre' || ligne?.logo_path !== `${ent}/logo.png`) throw new Error(JSON.stringify(ligne));
+      const parCommune = await comme(db, 'anon', async (tx) =>
+        (await tx.query(`select id from public.annuaire_precollecteurs('Yaoundé III')`)).rows.some((r) => r.id === ent));
+      if (!parCommune) throw new Error('introuvable par sa commune');
+
+      await comme(db, g, (tx) => tx.query(`update public.entreprises set niu = 'M999999999999Z' where id = $1`, [ent]));
+      if ((await valeur(db, `select dossier_statut from public.entreprises where id = $1`, [ent])) !== 'soumis') throw new Error('NIU changé sans nouvelle vérification');
+      if (await visible()) throw new Error('encore visible pendant la nouvelle vérification');
+    },
+  },
+  {
+    titre: 'Le gérant tient sa vitrine (devise, quartiers) et ses communes ; une commune ajoutée sur un dossier validé le renvoie en vérification',
+    async jouer(db, s) {
+      if (!(await avec0017(db))) return;
+      await comme(db, s.gerantD, (tx) => tx.query(`select public.mettre_a_jour_ma_vitrine('Douala propre', array['Bonanjo', ' akwa  nord'])`));
+      let e = (await db.query(`select devise, quartiers from public.entreprises where id = $1`, [s.entD])).rows[0];
+      if (e.devise !== 'Douala propre' || e.quartiers.join() !== 'Bonanjo,Akwa Nord') throw new Error(JSON.stringify(e));
+      await db.query(`update public.entreprises set dossier_statut = 'valide' where id = $1`, [s.entD]);
+      await comme(db, s.gerantD, (tx) => tx.query(`select public.definir_mes_communes($1::uuid[])`, [[s.dla1, s.yde3]]));
+      e = (await db.query(`select dossier_statut, commune_id from public.entreprises where id = $1`, [s.entD])).rows[0];
+      if (e.dossier_statut !== 'soumis' || e.commune_id !== s.dla1) throw new Error(JSON.stringify(e));
+      const n = await valeur(db, `select count(*)::int from public.entreprise_communes where entreprise_id = $1`, [s.entD]);
+      if (n !== 2) throw new Error(`communes d’activité : ${n}`);
+      // Remise en état : D ne garde que Douala I, dossier incomplet, vitrine vide.
+      await comme(db, s.gerantD, (tx) => tx.query(`select public.definir_mes_communes($1::uuid[])`, [[s.dla1]]));
+      await comme(db, s.gerantD, (tx) => tx.query(`select public.mettre_a_jour_ma_vitrine(null, '{}')`));
+      await db.query(`update public.entreprises set dossier_statut = 'incomplet' where id = $1`, [s.entD]);
+    },
+  },
+  {
     titre: 'Migration 0015 rejouée : comptes « enterprise » et « collecteur » convertis en ménage, rôle d’origine gardé, centre affiné conservé',
     async jouer(db) {
       const sql = migration('20261019000015');
@@ -1581,6 +1752,25 @@ export const PARCOURS = [
             [r.user_id, r.commune_id, r.accorde_at, r.accorde_par]);
         }
       }
+    },
+  },
+  // Après le rejeu de 0016 : rétablit aussi les fonctions et le garde-fou de 0017.
+  {
+    titre: 'Migration 0017 rejouée : dossiers, communes d’activité et textes inchangés ; contrôle final « OK »',
+    async jouer(db) {
+      const sql = migration('20261109000017');
+      if (!sql) return;
+      const photo = async () => JSON.stringify((await db.query(`select
+        (select string_agg(id || ':' || dossier_statut || ':' || array_to_string(quartiers, '|') || ':' || coalesce(devise, '-'), ',' order by id) from public.entreprises) as entreprises,
+        (select string_agg(entreprise_id || ':' || commune_id || ':' || coalesce(autorisation_path, '-'), ',' order by entreprise_id, commune_id) from public.entreprise_communes) as communes,
+        (select string_agg(type || version, ',' order by type, version) from public.documents_legaux) as documents`)).rows[0]);
+      await db.exec(sql);
+      const avant = await photo();
+      const resultats = await db.exec(sql);
+      const apres = await photo();
+      if (avant !== apres) throw new Error(`avant ${avant}\naprès ${apres}`);
+      const ko = resultats.at(-1).rows.filter((r) => r.resultat !== 'OK');
+      if (ko.length) throw new Error(JSON.stringify(ko));
     },
   },
 ];

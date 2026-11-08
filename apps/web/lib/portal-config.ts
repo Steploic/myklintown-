@@ -1,5 +1,6 @@
 import {
   AlertTriangle,
+  BadgeCheck,
   BarChart3,
   Camera,
   Home,
@@ -46,6 +47,7 @@ export const PRECOLLECTEUR_NAV: PortalNavItem[] = [
   { href: '/precollecteur/flotte', label: 'Flotte & équipe', icon: Bike },
   { href: '/precollecteur/incidents', label: 'Incidents', icon: Camera },
   { href: '/precollecteur/charges', label: 'Charges du mois', icon: Wallet, court: 'Charges' },
+  { href: '/precollecteur/dossier', label: 'Dossier & vitrine', icon: BadgeCheck, court: 'Dossier' },
   { href: '/precollecteur/grille', label: 'Grille tarifaire', icon: Tags },
 ];
 
@@ -72,7 +74,7 @@ export const DASHBOARD_NAV: PortalNavItem[] = [
   { href: '/dashboard/precollecteurs', label: 'Précollecteurs', icon: Truck },
   { href: '/dashboard/incidents', label: 'Incidents', icon: AlertTriangle },
   { href: '/dashboard/acces', label: 'Demandes d’accès', icon: KeyRound, roles: ['admin'] },
-  { href: '/dashboard/documents', label: 'Charte et contrat', icon: ScrollText, court: 'Charte', roles: ['admin'] },
+  { href: '/dashboard/documents', label: 'Textes à accepter', icon: ScrollText, court: 'Textes', roles: ['admin'] },
 ];
 
 export type PortalKey = 'precollecteur' | 'employe' | 'citoyen' | 'mairie';
@@ -89,7 +91,7 @@ export const PORTALS = {
     nav: EMPLOYE_NAV,
   },
   citoyen: {
-    name: 'Mon foyer',
+    name: 'Mon espace',
     role: 'Espace Client',
     nav: CITOYEN_NAV,
   },

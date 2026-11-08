@@ -120,12 +120,12 @@ export default function ZoneMap({
         {dessin && points && points.length > 0 && (
           <>
             {points.length >= 3 ? (
-              <Polygon positions={points} pathOptions={{ color: '#0D2438', weight: 3, fillColor: '#79C267', fillOpacity: 0.25 }} />
+              <Polygon positions={points} pathOptions={{ color: '#0B1E3B', weight: 3, fillColor: '#5DC36C', fillOpacity: 0.25 }} />
             ) : (
-              <Polyline positions={points} pathOptions={{ color: '#0D2438', weight: 3 }} />
+              <Polyline positions={points} pathOptions={{ color: '#0B1E3B', weight: 3 }} />
             )}
             {points.map((p, i) => (
-              <CircleMarker key={i} center={p} radius={i === 0 ? 7 : 5} pathOptions={{ color: '#fff', weight: 2, fillColor: i === 0 ? '#3E9A5E' : '#0D2438', fillOpacity: 1 }} />
+              <CircleMarker key={i} center={p} radius={i === 0 ? 7 : 5} pathOptions={{ color: '#fff', weight: 2, fillColor: i === 0 ? '#30823A' : '#0B1E3B', fillOpacity: 1 }} />
             ))}
           </>
         )}

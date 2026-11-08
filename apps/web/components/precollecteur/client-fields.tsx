@@ -46,7 +46,7 @@ export function ClientFields({
     <div className="space-y-5">
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label htmlFor="nom" className="field-label">Nom du client / du foyer *</label>
+          <label htmlFor="nom" className="field-label">Nom de l’abonné (personne ou structure) *</label>
           <input id="nom" name="nom" required defaultValue={client?.nom ?? ''} className="field" placeholder="ex. Famille Ateba" />
         </div>
         <div>

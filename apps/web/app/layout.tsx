@@ -12,15 +12,15 @@ const barlow = Barlow({
 
 export const metadata: Metadata = {
   title: {
-    default: 'MyKlinTown — Le logiciel des précollecteurs de déchets',
+    default: 'MyKlinTown — La collecte des déchets, enfin simple et fiable',
     template: '%s · MyKlinTown',
   },
   description:
-    "Clients, abonnements, factures, relances, tournées et preuves de passage : l'outil des précollecteurs de déchets, pour les ménages et les mairies de Yaoundé.",
+    "La plateforme qui réunit précollecteurs de déchets et abonnés : demandes de devis, tournées, factures, relances et preuves de passage. Lancement officiel en décembre 2026.",
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'),
   openGraph: {
     title: 'MyKlinTown',
-    description: 'Le logiciel des précollecteurs de déchets — Yaoundé',
+    description: 'La collecte des déchets, enfin simple et fiable pour tous.',
     images: ['/brand/icon-512.png'],
     type: 'website',
     locale: 'fr_FR',
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#0D2438',
+  themeColor: '#0B1E3B',
   width: 'device-width',
   initialScale: 1,
 };

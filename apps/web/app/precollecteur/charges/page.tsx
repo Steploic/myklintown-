@@ -69,7 +69,7 @@ export default async function ChargesPage({ searchParams }: { searchParams: Prom
     <PrecoShell path="/precollecteur/charges">
       <PageHeader
         titre="Charges du mois"
-        sousTitre="Ce que vous coûte la collecte. Avec vos passages, la plateforme calcule votre coût par ménage servi."
+        sousTitre="Ce que vous coûte la collecte. Avec vos passages, la plateforme calcule votre coût par abonné servi."
       />
 
       <nav aria-label="Mois" className="mb-5 flex flex-wrap gap-1.5">
@@ -126,24 +126,24 @@ export default async function ChargesPage({ searchParams }: { searchParams: Prom
         </Section>
 
         <div className="space-y-6">
-          <Section titre="Votre coût par ménage servi" sousTitre={nomMois}>
+          <Section titre="Votre coût par abonné servi" sousTitre={nomMois}>
             <dl className="space-y-3 text-body-sm">
               <div className="flex items-baseline justify-between gap-3">
                 <dt className="text-muted-foreground">Charges saisies</dt>
                 <dd className="num font-semibold text-brand-ink">{total ? fcfa(total) : '—'}</dd>
               </div>
               <div className="flex items-baseline justify-between gap-3">
-                <dt className="text-muted-foreground">Ménages servis au moins une fois</dt>
+                <dt className="text-muted-foreground">Abonnés servis au moins une fois</dt>
                 <dd className="num font-semibold text-brand-ink">{nombre(menages)}</dd>
               </div>
               <div className="flex items-baseline justify-between gap-3 border-t border-border pt-3">
-                <dt className="font-semibold text-brand-ink">Coût par ménage servi</dt>
+                <dt className="font-semibold text-brand-ink">Coût par abonné servi</dt>
                 <dd className="num text-h2-sm font-bold text-brand-ink" data-testid="cout-par-menage">
                   {total && menages ? fcfa(Math.round(total / menages)) : '—'}
                 </dd>
               </div>
               <div className="flex items-baseline justify-between gap-3">
-                <dt className="text-muted-foreground">Ce que vous gardez par ménage servi</dt>
+                <dt className="text-muted-foreground">Ce que vous gardez par abonné servi</dt>
                 <dd className="num font-semibold text-brand-ink">{menages ? fcfa(Math.round(garde / menages)) : '—'}</dd>
               </div>
             </dl>

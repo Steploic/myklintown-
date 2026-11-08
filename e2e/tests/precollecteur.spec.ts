@@ -1,12 +1,14 @@
 import fs from 'node:fs';
-import { codeAgrementDeTest, compte, emailDe, identifiants } from '../../apps/web/tests/support/fixtures';
+import { compte, emailDe, identifiants, JPEG_1PX } from '../../apps/web/tests/support/fixtures';
 import { etat, expect, RUN, SANS_MIGRATION_0011, session, test } from './base';
 
 // Nom unique par exécution : une reprise ne tombe jamais sur le client d'un essai précédent.
 const NOM = `Famille Nouvelle ${Date.now().toString().slice(-8)}`;
 
 test.describe('précollecteur : inscription et démarrage', () => {
-  test('s’inscrire → créer son entreprise → tableau de bord', async ({ page }) => {
+  // Retours de l'équipe (08/11/2026) : plus de code d'agrément ; un dossier
+  // vérifié par MyKlinTown ouvre la place dans l'annuaire.
+  test('s’inscrire → créer son entreprise sans code d’agrément → déposer son dossier → le soumettre', async ({ page }) => {
     const cle = `inscrit${Date.now()}`;
     await page.goto('/signup?role=precollecteur');
     await page.getByLabel('Nom complet').fill('Test Inscrit');
@@ -15,19 +17,37 @@ test.describe('précollecteur : inscription et démarrage', () => {
     await page.getByLabel('Mot de passe').fill(identifiants().motDePasse);
     await page.getByRole('button', { name: 'Créer mon compte' }).click();
     await expect(page).toHaveURL(/\/precollecteur\/demarrage/, { timeout: 90_000 });
+    await expect(page.getByLabel(/Code d.agrément/)).toHaveCount(0);
     await page.getByLabel('Nom de l’entreprise *').fill('Test Inscrit SARL');
-    if (etat().migration0012) {
-      // Sans code valide, pas d'espace ; avec le code tapé à sa façon, l'espace s'ouvre.
-      await page.getByLabel('Code d’agrément').fill('ABCDE-FGHJK');
-      await page.getByRole('button', { name: 'Créer mon espace' }).click();
-      await expect(page.getByText(/Code d.agrément invalide ou expiré/)).toBeVisible();
-      const code = await codeAgrementDeTest('Test Inscrit SARL');
-      await page.getByLabel('Code d’agrément').fill(`${code!.slice(0, 5).toLowerCase()} ${code!.slice(5)}`);
-    }
+    await page.getByLabel('NIU').fill('m012345678901a');
+    await page.getByLabel('Adresse du siège social').fill('Nsam, face pharmacie');
+    await page.getByRole('checkbox', { name: 'Yaoundé III', exact: true }).check();
+    await page.getByLabel('Quartiers desservis').fill('Nsam, Efoulan');
+    await page.getByLabel('Devise de l’entreprise').fill('Votre quartier propre');
+    await page.getByRole('checkbox', { name: /J’ai lu et j’accepte/ }).check();
     await page.getByRole('button', { name: 'Créer mon espace' }).click();
     await expect(page).toHaveURL(/\/precollecteur\?bienvenue=1/);
     await expect(page.getByRole('heading', { name: /Bienvenue, Test Inscrit SARL/ })).toBeVisible();
     await expect(page.getByRole('button', { name: /Charger la démo/ })).toBeVisible();
+
+    // Bandeau du dossier → page du dossier : il manque l'autorisation et le permis.
+    await page.getByRole('link', { name: /Dossier à compléter/ }).click();
+    await expect(page).toHaveURL(/\/precollecteur\/dossier$/);
+    await expect(page.getByText(/Il manque encore : .*autorisation territoriale.*permis environnemental/)).toBeVisible();
+    await expect(page.getByLabel('NIU (numéro d’identifiant unique)')).toHaveValue('M012345678901A');
+
+    // Pièces : photo envoyée dans le stockage, puis inscrite au dossier.
+    await page.getByLabel('Déposer le permis').setInputFiles({ name: 'permis.jpg', mimeType: 'image/jpeg', buffer: JPEG_1PX });
+    await expect(page.getByText('Permis déposé')).toBeVisible({ timeout: 30_000 });
+    await page.getByLabel('Déposer l’autorisation').setInputFiles({ name: 'autorisation.jpg', mimeType: 'image/jpeg', buffer: JPEG_1PX });
+    await expect(page.getByText('Autorisation déposée')).toBeVisible({ timeout: 30_000 });
+
+    await page.getByRole('button', { name: 'Soumettre mon dossier pour vérification' }).click();
+    // Le formulaire disparaît avec la page mise à jour : on lit l'état du dossier, pas le message.
+    await expect(page.getByText('Votre dossier est entre les mains de l’équipe MyKlinTown.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Soumettre mon dossier pour vérification' })).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByText('En vérification').first()).toBeVisible();
   });
 });
 
@@ -46,7 +66,7 @@ test.describe('précollecteur : exploitation', () => {
 
   test('nouveau client : carte, formule de la grille, première facture, QR', async ({ page }) => {
     await page.goto('/precollecteur/clients/nouveau');
-    await page.getByLabel('Nom du client / du foyer *').fill(NOM);
+    await page.getByLabel('Nom de l’abonné (personne ou structure) *').fill(NOM);
     await page.getByLabel('Téléphone').fill('677 55 66 77');
     await page.getByLabel('Quartier').fill('Nsam');
     await page.getByRole('radio', { name: /Trimestriel/ }).check({ force: true });
@@ -58,7 +78,7 @@ test.describe('précollecteur : exploitation', () => {
     await expect(page).toHaveURL(/\/precollecteur\/clients\/[0-9a-f-]+\?cree=1/);
     await expect(page.getByText('Client enregistré.')).toBeVisible();
     await expect(page.getByRole('heading', { name: NOM })).toBeVisible();
-    await expect(page.locator('section', { hasText: 'QR code du foyer' }).locator('svg path').first()).toBeAttached();
+    await expect(page.locator('section', { hasText: 'QR code de l’abonné' }).locator('svg path').first()).toBeAttached();
     await expect(page.getByText(/9\s500\sFCFA/).first()).toBeVisible();
     await expect(page.getByText(/À régler avant le/)).toBeVisible();
   });

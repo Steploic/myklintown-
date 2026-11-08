@@ -137,7 +137,7 @@ export function PaiementMobile({
           <Loader2 size={18} className="animate-spin" /> En attente de validation sur le téléphone
         </p>
         <p className="mt-1 text-body-sm text-muted-foreground">
-          {pourAutrui ? 'Le ménage reçoit' : 'Vous recevez'} un message {canal ? CANAUX[canal].court : ''} sur le {telephone} :{' '}
+          {pourAutrui ? 'L’abonné reçoit' : 'Vous recevez'} un message {canal ? CANAUX[canal].court : ''} sur le {telephone} :{' '}
           {pourAutrui ? 'il saisit' : 'saisissez'} {pourAutrui ? 'son' : 'votre'} code secret pour valider {fcfa(montant)}.
         </p>
       </div>
@@ -164,7 +164,7 @@ export function PaiementMobile({
         </div>
       </fieldset>
       <div>
-        <label className="field-label" htmlFor={`tel-${id}`}>Numéro {pourAutrui ? 'du ménage' : 'Mobile Money'}</label>
+        <label className="field-label" htmlFor={`tel-${id}`}>Numéro {pourAutrui ? 'de l’abonné' : 'Mobile Money'}</label>
         <input
           id={`tel-${id}`}
           type="tel"
