@@ -17,6 +17,8 @@ let service: SupabaseClient | null = null;
 let planId = '';
 
 const TYPES = ['charte_menage', 'contrat_menage'];
+// Conditions et charte du précollecteur (migration 20261109000017), lisibles par tous elles aussi.
+const TYPES_PRECOLLECTEUR = ['cgu_precollecteur', 'charte_precollecteur'];
 
 beforeAll(async () => {
   A = await precollecteur('precoA', 'Test Propreté A');
@@ -38,12 +40,14 @@ beforeAll(async () => {
 });
 
 describe('lecture', () => {
-  it('sans compte : la charte et le contrat publiés se lisent, pas les brouillons', async ({ skip }) => {
+  it('sans compte : les textes publiés se lisent, pas les brouillons', async ({ skip }) => {
     if (!migration) skip();
     const { data, error } = await clientAnonyme().from('documents_legaux').select('type, version, publie_at');
     expect(error).toBeNull();
     const lignes = (data ?? []) as { type: string; publie_at: string | null }[];
-    expect(new Set(lignes.map((d) => d.type))).toEqual(new Set(TYPES));
+    const types = new Set(lignes.map((d) => d.type));
+    for (const t of TYPES) expect(types.has(t)).toBe(true);
+    for (const t of types) expect([...TYPES, ...TYPES_PRECOLLECTEUR]).toContain(t);
     expect(lignes.every((d) => d.publie_at)).toBe(true);
   });
 });

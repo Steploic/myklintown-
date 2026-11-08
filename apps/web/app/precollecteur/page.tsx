@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import {
   AlertTriangle,
+  BadgeCheck,
   Banknote,
   Bike,
   CalendarClock,
@@ -20,6 +21,7 @@ import { CollectesChart, EncaissementsChart } from '@/components/precollecteur/c
 import { requireEntreprise } from '@/lib/precollecteur/context';
 import { chargerDemoAction, supprimerDemoAction } from '@/lib/precollecteur/actions';
 import { parametre, rows, rpc } from '@/lib/server';
+import { ETATS_DOSSIER, etatDossier } from '@/lib/dossier';
 import { ajouterJours, dateFr, fcfa, isoJour, nombre, pct, STATUT_TOURNEE } from '@/lib/format';
 
 export const metadata = { title: 'Tableau de bord' };
@@ -31,6 +33,7 @@ export default async function PrecollecteurDashboard({
 }) {
   const { bienvenue } = await searchParams;
   const { supabase, entreprise } = await requireEntreprise();
+  const dossier = etatDossier(entreprise.dossier_statut);
   const auj = isoJour();
   const il30 = ajouterJours(auj, -30);
   const debutMois = auj.slice(0, 8) + '01';
@@ -174,6 +177,24 @@ export default async function PrecollecteurDashboard({
           </>
         }
       />
+
+      {dossier !== 'valide' && (
+        <Link
+          href="/precollecteur/dossier"
+          className={`mb-6 flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-body-sm font-semibold ${
+            dossier === 'refuse'
+              ? 'border-terrain-stop/30 bg-terrain-stop/5 text-terrain-stop'
+              : dossier === 'soumis'
+                ? 'border-brand-blue/25 bg-brand-blue/5 text-brand-blue'
+                : 'border-terrain-relance/30 bg-terrain-relance/5 text-terrain-relance'
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <BadgeCheck size={18} className="shrink-0" /> {ETATS_DOSSIER[dossier].label} : {ETATS_DOSSIER[dossier].texte}
+          </span>
+          <span aria-hidden>→</span>
+        </Link>
+      )}
 
       {vide && (
         <section className="card-soft mb-6 overflow-hidden">

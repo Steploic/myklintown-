@@ -46,6 +46,19 @@ export default function LegalPage() {
         </section>
 
         <section className="card-soft space-y-2 p-6">
+          <h2>Conditions et charte du précollecteur</h2>
+          <p className="text-body-sm">
+            Le gérant d’une entreprise de précollecte accepte les conditions d’utilisation de la plateforme et la charte du
+            précollecteur en créant son espace. Son entreprise n’apparaît dans l’annuaire public qu’après vérification de
+            son dossier par MyKlinTown.
+          </p>
+          <ul className="flex flex-wrap gap-2 text-body-sm">
+            <li><Link href="/legal/conditions-precollecteur" className="btn-outline">Conditions d’utilisation</Link></li>
+            <li><Link href="/legal/charte-precollecteur" className="btn-outline">Charte du précollecteur</Link></li>
+          </ul>
+        </section>
+
+        <section className="card-soft space-y-2 p-6">
           <h2>Données personnelles</h2>
           <p className="text-body-sm">
             Les données des abonnés (nom, téléphone, adresse, position, abonnement, paiements, passages) sont

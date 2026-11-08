@@ -30,8 +30,20 @@ export interface Entreprise {
   adresse_fiscale?: string | null;
   /** Préfixe des numéros de facture (F001…), attribué une fois pour toutes. */
   prefixe_facture?: string;
+  /** Vitrine et dossier administratif (migration 20261109000017). */
+  devise?: string | null;
+  logo_path?: string | null;
+  quartiers?: string[];
+  permis_env_path?: string | null;
+  dossier_statut?: DossierStatut;
+  dossier_motif?: string | null;
+  dossier_soumis_at?: string | null;
+  dossier_statue_at?: string | null;
   created_at: string;
 }
+
+/** Dossier du précollecteur : seul un dossier « valide » paraît dans l'annuaire. */
+export type DossierStatut = 'incomplet' | 'soumis' | 'valide' | 'refuse';
 
 export interface Zone {
   id: string;

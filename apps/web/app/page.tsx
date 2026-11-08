@@ -9,6 +9,7 @@ import {
   FileText,
   QrCode,
   Receipt,
+  Search,
   ShieldAlert,
   ShieldCheck,
   Smartphone,
@@ -81,7 +82,10 @@ export default function HomePage() {
                   Faire ramasser mes déchets
                 </Link>
               </div>
-              <p className="mt-4 text-small text-white/55">Sans installation · Fonctionne sur tout smartphone et PC</p>
+              <Link href="/annuaire" className="mt-4 inline-flex items-center gap-2 text-body-sm font-semibold text-brand-blue-clair hover:text-white">
+                <Search size={16} /> Trouver un précollecteur près de chez moi
+              </Link>
+              <p className="mt-3 text-small text-white/55">Sans installation · Fonctionne sur tout smartphone et PC</p>
             </div>
 
             {/* Maquette téléphone : l'écran de tournée */}
@@ -217,8 +221,8 @@ export default function HomePage() {
               </p>
               <div className="mt-6 flex flex-wrap gap-3">
                 <Link href="/signup?role=precollecteur" className="btn-primary">Je suis précollecteur</Link>
-                <Link href="/signup?role=citoyen" className="btn-outline border-white/25 bg-white/5 text-white hover:bg-white/10">
-                  Je cherche un précollecteur
+                <Link href="/annuaire" className="btn-outline border-white/25 bg-white/5 text-white hover:bg-white/10">
+                  <Search size={16} /> Trouver un précollecteur
                 </Link>
               </div>
             </article>

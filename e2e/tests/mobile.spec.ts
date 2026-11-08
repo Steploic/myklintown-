@@ -5,7 +5,7 @@
 import { compte, emailDe, identifiants, iso } from '../../apps/web/tests/support/fixtures';
 import { etat, expect, pasDeDebordement, seConnecter, session, test } from './base';
 
-const PUBLIQUES = ['/', '/login', '/signup', '/marque', '/legal', '/legal/charte', '/legal/contrat', '/acces-mairie', '/rejoindre'];
+const PUBLIQUES = ['/', '/login', '/signup', '/marque', '/legal', '/legal/charte', '/legal/contrat', '/legal/conditions-precollecteur', '/legal/charte-precollecteur', '/annuaire', '/annuaire?quartier=Nsam', '/acces-mairie', '/rejoindre'];
 const PRECOLLECTEUR = [
   '/precollecteur',
   '/precollecteur/clients',
@@ -20,6 +20,7 @@ const PRECOLLECTEUR = [
   '/precollecteur/incidents',
   '/precollecteur/incidents/nouveau',
   '/precollecteur/grille',
+  '/precollecteur/dossier',
   '/settings',
 ];
 const MENAGE = ['/citoyen', '/citoyen/collectes', '/citoyen/factures', '/citoyen/qr-code', '/citoyen/signaler', '/citoyen/souscrire'];

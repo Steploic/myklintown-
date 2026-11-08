@@ -46,6 +46,7 @@ export function SiteFooter() {
         <div className="space-y-3">
           <h3 className="text-small font-semibold uppercase tracking-wider text-brand-leaf">Ressources</h3>
           <ul className="space-y-2 text-body-sm text-white/75">
+            <li><Link href="/annuaire" className="hover:text-white">Annuaire des précollecteurs</Link></li>
             <li><Link href="/marque" className="hover:text-white">Charte graphique</Link></li>
             <li><Link href="/legal/charte" className="hover:text-white">Charte de l’abonné</Link></li>
             <li><Link href="/legal/contrat" className="hover:text-white">Contrat d’abonnement</Link></li>
