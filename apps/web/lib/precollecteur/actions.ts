@@ -794,7 +794,7 @@ export async function chargerDemoAction(_p: ActionState, _fd: FormData): Promise
   });
 
   rafraichir();
-  return { ok: 'Démonstration chargée : 18 ménages, 2 employés, 2 tricycles, 3 tournées, factures et paiements.' };
+  return { ok: 'Démonstration chargée : 18 abonnés, 2 employés, 2 tricycles, 3 tournées, factures et paiements.' };
 }
 
 export async function supprimerDemoAction(_p: ActionState, _fd: FormData): Promise<ActionState> {

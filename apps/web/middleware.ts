@@ -97,9 +97,9 @@ function reseauIndisponible() {
   const page = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Réseau indisponible · MyKlinTown</title></head>
 <body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#F4F7F5;font-family:system-ui,sans-serif;color:#1A2330">
 <main style="max-width:26rem;margin:1rem;padding:2rem;background:#fff;border:1px solid #DDE4E1;border-radius:16px;text-align:center">
-<p style="font-size:2.5rem;margin:0">📶</p><h1 style="font-size:1.4rem;color:#0D2438">Réseau indisponible</h1>
+<p style="font-size:2.5rem;margin:0">📶</p><h1 style="font-size:1.4rem;color:#0B1E3B">Réseau indisponible</h1>
 <p style="color:#5B6673">Le serveur n’a pas pu être joint. Vos données sont intactes : réessayez dans un instant.</p>
-<button onclick="location.reload()" style="min-height:44px;padding:0 1.25rem;border:0;border-radius:8px;background:#3E9A5E;color:#fff;font-weight:600;font-size:1rem">Réessayer</button>
+<button onclick="location.reload()" style="min-height:44px;padding:0 1.25rem;border:0;border-radius:8px;background:#30823A;color:#fff;font-weight:600;font-size:1rem">Réessayer</button>
 </main></body></html>`;
   return new NextResponse(page, { status: 503, headers: { 'content-type': 'text/html; charset=utf-8', 'retry-after': '5' } });
 }

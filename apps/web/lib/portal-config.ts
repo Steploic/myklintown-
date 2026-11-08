@@ -89,7 +89,7 @@ export const PORTALS = {
     nav: EMPLOYE_NAV,
   },
   citoyen: {
-    name: 'Mon foyer',
+    name: 'Mon espace',
     role: 'Espace Client',
     nav: CITOYEN_NAV,
   },

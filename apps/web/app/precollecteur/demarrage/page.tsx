@@ -42,7 +42,7 @@ export default async function DemarragePage() {
             </h1>
             <p className="max-w-lg text-body text-white/75">
               Donnez un nom à votre activité : c’est lui que verront vos clients sur leurs factures et
-              leurs reçus. Vous pourrez ensuite enregistrer vos ménages, votre flotte et vos tournées.
+              leurs reçus. Vous pourrez ensuite enregistrer vos abonnés, votre flotte et vos tournées.
             </p>
             <ul className="space-y-2 text-body-sm text-white/85">
               {[

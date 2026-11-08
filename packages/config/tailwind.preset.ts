@@ -2,7 +2,7 @@ import type { Config } from 'tailwindcss';
 import animate from 'tailwindcss-animate';
 
 /**
- * Tailwind preset — Charte Graphique MyKlinTown V1.0
+ * Tailwind preset — Charte graphique MyKlinTown V3 (novembre 2026)
  *
  * Importé par chaque app/package qui consomme Tailwind.
  * Toute évolution de la charte se reflète automatiquement partout.
@@ -23,23 +23,32 @@ const preset: Partial<Config> = {
     },
     extend: {
       colors: {
-        // --- Brand (charte V1.0) -----------------------------------------
+        // --- Marque (charte V3) ------------------------------------------
         brand: {
-          // Charte V2 (pivot précollecteurs, sept. 2026) — tirée du dégradé du
-          // logo : bleu « pixels » → sarcelle → vert feuille.
-          ink: '#0D2438',       // Nuit — barres latérales, fonds sombres
+          // Charte V3 (logo d'octobre 2026) : le dégradé du logo, bleu pixel
+          // #2563EB → turquoise #17B8A4 → vert feuille #5DC36C. Les teintes vives
+          // sont des ACCENTS (fonds sombres, décor) : sous du texte blanc, le vert
+          // et le turquoise du logo tombent à 2,2-2,5:1. Les teintes d'ACTION en
+          // sont dérivées, plus sombres, à 4,5:1 au moins avec le texte blanc.
+          ink: '#0B1E3B',       // Nuit — barres latérales, fonds sombres (16,6:1 avec le blanc)
           blue: {
-            DEFAULT: '#1B3F63', // Bleu Primaire — Confiance
-            hover: '#1F4F7A',   // Bleu Secondaire — hover
-            pixel: '#2B6CB0',   // Bleu des pixels du logo — accents
+            DEFAULT: '#2563EB', // Bleu pixel du logo — actions secondaires, liens (5,2:1)
+            hover: '#1D4ED8',
+            pixel: '#2563EB',   // alias historique (charte V2)
+            clair: '#7FA6F5',   // texte et accents sur fond sombre (6,9:1 sur la nuit)
           },
           green: {
-            DEFAULT: '#3E9A5E', // Vert Primaire — action, succès (AA sur blanc en gras)
-            light: '#7BC28A',   // Vert Clair — badges
-            pale: '#DDF0E2',    // Vert Très Clair — fonds
+            DEFAULT: '#30823A', // Vert action — bouton principal, succès (4,8:1 avec le blanc)
+            hover: '#276C30',
+            light: '#5DC36C',   // = vert feuille du logo — badges, pastilles
+            pale: '#E3F4E6',    // fonds
           },
-          leaf: '#79C267',      // Vert feuille du logo — accents sur fond sombre
-          teal: '#2E7F8E',      // Sarcelle — graphiques secondaires
+          leaf: '#5DC36C',      // Vert feuille du logo — accents sur fond sombre (7,5:1 sur la nuit)
+          teal: {
+            DEFAULT: '#0E8574', // Turquoise foncé — icônes et graphiques sur fond clair (4,5:1)
+            vif: '#17B8A4',     // Turquoise du logo — décor, dégradés
+            clair: '#5ED6C3',   // accents sur fond sombre
+          },
         },
 
         // Code terrain, lisible au soleil : servir / relancer / ne pas servir.
@@ -61,20 +70,20 @@ const preset: Partial<Config> = {
         surface: '#FFFFFF',
         border: '#DDE4E1',
         input: '#CBD5D1',
-        ring: '#1B3F63',
+        ring: '#2563EB',
 
         // shadcn/ui aliases (pour réutiliser les composants directement)
         primary: {
-          DEFAULT: '#1B3F63',
+          DEFAULT: '#2563EB',
           foreground: '#FFFFFF',
         },
         secondary: {
-          DEFAULT: '#4FA36A',
+          DEFAULT: '#30823A',
           foreground: '#FFFFFF',
         },
         accent: {
-          DEFAULT: '#7BC28A',
-          foreground: '#222222',
+          DEFAULT: '#5DC36C',
+          foreground: '#0B1E3B',
         },
         card: {
           DEFAULT: '#FFFFFF',
@@ -100,7 +109,7 @@ const preset: Partial<Config> = {
           foreground: '#222222',
         },
         success: {
-          DEFAULT: '#3E9A5E',
+          DEFAULT: '#30823A',
           foreground: '#FFFFFF',
         },
       },
@@ -134,7 +143,7 @@ const preset: Partial<Config> = {
         // Ombre douce de la charte : les cartes "lévitent légèrement"
         soft: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
         card: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06)',
-        elevated: '0 10px 20px -4px rgba(27, 63, 99, 0.12)',
+        elevated: '0 10px 20px -4px rgba(11, 30, 59, 0.12)',
       },
 
       keyframes: {
@@ -163,10 +172,10 @@ const preset: Partial<Config> = {
       },
 
       backgroundImage: {
-        // Dégradé signature du logo : bleu profond → vert clair
-        'brand-gradient': 'linear-gradient(135deg, #1B3F63 0%, #2E7F8E 55%, #3E9A5E 100%)',
-        'brand-gradient-ink': 'linear-gradient(160deg, #0D2438 0%, #123A4F 60%, #15503F 100%)',
-        'brand-gradient-soft': 'linear-gradient(135deg, rgba(27, 63, 99, 0.06) 0%, rgba(79, 163, 106, 0.06) 100%)',
+        // Dégradé signature du logo : bleu pixel → turquoise → vert feuille
+        'brand-gradient': 'linear-gradient(135deg, #2563EB 0%, #17B8A4 55%, #5DC36C 100%)',
+        'brand-gradient-ink': 'linear-gradient(160deg, #0B1E3B 0%, #0C3550 58%, #0E4A43 100%)',
+        'brand-gradient-soft': 'linear-gradient(135deg, rgba(37, 99, 235, 0.06) 0%, rgba(93, 195, 108, 0.06) 100%)',
       },
     },
   },

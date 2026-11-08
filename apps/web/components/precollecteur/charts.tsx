@@ -18,7 +18,7 @@ export function CollectesChart({ data }: { data: PointJour[] }) {
           <XAxis dataKey="jour" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: '#5B6673' }} />
           <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: '#5B6673' }} />
           <Tooltip
-            cursor={{ fill: 'rgba(13,36,56,0.04)' }}
+            cursor={{ fill: 'rgba(11,30,59,0.04)' }}
             contentStyle={{ borderRadius: 10, border: '1px solid #DDE4E1', fontSize: 13 }}
           />
           <Legend iconType="square" wrapperStyle={{ fontSize: 12 }} />
@@ -49,11 +49,11 @@ export function EncaissementsChart({ data }: { data: PointSemaine[] }) {
             tickFormatter={(v: number) => (v >= 1000 ? `${Math.round(v / 1000)}k` : String(v))}
           />
           <Tooltip
-            cursor={{ fill: 'rgba(13,36,56,0.04)' }}
+            cursor={{ fill: 'rgba(11,30,59,0.04)' }}
             formatter={(v: number) => [`${new Intl.NumberFormat('fr-FR').format(v)} FCFA`, 'Encaissé']}
             contentStyle={{ borderRadius: 10, border: '1px solid #DDE4E1', fontSize: 13 }}
           />
-          <Bar dataKey="encaisse" name="Encaissé" fill="#2E7F8E" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="encaisse" name="Encaissé" fill="#0E8574" radius={[4, 4, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>

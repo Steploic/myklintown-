@@ -59,7 +59,7 @@ test('indicateurs du pilote : les 8 indicateurs, les périmètres, les exports',
   expect(csv).toContain('Indicateur;Définition;octobre 2026 — valeur');
   expect(csv).toContain('Taux de paiement effectif');
   const [semaines] = await Promise.all([page.waitForEvent('download'), page.getByRole('link', { name: /Relevés hebdomadaires \(CSV\)/ }).click()]);
-  expect(fs.readFileSync((await semaines.path())!, 'utf8')).toContain('Début;Fin;Ménages inscrits');
+  expect(fs.readFileSync((await semaines.path())!, 'utf8')).toContain('Début;Fin;Abonnés inscrits');
 });
 
 test('codes d’agrément : délivrer, envoyer par WhatsApp, révoquer', async ({ page }) => {

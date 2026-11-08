@@ -8,7 +8,7 @@ import { enregistrerAcceptation } from '@/lib/acceptations';
 import { estTypeDocument } from '@/lib/documents';
 import type { ActionState } from '@/lib/types';
 
-const MESSAGE_DOCUMENTS = 'Cochez la case pour accepter la charte du ménage et le contrat d’abonnement.';
+const MESSAGE_DOCUMENTS = 'Cochez la case pour accepter la charte de l’abonné et le contrat d’abonnement.';
 import type { IncidentInput } from '@/components/capture/incident-form';
 
 export interface PrecollecteurTrouve {

@@ -10,6 +10,6 @@ export async function qrSvg(code: string): Promise<string> {
     type: 'svg',
     margin: 1,
     errorCorrectionLevel: 'M',
-    color: { dark: '#0D2438', light: '#FFFFFF' },
+    color: { dark: '#0B1E3B', light: '#FFFFFF' },
   });
 }

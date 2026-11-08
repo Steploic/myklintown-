@@ -116,7 +116,7 @@ export default async function FicheClientPage({
 
       {pris && (
         <p className="mb-5 flex items-center gap-2 rounded-lg border border-terrain-ok/25 bg-terrain-ok/5 px-4 py-3 text-body-sm font-medium text-terrain-ok">
-          <CheckCircle2 size={18} /> Demande prise en charge : ce ménage est votre client et sa première facture est émise. Appelez-le pour convenir du premier passage.
+          <CheckCircle2 size={18} /> Demande prise en charge : cet abonné est votre client et sa première facture est émise. Appelez-le pour convenir du premier passage.
         </p>
       )}
       {cree && (
@@ -132,7 +132,7 @@ export default async function FicheClientPage({
         <section className="mb-6 rounded-xl border border-brand-green/30 bg-brand-green/5 p-5">
           <h2 className="flex items-center gap-2"><UserCheck size={20} className="text-brand-green" /> Demande d’abonnement en ligne</h2>
           <p className="mt-1 text-body-sm text-muted-foreground">
-            Ce ménage s’est inscrit depuis l’application en choisissant la formule <strong>{client.plan_nom}</strong>.
+            Cet abonné s’est inscrit depuis l’application en choisissant la formule <strong>{client.plan_nom}</strong>.
             Accepter ouvre son abonnement et émet sa première facture.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -324,7 +324,7 @@ export default async function FicheClientPage({
                                       required
                                       minLength={3}
                                       maxLength={300}
-                                      placeholder="ex. Erreur de formule, ménage parti"
+                                      placeholder="ex. Erreur de formule, abonné parti"
                                       className="field min-w-[12rem] flex-1"
                                     />
                                     <SubmitButton variant="danger" pendingLabel="Annulation…">Confirmer l’annulation</SubmitButton>
@@ -416,7 +416,7 @@ export default async function FicheClientPage({
 
         {/* Colonne latérale */}
         <div className="space-y-6">
-          <Section titre="QR code du foyer">
+          <Section titre="QR code de l’abonné">
             <div className="mx-auto w-44 rounded-lg border border-border p-2" dangerouslySetInnerHTML={{ __html: qr }} />
             <p className="num mt-2 text-center font-semibold tracking-wider text-brand-ink">{client.code}</p>
             <p className="mt-1 text-center text-small text-muted-foreground">Scanné à chaque passage pour prouver le service.</p>
@@ -456,7 +456,7 @@ export default async function FicheClientPage({
                     <input key={d.type} type="hidden" name="type" value={d.type} />
                   ))}
                   <p className="mb-2 text-small text-muted-foreground">
-                    Vous avez remis le texte en vigueur au ménage, qui l’a accepté : enregistrez-le (à votre nom, daté).
+                    Vous avez remis le texte en vigueur à l’abonné, qui l’a accepté : enregistrez-le (à votre nom, daté).
                   </p>
                   <SubmitButton variant="outline" className="w-full" pendingLabel="Enregistrement…">Enregistrer la remise</SubmitButton>
                 </ActionForm>

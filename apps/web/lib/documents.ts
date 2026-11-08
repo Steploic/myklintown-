@@ -17,7 +17,7 @@ export type TypeDocument = 'charte_menage' | 'contrat_menage';
 export const TYPES_DOCUMENTS: readonly TypeDocument[] = ['charte_menage', 'contrat_menage'];
 
 export const DOCUMENTS: Record<TypeDocument, { libelle: string; chemin: string }> = {
-  charte_menage: { libelle: 'Charte du ménage', chemin: '/legal/charte' },
+  charte_menage: { libelle: 'Charte de l’abonné', chemin: '/legal/charte' },
   contrat_menage: { libelle: 'Contrat d’abonnement', chemin: '/legal/contrat' },
 };
 

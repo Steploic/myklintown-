@@ -16,7 +16,7 @@ export async function GET() {
     collectes_realisees_30j: number;
     incidents_ouverts: number;
   }>(data);
-  const entetes = ['Zone', 'Commune', 'Précollecteurs', 'Ménages inscrits', 'Ménages actifs', 'Collectes prévues (30 j)', 'Collectes réalisées (30 j)', 'Incidents ouverts'];
+  const entetes = ['Zone', 'Commune', 'Précollecteurs', 'Abonnés inscrits', 'Abonnés actifs', 'Collectes prévues (30 j)', 'Collectes réalisées (30 j)', 'Incidents ouverts'];
   const csv = documentCsv(
     entetes,
     zones.map((z) => [z.zone_nom, z.commune, z.precollecteurs.join(', '), z.nb_clients, z.nb_clients_actifs, z.collectes_30j, z.collectes_realisees_30j, z.incidents_ouverts]),

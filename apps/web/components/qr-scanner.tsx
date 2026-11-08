@@ -116,7 +116,7 @@ export function QrScanner({ onScan, className }: QrScannerProps) {
                   } ${pos.includes('left') ? 'left-0 rounded-tl-2xl border-l-4' : 'right-0 rounded-tr-2xl border-r-4'}`}
                 />
               ))}
-              <div className="absolute left-0 right-0 top-1/2 h-0.5 -translate-y-1/2 animate-pulse bg-brand-green shadow-[0_0_20px_2px_rgba(79,163,106,0.7)]" />
+              <div className="absolute left-0 right-0 top-1/2 h-0.5 -translate-y-1/2 animate-pulse bg-brand-green shadow-[0_0_20px_2px_rgba(93,195,108,0.7)]" />
             </div>
             <p className="absolute bottom-6 left-0 right-0 text-center text-body-sm font-medium text-white">
               Centrez le QR Code dans le cadre…
@@ -137,7 +137,7 @@ export function QrScanner({ onScan, className }: QrScannerProps) {
               </span>
               <span className="text-body-sm font-semibold">Activer la caméra</span>
               <span className="max-w-xs text-center text-small text-white/70">
-                Autorisez l’accès caméra pour scanner les QR codes des ménages.
+                Autorisez l’accès caméra pour scanner les QR codes des abonnés.
               </span>
             </span>
           </button>

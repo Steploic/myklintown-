@@ -34,8 +34,8 @@ const COULEURS: Record<Ton, string> = {
   relance: '#B86E00',
   stop: '#C8372D',
   neutre: '#5B6673',
-  info: '#2B6CB0',
-  direct: '#2E7F8E',
+  info: '#2563EB',
+  direct: '#0E8574',
 };
 
 // Pictogrammes (tracés type Lucide) dessinés en blanc dans le repère.
@@ -56,7 +56,7 @@ function icone(ton: Ton, picto: Picto): L.DivIcon {
   const ic = L.divIcon({
     className: '',
     html: `<div style="position:relative;width:34px;height:42px">
-      <svg width="34" height="42" viewBox="0 0 34 42" style="position:absolute;inset:0;filter:drop-shadow(0 2px 3px rgba(13,36,56,.35))">
+      <svg width="34" height="42" viewBox="0 0 34 42" style="position:absolute;inset:0;filter:drop-shadow(0 2px 3px rgba(11,30,59,.35))">
         <path d="M17 41C17 41 32 25.5 32 16A15 15 0 1 0 2 16c0 9.5 15 25 15 25z" fill="${COULEURS[ton]}" stroke="#fff" stroke-width="2"/>
       </svg>
       <svg width="18" height="18" viewBox="0 0 24 24" style="position:absolute;left:8px;top:7px">${SVG[picto]}</svg>
@@ -105,7 +105,7 @@ export default function CartePointsInner({
           <Polygon
             key={z.id}
             positions={z.contour.coordinates[0]!.map(([lng, lat]) => [lat, lng] as [number, number])}
-            pathOptions={{ color: z.couleur ?? '#2E7F8E', weight: 2, fillOpacity: 0.06, dashArray: '4 6' }}
+            pathOptions={{ color: z.couleur ?? '#0E8574', weight: 2, fillOpacity: 0.06, dashArray: '4 6' }}
           >
             <Tooltip sticky>{z.nom}</Tooltip>
           </Polygon>

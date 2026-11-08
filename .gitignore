@@ -41,17 +41,17 @@ supabase/.branches
 supabase/.temp
 
 # Documents métier — dépôt PUBLIC
-# Le rapport de réunion (participants nommés, numéros de téléphone) et la
-# planification du pilote (grille tarifaire, partage de la valeur, seuil de
-# rentabilité, projection de chiffre d'affaires) n'ont pas à être publiés.
+# Pacte d'associés, contrats, comptes rendus (participants nommés, numéros de
+# téléphone), planification du pilote (prix, projections), rapports d'audit de
+# sécurité (une feuille de route pour un attaquant) : rien de tout cela n'a à
+# être publié. Liste blanche : TOUT `docs/` est ignoré, sauf ce qui est cité
+# ci-dessous — un nouveau dossier rangé là reste privé par défaut.
 # Rappel : sur un dépôt public, un fichier commité reste consultable dans
 # l'historique même après suppression. L'exclusion est réversible, la
 # publication ne l'est pas.
-docs/livrables/
-docs/reunions/
-# Rapports d'audit de sécurité : ils listent ce qui reste à fermer côté
-# configuration (Supabase, Vercel, comptes) — une feuille de route pour un attaquant.
-docs/securite/
+docs/*
+!docs/README.md
+!docs/CHARTE.md
 
 # Tests : identifiants des comptes de test (locaux) et rapports
 apps/web/tests/.fixtures*.json

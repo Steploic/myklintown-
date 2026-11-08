@@ -22,7 +22,7 @@ export function AuthAside({ titre, points }: { titre: string; points: string[] }
           ))}
         </ul>
       </div>
-      <p className="relative text-small text-white/50">Phase pilote · Yaoundé · 2026</p>
+      <p className="relative text-small text-white/50">Lancement officiel · décembre 2026</p>
     </div>
   );
 }

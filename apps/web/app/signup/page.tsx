@@ -1,21 +1,29 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { Logo } from '@myklintown/ui';
 import { AuthAside } from '@/components/auth-aside';
+import { getCurrentProfile } from '@/lib/get-profile';
+import { homeForRole } from '@/lib/roles';
 import { SignupForm } from './signup-form';
 
 export const metadata = { title: 'Créer un compte' };
 
 export default async function SignupPage({ searchParams }: { searchParams: Promise<{ role?: string }> }) {
   const { role } = await searchParams;
+  // Déjà connecté (bouton « Faire ramasser mes déchets » de l'accueil, par
+  // exemple) : son espace plutôt qu'un second compte.
+  const profil = await getCurrentProfile();
+  if (profil?.role) redirect(homeForRole(profil.role));
+
   const defaut = role === 'citoyen' ? 'citoyen' : 'precollecteur';
   return (
     <div className="grid min-h-screen bg-surface lg:grid-cols-[0.9fr_1.1fr]">
       <AuthAside
-        titre="Rejoignez le pilote MyKlinTown."
+        titre="Rejoignez MyKlinTown."
         points={[
-          'Création en 2 minutes, sans installation',
-          'Précollecteurs : démonstration chargée en un clic',
-          'Ménages : abonnement auprès du précollecteur de votre zone',
+          'Inscription gratuite et sans engagement',
+          'Sans installation : fonctionne sur tout smartphone et PC',
+          'Abonnés : un précollecteur de votre quartier pour vos déchets',
         ]}
       />
       <div className="flex items-center justify-center p-6 lg:p-10">

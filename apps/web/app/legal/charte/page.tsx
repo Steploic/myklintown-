@@ -1,7 +1,7 @@
 import { PageDocument } from '@/components/legal/page-document';
 import { lireVersion } from '@/lib/documents';
 
-export const metadata = { title: 'Charte du ménage' };
+export const metadata = { title: 'Charte de l’abonné' };
 
 export default async function ChartePage({ searchParams }: { searchParams: Promise<{ version?: string }> }) {
   const { version } = await searchParams;

@@ -36,7 +36,7 @@ export function LoginForm({ suite }: { suite?: string }) {
         {pending && <Loader2 size={16} className="animate-spin" />} {pending ? 'Connexion…' : 'Se connecter'}
       </button>
       <Link href="/" className="btn-outline w-full">
-        Annuler
+        Retour vers le site
       </Link>
     </form>
   );

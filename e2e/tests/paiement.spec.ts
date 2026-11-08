@@ -117,10 +117,10 @@ test.describe('paiement en ligne (simulation)', () => {
       const ligne = page.locator('li', { hasText: FOYER_TOURNEE });
       await ligne.getByRole('button', { name: /Encaisser/ }).click();
       await ligne.getByRole('tab', { name: 'Mobile Money' }).click();
-      await expect(ligne.getByLabel('Numéro du ménage')).toHaveValue('699000555');
+      await expect(ligne.getByLabel('Numéro de l’abonné')).toHaveValue('699000555');
       await expect(ligne.getByRole('radio', { name: 'Orange Money' })).toBeChecked();
       await ligne.getByRole('button', { name: /^Demander/ }).click();
-      await expect(ligne.getByText(/Le ménage reçoit un message Orange Money/)).toBeVisible();
+      await expect(ligne.getByText(/L’abonné reçoit un message Orange Money/)).toBeVisible();
       await expect(ligne.getByText(/Paiement de .* reçu\. Merci !/)).toBeVisible({ timeout: 30_000 });
     });
 

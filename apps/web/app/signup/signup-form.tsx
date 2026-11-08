@@ -13,7 +13,7 @@ import { ChampMotDePasse } from '@/components/ui/champ-mot-de-passe';
 // Mairie sont ouverts par MyKlinTown, jamais demandés à l'inscription.
 const PROFILS = [
   { value: 'precollecteur', label: 'Précollecteur', icon: Truck, desc: 'Je gère une activité de précollecte. Code d’agrément de la Mairie requis.' },
-  { value: 'citoyen', label: 'Ménage', icon: Home, desc: 'Je veux faire collecter les déchets de mon foyer.' },
+  { value: 'citoyen', label: 'Abonné', icon: Home, desc: 'Je veux faire ramasser les déchets de mon domicile, de mon commerce ou de mon institution.' },
 ];
 
 const INITIAL: AuthState = {};
@@ -87,7 +87,7 @@ export function SignupForm({ defaut }: { defaut: 'precollecteur' | 'citoyen' }) 
         </Link>
         {' · '}
         <Link href="/" className="font-semibold text-brand-blue hover:underline">
-          Annuler
+          Retour vers le site
         </Link>
       </p>
       <p className="text-center text-small text-muted-foreground">

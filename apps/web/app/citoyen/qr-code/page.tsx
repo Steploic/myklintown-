@@ -6,6 +6,7 @@ import { EmptyState, PageHeader } from '@/components/ui/blocks';
 import { PrintButton } from '@/components/ui/print-button';
 import { getMonAbonnement } from '@/lib/client/context';
 import { qrSvg } from '@/lib/qr';
+import { telLisible } from '@/lib/format';
 
 export const metadata = { title: 'Mon QR code' };
 
@@ -42,13 +43,18 @@ export default async function QrCodePage() {
       <article className="impression-fidele mx-auto max-w-sm overflow-hidden rounded-2xl border-2 border-brand-ink bg-white shadow-elevated">
         <header className="flex items-center justify-between bg-brand-gradient-ink px-4 py-3 text-white">
           <Logo size={24} variant="bare" />
-          <span className="text-small font-semibold uppercase tracking-wider text-brand-leaf">Foyer abonné</span>
+          <span className="text-small font-semibold uppercase tracking-wider text-brand-leaf">Abonné</span>
         </header>
         <div className="p-6 text-center">
           <div className="mx-auto w-60" dangerouslySetInnerHTML={{ __html: qr }} />
           <p className="num mt-3 text-[1.4rem] font-bold tracking-[0.12em] text-brand-ink">{client.code}</p>
           <p className="font-semibold text-brand-ink">{client.nom}</p>
-          {entreprise && <p className="mt-2 text-small text-muted-foreground">Collecte assurée par {entreprise.nom}</p>}
+          {entreprise && (
+            <div className="mt-3 rounded-lg bg-brand-green/10 px-3 py-2 text-small text-terrain-ok">
+              Collecte assurée par <strong>{entreprise.nom}</strong>
+              {entreprise.telephone && <span className="block">{telLisible(entreprise.telephone)}</span>}
+            </div>
+          )}
         </div>
       </article>
     </PortalShell>

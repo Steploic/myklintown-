@@ -53,7 +53,7 @@ export default async function CarteClientsPage() {
       lng: d.lng,
       ton: 'info',
       picto: 'demande',
-      titre: 'Ménage en attente de précollecteur',
+      titre: 'Abonné en attente de précollecteur',
       lignes: [[d.quartier, d.plan_nom].filter(Boolean).join(' · ')],
       lien: { href: '/precollecteur/demandes', label: 'Prendre en charge' },
     });
@@ -79,7 +79,7 @@ export default async function CarteClientsPage() {
       {enDirect.length > 0 && <RafraichissementAuto secondes={30} />}
       <PageHeader
         titre="Carte des clients"
-        sousTitre="Chaque repère est un foyer ; sa couleur dit où en est le paiement. Touchez un repère pour la fiche ou l’itinéraire."
+        sousTitre="Chaque repère est un abonné ; sa couleur dit où en est le paiement. Touchez un repère pour la fiche ou l’itinéraire."
         actions={
           demandes.length > 0 && (
             <Link href="/precollecteur/demandes" className="btn-secondary">

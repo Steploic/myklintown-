@@ -1,20 +1,31 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { Logo } from '@myklintown/ui';
 import { AuthAside } from '@/components/auth-aside';
+import { getCurrentProfile } from '@/lib/get-profile';
+import { destinationApresConnexion } from '@/lib/destination';
 import { LoginForm } from './login-form';
 
 export const metadata = { title: 'Connexion' };
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
   const { next } = await searchParams;
+  // Session toujours valide : on ouvre l'espace sans redemander le mot de passe.
+  // L'application installée démarre ici (manifest : start_url = /login) ; sans
+  // ce renvoi, chaque ouverture affichait le formulaire alors que la session
+  // était intacte (retour de l'équipe, 08/11/2026). Se déconnecter reste un
+  // geste volontaire (/logout).
+  const profil = await getCurrentProfile();
+  if (profil?.role) redirect(destinationApresConnexion(profil.role, next));
+
   return (
     <div className="grid min-h-screen bg-surface lg:grid-cols-2">
       <AuthAside
         titre="Content de vous revoir."
         points={[
           'Précollecteurs : clients, factures, tournées',
-          'Ménages : abonnement, passages, signalements',
-          'Mairies : zones et supervision du territoire',
+          'Abonnés : devis, passages, signalements',
+          'Employés : tournées et scans sur le terrain',
         ]}
       />
       <div className="flex items-center justify-center p-6 lg:p-10">

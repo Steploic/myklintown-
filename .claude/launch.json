@@ -6,6 +6,15 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@myklintown/web", "dev"],
       "port": 3000
+    },
+    {
+      "name": "web-sans-base",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "-e",
+        "process.env.NEXT_PUBLIC_SUPABASE_URL='http://127.0.0.1:9';process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY='cle-factice';require('child_process').spawn('pnpm',['--filter','@myklintown/web','exec','next','dev','--port','3100'],{stdio:'inherit',shell:true}).on('exit',c=>process.exit(c??0))"
+      ],
+      "port": 3100
     }
   ]
 }

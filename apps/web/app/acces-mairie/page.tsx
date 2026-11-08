@@ -50,7 +50,7 @@ export default async function AccesMairiePage({ searchParams }: { searchParams: 
           <h1 className="mt-4">Accès Mairie</h1>
           <p className="mt-2 text-body text-muted-foreground">
             L’espace Mairie permet de découper la commune en zones de collecte, d’y affecter les précollecteurs et de
-            superviser l’activité (sans accès aux données personnelles des ménages). Il est ouvert après vérification
+            superviser l’activité (sans accès aux données personnelles des abonnés). Il est ouvert après vérification
             par l’équipe MyKlinTown.
           </p>
 

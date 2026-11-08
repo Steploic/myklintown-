@@ -46,7 +46,7 @@ test.describe('précollecteur : exploitation', () => {
 
   test('nouveau client : carte, formule de la grille, première facture, QR', async ({ page }) => {
     await page.goto('/precollecteur/clients/nouveau');
-    await page.getByLabel('Nom du client / du foyer *').fill(NOM);
+    await page.getByLabel('Nom de l’abonné (personne ou structure) *').fill(NOM);
     await page.getByLabel('Téléphone').fill('677 55 66 77');
     await page.getByLabel('Quartier').fill('Nsam');
     await page.getByRole('radio', { name: /Trimestriel/ }).check({ force: true });
@@ -58,7 +58,7 @@ test.describe('précollecteur : exploitation', () => {
     await expect(page).toHaveURL(/\/precollecteur\/clients\/[0-9a-f-]+\?cree=1/);
     await expect(page.getByText('Client enregistré.')).toBeVisible();
     await expect(page.getByRole('heading', { name: NOM })).toBeVisible();
-    await expect(page.locator('section', { hasText: 'QR code du foyer' }).locator('svg path').first()).toBeAttached();
+    await expect(page.locator('section', { hasText: 'QR code de l’abonné' }).locator('svg path').first()).toBeAttached();
     await expect(page.getByText(/9\s500\sFCFA/).first()).toBeVisible();
     await expect(page.getByText(/À régler avant le/)).toBeVisible();
   });
