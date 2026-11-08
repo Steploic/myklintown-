@@ -71,13 +71,14 @@ export default async function PrecollecteurDashboard({
       .neq('statut', 'resolu'),
     parametre(supabase, 'commission_taux', 0.1),
   ]);
-  const { data: ouvertes } = await rpc(supabase, 'demandes_ouvertes');
+  // Demandes de devis du secteur auxquelles il n'a pas encore répondu.
+  const { data: ouvertes } = await rpc(supabase, 'demandes_devis_ouvertes');
   const { count: nbEspecesAValider } = await supabase
     .from('paiements_clients')
     .select('id', { count: 'exact', head: true })
     .eq('entreprise_id', entreprise.id)
     .eq('statut', 'a_valider');
-  const nbDemandesOuvertes = rows(ouvertes).length;
+  const nbDemandesOuvertes = rows<{ mon_devis_statut: string | null }>(ouvertes).filter((d) => d.mon_devis_statut !== 'propose').length;
 
   const clients = rows<{
     id: string;
@@ -202,8 +203,8 @@ export default async function PrecollecteurDashboard({
             <div>
               <h2>Commencez par vos clients</h2>
               <p className="mt-1 max-w-xl text-body-sm text-muted-foreground">
-                Enregistrez les abonnés que vous servez déjà : l’abonnement est pris dans la grille
-                tarifaire MyKlinTown et la première facture est émise automatiquement. Vous voulez
+                Enregistrez les abonnés que vous servez déjà, au tarif que vous avez convenu avec
+                chacun : la première facture est émise automatiquement. Vous voulez
                 d’abord voir l’outil en action ? Chargez un jeu de démonstration, supprimable en un clic.
               </p>
             </div>
@@ -252,7 +253,7 @@ export default async function PrecollecteurDashboard({
           className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-brand-blue/25 bg-brand-blue/5 px-4 py-3 text-body-sm font-semibold text-brand-blue"
         >
           <span className="flex items-center gap-2">
-            <Inbox size={18} /> {nbDemandesOuvertes} abonné{nbDemandesOuvertes > 1 ? 's attendent' : ' attend'} un précollecteur : prenez-le{nbDemandesOuvertes > 1 ? 's' : ''} en charge
+            <Inbox size={18} /> {nbDemandesOuvertes} demande{nbDemandesOuvertes > 1 ? 's' : ''} de devis dans votre secteur : proposez votre tarif
           </span>
           <span aria-hidden>→</span>
         </Link>

@@ -97,8 +97,15 @@ export interface ClientStatut {
   est_demo: boolean;
   created_at: string;
   plan_nom: string | null;
+  /** Depuis 20261110000018 : le tarif de l'abonné (montant par facture) et sa période, plus la grille. */
   plan_prix: number | null;
   plan_duree_mois: number | null;
+  /** Tarif convenu avec l'abonné (devis), migration 20261110000018. */
+  tarif_fcfa?: number | null;
+  facturation_mois?: number;
+  passages_semaine?: number | null;
+  sacs_inclus?: boolean;
+  sacs_volume_litres?: number | null;
   zone_nom: string | null;
   couverture_fin: string | null;
   nb_impayees: number;
@@ -229,4 +236,52 @@ export interface ActionState {
   ok?: string;
   /** L'échec vient du réseau (à retenter), pas d'un refus. */
   reseau?: boolean;
+}
+
+/** Demande de devis de l'abonné connecté (migration 20261110000018). */
+export interface DemandeDevis {
+  id: string;
+  categorie: string;
+  quartier: string;
+  passages_semaine: number;
+  statut: 'en_attente' | 'devis_recu' | 'acceptee' | 'annulee';
+  created_at: string;
+}
+
+/** Devis reçu par l'abonné (`mes_devis`), avec la vitrine du précollecteur. */
+export interface DevisRecu {
+  devis_id: string;
+  statut: 'propose' | 'refuse';
+  tarif_fcfa: number;
+  facturation_mois: number;
+  passages_semaine: number;
+  sacs_inclus: boolean;
+  sacs_volume_litres: number | null;
+  note: string | null;
+  created_at: string;
+  entreprise_nom: string;
+  entreprise_devise: string | null;
+  entreprise_logo: string | null;
+}
+
+/** Demande ouverte vue par un précollecteur vérifié (`demandes_devis_ouvertes`) : identité masquée. */
+export interface DemandeOuverte {
+  id: string;
+  categorie: string;
+  commune: string | null;
+  quartier: string;
+  acces_voie: string | null;
+  gabarit_max: string | null;
+  inaccessible_pluies: boolean;
+  passages_semaine: number;
+  sacs_besoin: boolean;
+  sacs_volume_litres: number | null;
+  details: Record<string, string | number | boolean | string[]> | null;
+  ciblee: boolean;
+  created_at: string;
+  mon_devis_id: string | null;
+  mon_devis_statut: 'propose' | 'accepte' | 'refuse' | 'retire' | 'caduc' | null;
+  mon_tarif_fcfa: number | null;
+  mon_facturation_mois: number | null;
+  nb_devis: number;
 }

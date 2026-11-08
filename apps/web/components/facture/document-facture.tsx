@@ -157,7 +157,7 @@ export function DocumentFacture({
       )}
 
       <footer className="mt-8 flex items-center justify-between gap-4 border-t border-border pt-4 text-small text-muted-foreground">
-        <span>Document généré par MyKlinTown — tarif issu de la grille commune.</span>
+        <span>Document généré par MyKlinTown — tarif convenu entre l’abonné et son précollecteur.</span>
         <Logo size={20} />
       </footer>
     </article>

@@ -1,9 +1,9 @@
 import { cache } from 'react';
 import { redirect } from 'next/navigation';
-import { getSupabase, row, utilisateurCourant } from '@/lib/server';
-import type { ClientStatut, Entreprise } from '@/lib/types';
+import { getSupabase, row, rows, rpc, utilisateurCourant } from '@/lib/server';
+import type { ClientStatut, DemandeDevis, DevisRecu, Entreprise } from '@/lib/types';
 
-/** Abonnement du ménage connecté (le plus récent non résilié), et son précollecteur. */
+/** Abonnement de l'abonné connecté (le plus récent non résilié), et son précollecteur. */
 export const getMonAbonnement = cache(async () => {
   const supabase = await getSupabase();
   const user = await utilisateurCourant(supabase);
@@ -24,16 +24,18 @@ export const getMonAbonnement = cache(async () => {
     const { data: e } = await supabase.from('entreprises').select('id, nom, telephone').eq('id', client.entreprise_id).maybeSingle();
     entreprise = row<Pick<Entreprise, 'id' | 'nom' | 'telephone'>>(e);
   }
-  // R3 : demande en attente d'un précollecteur (ménage hors zone couverte).
-  let demande: { id: string; quartier: string | null; created_at: string } | null = null;
+  // Demande de devis ouverte (migration 20261110000018) et devis reçus.
+  let demande: DemandeDevis | null = null;
+  let devis: DevisRecu[] = [];
   if (!client) {
     const { data: d } = await supabase
-      .from('demandes_abonnement')
-      .select('id, quartier, created_at')
+      .from('demandes_devis')
+      .select('id, categorie, quartier, passages_semaine, statut, created_at')
       .eq('user_id', user.id)
-      .eq('statut', 'en_attente')
+      .in('statut', ['en_attente', 'devis_recu'])
       .maybeSingle();
-    demande = row<{ id: string; quartier: string | null; created_at: string }>(d);
+    demande = row<DemandeDevis>(d);
+    if (demande) devis = rows<DevisRecu>((await rpc(supabase, 'mes_devis')).data);
   }
-  return { supabase, user, client, entreprise, demande };
+  return { supabase, user, client, entreprise, demande, devis };
 });

@@ -6,17 +6,13 @@ import { ClientFields } from '@/components/precollecteur/client-fields';
 import { requireEntreprise } from '@/lib/precollecteur/context';
 import { creerClientAction } from '@/lib/precollecteur/actions';
 import { rows } from '@/lib/server';
-import type { Plan, Zone } from '@/lib/types';
+import type { Zone } from '@/lib/types';
 
 export const metadata = { title: 'Nouveau client' };
 
 export default async function NouveauClientPage() {
   const { supabase, entreprise } = await requireEntreprise();
-  const [pl, za] = await Promise.all([
-    supabase.from('plans_tarifaires').select('*').eq('actif', true).order('ordre'),
-    supabase.from('zone_affectations').select('zones(*)').eq('entreprise_id', entreprise.id),
-  ]);
-  const plans = rows<Plan>(pl.data);
+  const za = await supabase.from('zone_affectations').select('zones(*)').eq('entreprise_id', entreprise.id);
   const zones = rows<{ zones: Zone | null }>(za.data)
     .map((a) => a.zones)
     .filter((z): z is Zone => !!z);
@@ -25,11 +21,11 @@ export default async function NouveauClientPage() {
     <PrecoShell path="/precollecteur/clients">
       <PageHeader
         titre="Nouveau client"
-        sousTitre="Le prix vient de la grille tarifaire commune : il ne se saisit pas."
+        sousTitre="Vous fixez le tarif convenu avec l’abonné : il sert à chacune de ses factures."
         retour={{ href: '/precollecteur/clients', label: 'Clients' }}
       />
       <ActionForm action={creerClientAction} className="card-soft max-w-3xl p-5 sm:p-6">
-        <ClientFields plans={plans} zones={zones} />
+        <ClientFields zones={zones} />
         <label className="mt-5 flex items-start gap-3 rounded-lg bg-muted/60 p-3 text-body-sm">
           <input type="checkbox" name="facturer" defaultChecked className="mt-0.5 h-5 w-5 accent-[#30823A]" />
           <span>

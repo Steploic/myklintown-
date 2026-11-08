@@ -148,8 +148,54 @@ export async function majEntrepriseAction(_p: ActionState, fd: FormData): Promis
   return { ok: 'Informations enregistrées.' };
 }
 
+/** Tarif saisi (fiche client ou devis) : montant par facture, période, passages, sacs. */
+function lireTarif(fd: FormData):
+  | { tarif_fcfa: number; facturation_mois: number; passages_semaine: number; sacs_inclus: boolean; sacs_volume_litres: number | null }
+  | { error: string } {
+  const tarif = num(fd, 'tarif_fcfa');
+  if (tarif == null || !Number.isInteger(tarif) || tarif < 0 || tarif > 10_000_000) {
+    return { error: 'Indiquez le montant de chaque facture, en FCFA (nombre entier).' };
+  }
+  const mois = num(fd, 'facturation_mois') ?? 1;
+  const passages = num(fd, 'passages_semaine') ?? 2;
+  if (![1, 3, 6, 12].includes(mois)) return { error: 'Période facturée : 1, 3, 6 ou 12 mois.' };
+  if (!Number.isInteger(passages) || passages < 1 || passages > 7) return { error: 'Passages par semaine : de 1 à 7.' };
+  const sacs = fd.get('sacs_inclus') === 'on';
+  const volume = sacs ? num(fd, 'sacs_volume_litres') : null;
+  return { tarif_fcfa: tarif, facturation_mois: mois, passages_semaine: passages, sacs_inclus: sacs, sacs_volume_litres: volume };
+}
+
 // =============================================================================
-// Facturation — cœur : une facture = une période de couverture, prix de la grille
+// Devis (migration 20261110000018)
+// =============================================================================
+
+export async function proposerDevisAction(_p: ActionState, fd: FormData): Promise<ActionState> {
+  const { supabase } = await requireEntreprise();
+  const tarif = lireTarif(fd);
+  if ('error' in tarif) return { error: tarif.error };
+  const { error } = await rpc(supabase, 'proposer_devis', {
+    p_demande: String(fd.get('demande_id')),
+    p_tarif: tarif.tarif_fcfa,
+    p_facturation_mois: tarif.facturation_mois,
+    p_passages: tarif.passages_semaine,
+    p_sacs: tarif.sacs_inclus,
+    p_volume: tarif.sacs_volume_litres,
+    p_note: txt(fd, 'note'),
+  });
+  if (error) return { error: erreurLisible(error.message) };
+  rafraichir();
+  return { ok: 'Devis envoyé : l’abonné le voit dans son espace.' };
+}
+
+export async function retirerDevisAction(fd: FormData) {
+  const { supabase } = await requireEntreprise();
+  const { error } = await rpc(supabase, 'retirer_devis', { p_devis: String(fd.get('devis_id')) });
+  rafraichir();
+  if (error) redirect(`/precollecteur/demandes?erreur=${encodeURIComponent(error.message)}`);
+}
+
+// =============================================================================
+// Facturation — cœur : une facture = une période de couverture, au tarif convenu avec l'abonné
 // =============================================================================
 
 async function emettreFacturePour(
@@ -159,17 +205,25 @@ async function emettreFacturePour(
 ): Promise<{ error?: string; numero?: string }> {
   const { data: c } = await supabase
     .from('clients')
-    .select('id, nom, plan_id, statut')
+    .select('id, nom, plan_id, statut, tarif_fcfa, facturation_mois')
     .eq('id', clientId)
     .eq('entreprise_id', entrepriseId)
     .maybeSingle();
-  const client = row<{ id: string; nom: string; plan_id: string | null; statut: string }>(c);
+  const client = row<{ id: string; nom: string; plan_id: string | null; statut: string; tarif_fcfa: number | null; facturation_mois: number | null }>(c);
   if (!client) return { error: 'Client introuvable.' };
-  if (!client.plan_id) return { error: 'Choisissez d’abord une formule dans la grille tarifaire.' };
 
-  const { data: p } = await supabase.from('plans_tarifaires').select('*').eq('id', client.plan_id).single();
-  const plan = row<Plan>(p);
-  if (!plan) return { error: 'Formule introuvable.' };
+  // Tarif convenu avec l'abonné ; à défaut, l'ancienne formule de sa fiche.
+  let montant = client.tarif_fcfa;
+  let dureeMois = client.facturation_mois ?? 1;
+  if (montant == null && client.plan_id) {
+    const { data: p } = await supabase.from('plans_tarifaires').select('*').eq('id', client.plan_id).single();
+    const plan = row<Plan>(p);
+    if (plan) {
+      montant = plan.prix_fcfa;
+      dureeMois = plan.duree_mois;
+    }
+  }
+  if (montant == null) return { error: 'Fixez d’abord le tarif de cet abonné, depuis sa fiche.' };
 
   const { data: attente } = await supabase
     .from('factures')
@@ -193,7 +247,7 @@ async function emettreFacturePour(
   const { debut, fin, echeance } = periodeFacture({
     aujourdhui: isoJour(),
     finPrecedente,
-    dureeMois: plan.duree_mois,
+    dureeMois,
     grace,
   });
 
@@ -202,11 +256,11 @@ async function emettreFacturePour(
     .insert({
       entreprise_id: entrepriseId,
       client_id: clientId,
-      plan_id: plan.id,
-      libelle: `Abonnement ${plan.nom} · du ${dateFr(debut)} au ${dateFr(fin)}`,
+      plan_id: client.plan_id,
+      libelle: `Abonnement de précollecte · du ${dateFr(debut)} au ${dateFr(fin)}`,
       periode_debut: debut,
       periode_fin: fin,
-      montant_fcfa: plan.prix_fcfa,
+      montant_fcfa: montant,
       echeance,
     })
     .select('numero')
@@ -357,9 +411,9 @@ async function zoneDuPoint(supabase: Supa, lat: number | null, lng: number | nul
 export async function creerClientAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   const { supabase, entreprise } = await requireEntreprise();
   const nom = normaliserNom(txt(fd, 'nom')) || null;
-  const planId = txt(fd, 'plan_id');
   if (!nom) return { error: 'Le nom du client est obligatoire.' };
-  if (!planId) return { error: 'Choisissez une formule dans la grille tarifaire.' };
+  const tarif = lireTarif(fd);
+  if ('error' in tarif) return { error: tarif.error };
 
   const lat = num(fd, 'lat');
   const lng = num(fd, 'lng');
@@ -377,7 +431,7 @@ export async function creerClientAction(_p: ActionState, fd: FormData): Promise<
       lat,
       lng,
       zone_id: zone,
-      plan_id: planId,
+      ...tarif,
       notes: txt(fd, 'notes'),
       statut: 'actif',
     })
@@ -412,6 +466,8 @@ export async function majClientAction(_p: ActionState, fd: FormData): Promise<Ac
   const id = String(fd.get('id'));
   const nom = normaliserNom(txt(fd, 'nom')) || null;
   if (!nom) return { error: 'Le nom est obligatoire.' };
+  const tarif = lireTarif(fd);
+  if ('error' in tarif) return { error: tarif.error };
   const lat = num(fd, 'lat');
   const lng = num(fd, 'lng');
   const zone = txt(fd, 'zone_id') ?? (await zoneDuPoint(supabase, lat, lng));
@@ -422,7 +478,7 @@ export async function majClientAction(_p: ActionState, fd: FormData): Promise<Ac
       telephone: txt(fd, 'telephone'),
       adresse: txt(fd, 'adresse'),
       quartier: normaliserNom(txt(fd, 'quartier')) || null,
-      plan_id: txt(fd, 'plan_id'),
+      ...tarif,
       notes: txt(fd, 'notes'),
       lat,
       lng,
@@ -729,9 +785,8 @@ export async function chargerDemoAction(_p: ActionState, _fd: FormData): Promise
     .limit(1);
   if (rows(dejà).length) return { error: 'Les données de démonstration sont déjà chargées.' };
 
-  const { data: pl } = await supabase.from('plans_tarifaires').select('*').eq('actif', true).order('ordre');
-  const plans = rows<Plan>(pl);
-  if (!plans.length) return { error: 'La grille tarifaire est vide : impossible de créer des abonnements.' };
+  // Plus de grille commune : chaque abonné de démonstration a son tarif (mensuel, ou trimestriel un sur cinq).
+  const tarifDemo = (i: number) => (i % 5 === 0 ? { tarif: 9500, mois: 3 } : { tarif: 3500, mois: 1 });
 
   const { data: emps } = await supabase
     .from('employes')
@@ -768,7 +823,9 @@ export async function chargerDemoAction(_p: ActionState, _fd: FormData): Promise
         adresse: `Rue ${i + 3}, porte ${10 + i}`,
         lat: 3.8285 + (Math.sin(i * 1.7) * 0.012),
         lng: 11.4985 + (Math.cos(i * 2.3) * 0.014),
-        plan_id: plans[i % 5 === 0 ? Math.min(1, plans.length - 1) : 0]!.id,
+        tarif_fcfa: tarifDemo(i).tarif,
+        facturation_mois: tarifDemo(i).mois,
+        passages_semaine: 2,
         statut: i === 17 ? 'demande' : 'actif',
         est_demo: true,
       })),
@@ -781,18 +838,17 @@ export async function chargerDemoAction(_p: ActionState, _fd: FormData): Promise
   const auj = isoJour();
   const factures: Record<string, unknown>[] = [];
   clients.slice(0, 17).forEach((c, i) => {
-    const plan = plans[i % 5 === 0 ? Math.min(1, plans.length - 1) : 0]!;
+    const t = tarifDemo(i);
     const decalage = i < 10 ? -10 : i < 13 ? -26 : -40;
     const debut = ajouterJours(auj, decalage);
-    const fin = ajouterJours(ajouterMois(debut, plan.duree_mois), -1);
+    const fin = ajouterJours(ajouterMois(debut, t.mois), -1);
     factures.push({
       entreprise_id: entreprise.id,
       client_id: c.id,
-      plan_id: plan.id,
-      libelle: `Abonnement ${plan.nom} · du ${dateFr(debut)} au ${dateFr(fin)}`,
+      libelle: `Abonnement de précollecte · du ${dateFr(debut)} au ${dateFr(fin)}`,
       periode_debut: debut,
       periode_fin: fin,
-      montant_fcfa: plan.prix_fcfa,
+      montant_fcfa: t.tarif,
       echeance: ajouterJours(debut, 7),
     });
   });
@@ -881,13 +937,3 @@ export async function supprimerDemoAction(_p: ActionState, _fd: FormData): Promi
 // R3 — Demandes de ménages sans précollecteur
 // =============================================================================
 
-export async function prendreDemandeAction(fd: FormData) {
-  const { supabase, entreprise } = await requireEntreprise();
-  const { data, error } = await rpc(supabase, 'prendre_demande', { p_demande: String(fd.get('demande_id')) });
-  if (error) redirect(`/precollecteur/demandes?erreur=${encodeURIComponent(error.message)}`);
-  const clientId = data as string;
-  // Paiement avant service : la première période est facturée tout de suite.
-  await emettreFacturePour(supabase, entreprise.id, clientId);
-  rafraichir();
-  redirect(`/precollecteur/clients/${clientId}?pris=1`);
-}
