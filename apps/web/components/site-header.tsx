@@ -4,9 +4,8 @@ import { MobileSiteMenu } from './mobile-site-menu';
 
 const NAV = [
   { href: '/#precollecteurs', label: 'Précollecteurs' },
-  { href: '/#menages', label: 'Ménages' },
-  { href: '/#mairies', label: 'Mairies' },
-  { href: '/#tarifs', label: 'Tarifs' },
+  { href: '/#abonnes', label: 'Abonnés' },
+  { href: '/#fonctionnement', label: 'Comment ça marche' },
 ];
 
 export function SiteHeader() {

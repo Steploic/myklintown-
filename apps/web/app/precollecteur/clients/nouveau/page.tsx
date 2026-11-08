@@ -31,7 +31,7 @@ export default async function NouveauClientPage() {
       <ActionForm action={creerClientAction} className="card-soft max-w-3xl p-5 sm:p-6">
         <ClientFields plans={plans} zones={zones} />
         <label className="mt-5 flex items-start gap-3 rounded-lg bg-muted/60 p-3 text-body-sm">
-          <input type="checkbox" name="facturer" defaultChecked className="mt-0.5 h-5 w-5 accent-[#3E9A5E]" />
+          <input type="checkbox" name="facturer" defaultChecked className="mt-0.5 h-5 w-5 accent-[#30823A]" />
           <span>
             <strong className="text-brand-ink">Émettre la première facture maintenant</strong>
             <span className="block text-muted-foreground">
@@ -40,12 +40,12 @@ export default async function NouveauClientPage() {
           </span>
         </label>
         <label className="mt-3 flex items-start gap-3 rounded-lg bg-muted/60 p-3 text-body-sm">
-          <input type="checkbox" name="charte_remise" className="mt-0.5 h-5 w-5 shrink-0 accent-[#3E9A5E]" />
+          <input type="checkbox" name="charte_remise" className="mt-0.5 h-5 w-5 shrink-0 accent-[#30823A]" />
           <span>
             <strong className="text-brand-ink">Charte remise et acceptée</strong>
             <span className="block text-muted-foreground">
-              Le ménage a reçu sur papier la{' '}
-              <Link href="/legal/charte" target="_blank" className="font-semibold text-brand-blue underline">charte du ménage</Link> et le{' '}
+              L’abonné a reçu sur papier la{' '}
+              <Link href="/legal/charte" target="_blank" className="font-semibold text-brand-blue underline">charte de l’abonné</Link> et le{' '}
               <Link href="/legal/contrat" target="_blank" className="font-semibold text-brand-blue underline">contrat d’abonnement</Link> en
               vigueur, et les a acceptés. C’est enregistré à votre nom, avec la date.
             </span>

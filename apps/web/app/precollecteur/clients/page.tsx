@@ -106,7 +106,7 @@ export default async function ClientsPage({
           <EmptyState
             icon={Users}
             titre={tous.length ? 'Aucun client ne correspond' : 'Pas encore de client'}
-            texte={tous.length ? 'Changez de filtre ou de recherche.' : 'Ajoutez les ménages que vous servez pour suivre leurs abonnements et leurs paiements.'}
+            texte={tous.length ? 'Changez de filtre ou de recherche.' : 'Ajoutez les abonnés que vous servez pour suivre leurs abonnements et leurs paiements.'}
             action={
               !tous.length && (
                 <Link href="/precollecteur/clients/nouveau" className="btn-primary">

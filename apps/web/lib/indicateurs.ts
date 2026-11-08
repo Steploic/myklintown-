@@ -164,10 +164,10 @@ export function heures(v: number | null | undefined): string {
 export const INDICATEURS: DefIndicateur[] = [
   {
     cle: 'abonnes_actifs',
-    label: 'Ménages abonnés actifs',
+    label: 'Abonnés actifs',
     definition: 'Abonnements en cours de validité',
     methode:
-      'Ménages inscrits dont une facture payée couvre le jour de mesure, ou s’est terminée depuis moins que le délai de grâce. Payé = paiements validés, encaissés au plus tard ce jour-là, couvrant le montant.',
+      'Abonnés inscrits dont une facture payée couvre le jour de mesure, ou s’est terminée depuis moins que le délai de grâce. Payé = paiements validés, encaissés au plus tard ce jour-là, couvrant le montant.',
     sens: 'haut',
     cumul: true,
     format: (v) => nombre(v),
@@ -175,8 +175,8 @@ export const INDICATEURS: DefIndicateur[] = [
   {
     cle: 'taux_paiement',
     label: 'Taux de paiement effectif',
-    definition: 'Abonnés à jour ÷ ménages inscrits',
-    methode: 'Abonnés actifs (ci-dessus) ÷ ménages inscrits (fiche active ou suspendue, hors demandes et résiliations).',
+    definition: 'Abonnés à jour ÷ abonnés inscrits',
+    methode: 'Abonnés actifs (ci-dessus) ÷ abonnés inscrits (fiche active ou suspendue, hors demandes et résiliations).',
     sens: 'haut',
     format: pourcent,
   },
@@ -185,7 +185,7 @@ export const INDICATEURS: DefIndicateur[] = [
     label: 'Taux d’exécution du service',
     definition: 'Passages réalisés ÷ passages planifiés',
     methode:
-      'Passages des tournées de la période, hors tournées annulées. Un passage resté « prévu » un jour passé compte comme non réalisé ; prévu aujourd’hui, il n’est pas encore dû. Un ménage refusé pour abonnement impayé, expiré ou suspendu (blocage au passage) n’était pas à servir : son passage est retiré des passages planifiés.',
+      'Passages des tournées de la période, hors tournées annulées. Un passage resté « prévu » un jour passé compte comme non réalisé ; prévu aujourd’hui, il n’est pas encore dû. Un abonné refusé pour abonnement impayé, expiré ou suspendu (blocage au passage) n’était pas à servir : son passage est retiré des passages planifiés.',
     sens: 'haut',
     format: pourcent,
   },
@@ -194,7 +194,7 @@ export const INDICATEURS: DefIndicateur[] = [
     label: 'Rétention mensuelle',
     definition: 'Abonnés renouvelant leur formule',
     methode:
-      'Sur 30 jours glissants, ménages dont la période payée s’est terminée (délai de grâce écoulé) et qui ont payé la période suivante.',
+      'Sur 30 jours glissants, abonnés dont la période payée s’est terminée (délai de grâce écoulé) et qui ont payé la période suivante.',
     sens: 'haut',
     format: pourcent,
   },
@@ -203,16 +203,16 @@ export const INDICATEURS: DefIndicateur[] = [
     label: 'Délai de traitement d’un signalement',
     definition: 'Moyenne, du dépôt à la résolution',
     methode:
-      'Signalements déposés par les ménages et résolus dans la période ; l’heure de résolution est posée par la plateforme. Les signalements encore ouverts sont comptés à part.',
+      'Signalements déposés par les abonnés et résolus dans la période ; l’heure de résolution est posée par la plateforme. Les signalements encore ouverts sont comptés à part.',
     sens: 'bas',
     format: heures,
   },
   {
     cle: 'cout_par_menage',
-    label: 'Coût de collecte par ménage servi',
-    definition: 'Charges d’exploitation ÷ ménages servis',
+    label: 'Coût de collecte par abonné servi',
+    definition: 'Charges d’exploitation ÷ abonnés servis',
     methode:
-      'Calcul mensuel : charges saisies par les précollecteurs ÷ ménages servis au moins une fois dans le mois, chez ceux qui ont saisi leurs charges.',
+      'Calcul mensuel : charges saisies par les précollecteurs ÷ abonnés servis au moins une fois dans le mois, chez ceux qui ont saisi leurs charges.',
     sens: 'bas',
     mensuel: true,
     format: (v) => fcfa(v),
@@ -304,7 +304,7 @@ export function detail(v: ValeursKpi, cle: CleIndicateur): string {
     case 'abonnes_actifs':
       return v.abonnes_actifs.dont_grace
         ? `dont ${nombre(v.abonnes_actifs.dont_grace)} en délai de grâce · ${nombre(v.menages_inscrits)} inscrits`
-        : `${nombre(v.menages_inscrits)} ménages inscrits`;
+        : `${nombre(v.menages_inscrits)} abonnés inscrits`;
     case 'taux_paiement':
       return `${nombre(v.taux_paiement.num)} à jour sur ${nombre(v.taux_paiement.den)} inscrits`;
     case 'taux_execution':
@@ -327,7 +327,7 @@ export function detail(v: ValeursKpi, cle: CleIndicateur): string {
       const c = v.cout_par_menage;
       if (!c) return 'Calculé sur le mois';
       if (!c.entreprises_saisies) return `Aucune charge saisie ce mois (${nombre(c.entreprises_actives)} précollecteur${c.entreprises_actives > 1 ? 's' : ''} en activité)`;
-      return `${fcfa(c.charges)} ÷ ${nombre(c.menages_mois)} ménages servis · ${nombre(c.entreprises_saisies)} précollecteur${c.entreprises_saisies > 1 ? 's' : ''} sur ${nombre(c.entreprises_actives)} ont saisi`;
+      return `${fcfa(c.charges)} ÷ ${nombre(c.menages_mois)} abonnés servis · ${nombre(c.entreprises_saisies)} précollecteur${c.entreprises_saisies > 1 ? 's' : ''} sur ${nombre(c.entreprises_actives)} ont saisi`;
     }
     case 'part_mobile_money':
       return `${fcfa(v.part_mobile_money.num)} sur ${fcfa(v.part_mobile_money.den)} encaissés`;
@@ -371,7 +371,7 @@ export function criteres(t: TableauIndicateurs): Critere[] {
   return [
     {
       code: 'C1',
-      enonce: `Au moins ${c1 != null ? nombre(c1) : '—'} ménages abonnés actifs au 31 décembre`,
+      enonce: `Au moins ${c1 != null ? nombre(c1) : '—'} abonnés actifs au 31 décembre`,
       etat: actifs == null ? 'Pas encore mesuré' : `${nombre(actifs)} aujourd’hui`,
       chip: actifs != null && c1 != null && actifs >= c1 ? 'chip-ok' : 'chip-neutre',
     },
@@ -383,10 +383,10 @@ export function criteres(t: TableauIndicateurs): Critere[] {
     },
     {
       code: 'C3',
-      enonce: 'Coût de collecte par ménage servi mesuré et inférieur à la part reversée au précollecteur',
+      enonce: 'Coût de collecte par abonné servi mesuré et inférieur à la part reversée au précollecteur',
       etat: avecCouts?.valeur == null
         ? 'Pas encore mesuré : aucune charge saisie'
-        : `${fcfa(avecCouts.valeur)} de coût pour ${fcfa(avecCouts.recette_par_menage)} reversés par ménage servi`,
+        : `${fcfa(avecCouts.valeur)} de coût pour ${fcfa(avecCouts.recette_par_menage)} reversés par abonné servi`,
       chip:
         avecCouts?.valeur == null || avecCouts.recette_par_menage == null
           ? 'chip-neutre'

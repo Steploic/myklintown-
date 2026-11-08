@@ -3,9 +3,10 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createServerSupabase } from '@myklintown/db/server';
-import { canAccessPath, homeForRole, isProtectedPath, isSelfServiceRole, type UserRole } from './roles';
+import { homeForRole, isSelfServiceRole, type UserRole } from './roles';
 import { estErreurReseau, MESSAGE_RESEAU } from './format';
-import { cheminInterne, normaliserNom } from './metier';
+import { normaliserNom } from './metier';
+import { destinationApresConnexion } from './destination';
 import { origineDemande, type Supa } from './server';
 import { enregistrerAcceptation } from './acceptations';
 
@@ -38,11 +39,7 @@ export async function signInAction(_prev: AuthState, formData: FormData): Promis
   const role = (profile as unknown as { role?: string } | null)?.role;
   // Retour à la page demandée avant la connexion, si elle est interne et
   // permise pour ce rôle (sinon, accueil de l'espace).
-  const suite = String(formData.get('next') ?? '');
-  if (cheminInterne(suite) && (!isProtectedPath(suite.split('?')[0]!) || canAccessPath(role, suite.split('?')[0]!))) {
-    redirect(suite);
-  }
-  redirect(homeForRole(role));
+  redirect(destinationApresConnexion(role, String(formData.get('next') ?? '')));
 }
 
 /** Inscription : crée l'utilisateur (le trigger SQL crée le profil avec le rôle). */
@@ -73,7 +70,7 @@ export async function signUpAction(_prev: AuthState, formData: FormData): Promis
   // Ménage : charte du ménage et contrat d'abonnement acceptés dès l'inscription.
   const menage = role === 'citoyen';
   if (menage && formData.get('documents') !== 'on') {
-    return { error: 'Cochez la case pour accepter la charte du ménage et le contrat d’abonnement.' };
+    return { error: 'Cochez la case pour accepter la charte de l’abonné et le contrat d’abonnement.' };
   }
 
   const supabase = createServerSupabase(await cookies());

@@ -13,11 +13,11 @@ interface LogoProps {
   variant?: 'badge' | 'bare';
 }
 
-// Assets dérivés du logo officiel (public/logo-myklintown.png) — voir public/brand/.
-const HORIZONTAL = { couleur: '/brand/logo-horizontal.png', blanc: '/brand/logo-horizontal-blanc.png', ratio: 1569 / 400 };
+// Assets dérivés du logo d'octobre 2026 (docs/identite-visuelle, privé) — voir public/brand/.
+const HORIZONTAL = { couleur: '/brand/logo-horizontal.png', blanc: '/brand/logo-horizontal-blanc.png', ratio: 1959 / 400 };
 const SYMBOLE = { couleur: '/brand/symbole.png', blanc: '/brand/symbole-blanc.png', ratio: 1 };
 
-/** Logo MyKlinTown — charte V2. */
+/** Logo MyKlinTown — charte V3. */
 export function Logo({ className, size = 40, showWordmark = true, variant = 'badge' }: LogoProps) {
   const asset = showWordmark ? HORIZONTAL : SYMBOLE;
   const src = variant === 'bare' ? asset.blanc : asset.couleur;

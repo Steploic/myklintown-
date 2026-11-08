@@ -1,31 +1,43 @@
 import { expect, pasDeDebordement, session, test } from './base';
 
 test.describe('pages publiques', () => {
-  test('accueil : message, appels à l’action, grille lue en base', async ({ page }) => {
+  test('accueil : message, appels à l’action, plus de grille tarifaire', async ({ page }) => {
     await page.goto('/');
     await expect(page).toHaveTitle(/MyKlinTown/);
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('La précollecte');
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('La collecte des déchets, enfin simple et fiable pour tous.');
     await expect(page.getByRole('link', { name: /Créer mon espace précollecteur/ })).toHaveAttribute('href', '/signup?role=precollecteur');
-    const tarifs = page.locator('#tarifs');
-    await expect(tarifs.getByText(/3\s500\sFCFA/)).toBeVisible();
-    await expect(tarifs.getByText(/9\s500\sFCFA/)).toBeVisible();
-    await expect(tarifs.getByText(/35\s000\sFCFA/)).toBeVisible();
-    await expect(tarifs.getByText('−10 %')).toBeVisible();
-    await expect(tarifs.getByText('−17 %')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Faire ramasser mes déchets' }).first()).toHaveAttribute('href', '/signup?role=citoyen');
+    await expect(page.getByText('Lancement officiel · décembre 2026').first()).toBeVisible();
+    // Retours de l'équipe (08/11/2026) : ni grille commune, ni « pilote Yaoundé », ni étape Mairie.
+    await expect(page.getByText(/FCFA/)).toHaveCount(0);
+    await expect(page.getByText(/pilote/i)).toHaveCount(0);
+    await expect(page.getByText('La Mairie découpe')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Une chaîne simple entre les acteurs.' })).toBeVisible();
   });
 
   test('les ancres du menu mènent aux bonnes sections', async ({ page }) => {
     await page.goto('/');
-    for (const id of ['precollecteurs', 'menages', 'mairies', 'tarifs']) {
+    for (const id of ['precollecteurs', 'abonnes', 'fonctionnement']) {
       await expect(page.locator(`#${id}`)).toHaveCount(1);
     }
+    for (const id of ['menages', 'mairies', 'tarifs']) {
+      await expect(page.locator(`#${id}`)).toHaveCount(0);
+    }
+  });
+
+  test('contacts : appels uniquement, WhatsApp et e-mail', async ({ page }) => {
+    await page.goto('/');
+    const pied = page.locator('footer');
+    await expect(pied.getByText('Appels uniquement')).toBeVisible();
+    await expect(pied.getByRole('link', { name: '+237 6 40 12 90 41' })).toHaveAttribute('href', 'https://wa.me/237640129041');
+    await expect(pied.getByRole('link', { name: 'projet.myklintown@gmail.com' })).toHaveAttribute('href', 'mailto:projet.myklintown@gmail.com');
   });
 
   test('connexion, inscription, charte, mentions légales', async ({ page }) => {
     await page.goto('/login');
     await expect(page.getByRole('heading', { name: 'Connexion' })).toBeVisible();
     await page.goto('/signup?role=citoyen');
-    await expect(page.getByRole('radio', { name: /Ménage/ })).toBeChecked();
+    await expect(page.getByRole('radio', { name: /Abonné/ })).toBeChecked();
     await page.goto('/signup?role=precollecteur');
     await expect(page.getByRole('radio', { name: /Précollecteur/ })).toBeChecked();
     await page.goto('/marque');
@@ -35,9 +47,9 @@ test.describe('pages publiques', () => {
     await expect(page.getByRole('heading', { name: 'Données personnelles' })).toBeVisible();
   });
 
-  test('charte et contrat lisibles sans compte ; inscription ménage : case obligatoire', async ({ page }) => {
+  test('charte et contrat lisibles sans compte ; inscription abonné : case obligatoire', async ({ page }) => {
     await page.goto('/legal');
-    await page.getByRole('link', { name: 'Charte du ménage' }).first().click();
+    await page.getByRole('link', { name: 'Charte de l’abonné' }).first().click();
     await expect(page).toHaveURL(/\/legal\/charte/);
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     await expect(page.getByText(/^Version \d+$/).first()).toBeVisible();
@@ -76,7 +88,7 @@ test.describe('pages publiques', () => {
     erreurs.splice(0, erreurs.length, ...erreurs.filter((e) => !/404/.test(e)));
   });
 
-  test('connexion et inscription : Annuler, « déjà un compte ? », mot de passe visible', async ({ page }) => {
+  test('connexion et inscription : retour vers le site, « déjà un compte ? », mot de passe visible', async ({ page }) => {
     await page.goto('/');
     await page.getByRole('link', { name: /Créer mon espace précollecteur/ }).first().click();
     await expect(page).toHaveURL(/\/signup/);
@@ -93,7 +105,7 @@ test.describe('pages publiques', () => {
     await page.getByRole('button', { name: 'Masquer la saisie' }).click();
     await expect(mdp).toHaveAttribute('type', 'password');
 
-    await page.getByRole('link', { name: 'Annuler' }).click();
+    await page.getByRole('link', { name: 'Retour vers le site' }).click();
     await expect(page).toHaveURL(/\/$/);
   });
 
@@ -133,6 +145,18 @@ test.describe('espaces protégés sans connexion', () => {
 test.describe('cloisonnement des espaces (connecté)', () => {
   test.describe('précollecteur', () => {
     test.use({ storageState: session('precoA') });
+    // Application installée : elle démarre sur /login. Une session ouverte ne
+    // redemande pas le mot de passe (retour de l'équipe, 08/11/2026).
+    test('/login avec une session ouverte → son espace, ou la page demandée', async ({ page }) => {
+      await page.goto('/login');
+      await expect(page).toHaveURL(/\/precollecteur$/);
+      await page.goto('/login?next=/precollecteur/clients');
+      await expect(page).toHaveURL(/\/precollecteur\/clients$/);
+      await page.goto('/login?next=/dashboard');
+      await expect(page).toHaveURL(/\/precollecteur$/);
+      await page.goto('/signup?role=citoyen');
+      await expect(page).toHaveURL(/\/precollecteur$/);
+    });
     for (const url of ['/dashboard', '/dashboard/zones', '/citoyen', '/citoyen/factures']) {
       test(`${url} → renvoyé vers son espace`, async ({ page }) => {
         await page.goto(url);
@@ -169,7 +193,7 @@ test.describe('portails de démonstration retirés', () => {
     test(`${url} → accueil`, async ({ page }) => {
       await page.goto(url);
       await expect(page).toHaveURL(/\/$/);
-      await expect(page.getByRole('heading', { level: 1 })).toContainText('La précollecte');
+      await expect(page.getByRole('heading', { level: 1 })).toContainText('La collecte des déchets');
     });
   }
   test.describe('connecté', () => {

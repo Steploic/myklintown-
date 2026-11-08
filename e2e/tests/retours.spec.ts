@@ -76,7 +76,7 @@ test.describe('précollecteur : retours de test', () => {
     const A = await compte('precoA', 'precollecteur');
     try {
       await page.goto('/precollecteur/clients/nouveau');
-      await page.getByLabel('Nom du client / du foyer *').fill('  famille   NGONO-ESSO ');
+      await page.getByLabel('Nom de l’abonné (personne ou structure) *').fill('  famille   NGONO-ESSO ');
       await page.getByLabel('Téléphone').fill('677 11 22 33');
       await page.getByLabel('Quartier').fill('mvog-ada');
       await page.getByRole('radio', { name: /Mensuel/ }).check({ force: true });

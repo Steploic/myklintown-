@@ -23,7 +23,7 @@ export default async function IncidentsMairiePage() {
 
   return (
     <PortalShell portalKey="mairie" currentPath="/dashboard/incidents">
-      <PageHeader titre="Incidents signalés" sousTitre="Terrain et ménages, chez les précollecteurs de votre territoire, avec leurs preuves." />
+      <PageHeader titre="Incidents signalés" sousTitre="Terrain et abonnés, chez les précollecteurs de votre territoire, avec leurs preuves." />
       {incidents.length === 0 ? (
         <div className="card-soft">
           <EmptyState icon={ShieldCheck} titre="Aucun incident" />
@@ -39,7 +39,7 @@ export default async function IncidentsMairiePage() {
                   <p className="flex flex-wrap items-center gap-2 font-semibold text-brand-ink">
                     {CATEGORIES_INCIDENT[i.categorie] ?? i.categorie}
                     <span className={s.chip}>{s.label}</span>
-                    <span className="chip-neutre">{i.source === 'client' ? 'Ménage' : 'Terrain'}</span>
+                    <span className="chip-neutre">{i.source === 'client' ? 'Abonné' : 'Terrain'}</span>
                   </p>
                   <p className="text-body-sm text-muted-foreground">{i.entreprises?.nom}</p>
                   {i.description && <p className="mt-1 text-body-sm">{i.description}</p>}

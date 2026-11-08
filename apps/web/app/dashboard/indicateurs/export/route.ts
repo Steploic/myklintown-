@@ -67,7 +67,7 @@ export async function GET(req: Request) {
       ...(t.semaine_en_cours ? [{ valeurs: t.semaine_en_cours, calcule_at: null, mode: 'en cours (direct)' }] : []),
     ];
     const entetes = [
-      'Début', 'Fin', 'Ménages inscrits', 'Abonnés actifs', 'dont en délai de grâce', 'Taux de paiement (%)',
+      'Début', 'Fin', 'Abonnés inscrits', 'Abonnés actifs', 'dont en délai de grâce', 'Taux de paiement (%)',
       'Passages réalisés', 'Passages planifiés', 'Taux d’exécution (%)', 'Rétention (%)', 'Délai moyen des signalements (h)',
       'Signalements résolus', 'Signalements en attente', 'Part du Mobile Money (%)', 'Encaissé hors espèces (FCFA)',
       'Encaissé total (FCFA)', 'Incidents terrain', 'Incidents pour 1 000 passages', 'Relevé le', 'Mode',

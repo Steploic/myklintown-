@@ -86,7 +86,7 @@ export async function publierVersionAction(_p: ActionState, fd: FormData): Promi
   const v = rows<{ version: number }>(data)[0];
   if (!v) return { error: 'Cette version est déjà publiée.' };
   rafraichir();
-  return { ok: `Version ${v.version} publiée : les ménages seront invités à l’accepter.` };
+  return { ok: `Version ${v.version} publiée : les abonnés seront invités à l’accepter.` };
 }
 
 /** Un brouillon abandonné se supprime ; une version publiée, jamais. */

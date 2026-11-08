@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /* =============================================================================
-   MyKlinTown — Charte V2 (pivot précollecteurs, septembre 2026)
+   MyKlinTown — Charte V3 (logo d'octobre 2026, novembre 2026)
    Principes : pensée pour le terrain (téléphone, plein soleil, pouce),
    chiffres alignés, code couleur servir / relancer / ne pas servir.
    ============================================================================= */
@@ -11,12 +11,12 @@
 @layer base {
   :root {
     /* Valeurs brutes pour Leaflet / Recharts, qui ne lisent pas les classes. */
-    --color-brand-ink: 13 36 56;        /* #0D2438 */
-    --color-brand-blue: 27 63 99;       /* #1B3F63 */
-    --color-brand-blue-hover: 31 79 122; /* #1F4F7A */
-    --color-brand-green: 62 154 94;     /* #3E9A5E */
-    --color-brand-green-light: 123 194 138; /* #7BC28A */
-    --color-brand-teal: 46 127 142;     /* #2E7F8E */
+    --color-brand-ink: 11 30 59;        /* #0B1E3B */
+    --color-brand-blue: 37 99 235;      /* #2563EB */
+    --color-brand-blue-hover: 29 78 216; /* #1D4ED8 */
+    --color-brand-green: 48 130 58;     /* #30823A */
+    --color-brand-green-light: 93 195 108; /* #5DC36C */
+    --color-brand-teal: 14 133 116;     /* #0E8574 */
     --color-danger: 239 68 68;
     --color-warning: 245 158 11;
   }
@@ -45,14 +45,14 @@
 
 @layer components {
   .card-soft {
-    @apply rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(13,36,56,0.05),0_4px_12px_-4px_rgba(13,36,56,0.08)];
+    @apply rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(11,30,59,0.05),0_4px_12px_-4px_rgba(11,30,59,0.08)];
   }
 
   /* Boutons : 44 px minimum de hauteur — cible de pouce, pas de souris. */
   .btn-primary {
     @apply inline-flex min-h-[44px] items-center justify-center gap-2 rounded-md bg-brand-green
       px-4 py-2 text-body-sm font-semibold text-white whitespace-nowrap shadow-soft
-      transition-colors hover:bg-[#358851] focus-visible:outline-none
+      transition-colors hover:bg-brand-green-hover focus-visible:outline-none
       focus-visible:ring-2 focus-visible:ring-brand-blue focus-visible:ring-offset-2
       disabled:cursor-not-allowed disabled:opacity-50;
   }
@@ -132,12 +132,12 @@
   /* Motif signature : la « traînée de pixels » du logo. */
   .pixel-trail {
     background-image:
-      linear-gradient(90deg, rgba(43, 108, 176, 0.9) 0 100%),
-      linear-gradient(90deg, rgba(43, 108, 176, 0.7) 0 100%),
-      linear-gradient(90deg, rgba(46, 127, 142, 0.6) 0 100%),
-      linear-gradient(90deg, rgba(46, 127, 142, 0.45) 0 100%),
-      linear-gradient(90deg, rgba(62, 154, 94, 0.35) 0 100%),
-      linear-gradient(90deg, rgba(121, 194, 103, 0.25) 0 100%);
+      linear-gradient(90deg, rgba(37, 99, 235, 0.9) 0 100%),
+      linear-gradient(90deg, rgba(37, 99, 235, 0.7) 0 100%),
+      linear-gradient(90deg, rgba(23, 184, 164, 0.6) 0 100%),
+      linear-gradient(90deg, rgba(23, 184, 164, 0.45) 0 100%),
+      linear-gradient(90deg, rgba(93, 195, 108, 0.35) 0 100%),
+      linear-gradient(90deg, rgba(93, 195, 108, 0.25) 0 100%);
     background-size: 10px 10px, 8px 8px, 10px 10px, 6px 6px, 8px 8px, 6px 6px;
     background-position: 0 0, 18px 14px, 34px 2px, 52px 20px, 70px 8px, 92px 22px;
     background-repeat: no-repeat;

@@ -51,7 +51,7 @@ test.describe('précollecteur', () => {
   test('la fiche client tient sur l’écran', async ({ page }) => {
     await page.goto('/precollecteur/clients');
     await page.locator('a[href^="/precollecteur/clients/"]').filter({ hasText: 'Famille Scan' }).first().click();
-    await expect(page.getByText('QR code du foyer')).toBeVisible();
+    await expect(page.getByText('QR code de l’abonné')).toBeVisible();
     await pasDeDebordement(page);
   });
 });

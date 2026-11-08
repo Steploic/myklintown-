@@ -33,7 +33,7 @@ export function BoutonStatutTournee({ tourneeId, action }: { tourneeId: string; 
       const n = file.enAttente.length;
       setMessage(
         `${n} geste${n > 1 ? 's' : ''} fait${n > 1 ? 's' : ''} hors ligne ${n > 1 ? 'attendent' : 'attend'} encore d’être envoyé${n > 1 ? 's' : ''}. ` +
-          'Terminez quand le réseau est revenu : sinon ces foyers seraient comptés « non visités ».',
+          'Terminez quand le réseau est revenu : sinon ces abonnés seraient comptés « non visités ».',
       );
       file.relancer();
       return;

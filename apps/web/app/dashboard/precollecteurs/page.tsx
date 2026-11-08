@@ -60,7 +60,7 @@ export default async function PrecollecteursPage() {
               <tr>
                 <th>Entreprise</th>
                 <th>Zones</th>
-                <th className="text-right">Ménages</th>
+                <th className="text-right">Abonnés</th>
                 <th className="text-right">Flotte</th>
                 <th className="text-right">Collectes 30 j</th>
                 <th className="text-right">Exécution</th>

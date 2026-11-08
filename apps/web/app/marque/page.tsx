@@ -7,22 +7,22 @@ import { PixelDots } from '@/components/ui/blocks';
 export const metadata = { title: 'Charte graphique' };
 
 const COULEURS = [
-  { nom: 'Nuit', hex: '#0D2438', role: 'Fonds sombres, barres latérales, titres', texte: 'text-white' },
-  { nom: 'Bleu confiance', hex: '#1B3F63', role: 'Actions secondaires, liens', texte: 'text-white' },
-  { nom: 'Bleu pixel', hex: '#2B6CB0', role: 'Accents issus des pixels du logo', texte: 'text-white' },
-  { nom: 'Sarcelle', hex: '#2E7F8E', role: 'Graphiques, éléments secondaires', texte: 'text-white' },
-  { nom: 'Vert action', hex: '#3E9A5E', role: 'Bouton principal, validation', texte: 'text-white' },
-  { nom: 'Vert feuille', hex: '#79C267', role: 'Accents sur fond sombre', texte: 'text-brand-ink' },
+  { nom: 'Bleu pixel', hex: '#2563EB', role: 'Logo · liens, actions secondaires', texte: 'text-white' },
+  { nom: 'Turquoise', hex: '#17B8A4', role: 'Logo · décor, dégradés', texte: 'text-brand-ink' },
+  { nom: 'Vert feuille', hex: '#5DC36C', role: 'Logo · accents sur fond sombre', texte: 'text-brand-ink' },
+  { nom: 'Vert action', hex: '#30823A', role: 'Bouton principal, validation', texte: 'text-white' },
+  { nom: 'Turquoise foncé', hex: '#0E8574', role: 'Icônes et graphiques sur fond clair', texte: 'text-white' },
+  { nom: 'Nuit', hex: '#0B1E3B', role: 'Fonds sombres, barres latérales, titres', texte: 'text-white' },
   { nom: 'Brume', hex: '#F4F7F5', role: 'Fond d’application', texte: 'text-brand-ink' },
 ];
 
-/** Charte V2 : la référence visuelle pour l'équipe (supports, réseaux, impressions). */
+/** Charte V3 : la référence visuelle pour l'équipe (supports, réseaux, impressions). */
 export default function MarquePage() {
   return (
     <div className="flex min-h-screen flex-col bg-surface">
       <SiteHeader />
       <main className="container flex-1 py-14">
-        <p className="text-small font-semibold uppercase tracking-wider text-brand-green">Charte graphique · V2 · septembre 2026</p>
+        <p className="text-small font-semibold uppercase tracking-wider text-brand-green">Charte graphique · V3 · novembre 2026</p>
         <h1 className="mt-2 text-[2.2rem] font-bold md:text-[2.8rem]">L’identité MyKlinTown</h1>
         <p className="mt-3 max-w-2xl text-body text-muted-foreground">
           Une ville propre, rendue lisible par la donnée. Le logo le dit déjà : des pixels qui s’assemblent en un cercle
@@ -49,7 +49,7 @@ export default function MarquePage() {
 
         <section className="mt-14">
           <h2 className="text-[1.5rem] font-bold">Couleurs</h2>
-          <div className="mt-5 h-3 rounded-full bg-gradient-to-r from-[#2B6CB0] via-[#2E7F8E] to-[#79C267]" />
+          <div className="mt-5 h-3 rounded-full bg-brand-gradient" />
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {COULEURS.map((c) => (
               <div key={c.hex} className="overflow-hidden rounded-xl border border-border">
@@ -61,6 +61,11 @@ export default function MarquePage() {
               </div>
             ))}
           </div>
+          <p className="mt-3 max-w-3xl text-body-sm text-muted-foreground">
+            Les trois couleurs du logo sont des accents : sous un texte blanc, le turquoise et le vert feuille deviennent
+            illisibles au soleil. Les boutons et les liens prennent donc le vert action et le bleu pixel, qui gardent un
+            contraste d’au moins 4,5:1.
+          </p>
         </section>
 
         <section className="mt-14">
@@ -90,7 +95,7 @@ export default function MarquePage() {
             <div className="mt-5 space-y-3 rounded-2xl border border-border p-6">
               <p className="text-[2.4rem] font-bold leading-none text-brand-ink">Titre 700</p>
               <p className="text-h2 font-semibold text-brand-ink">Sous-titre 600</p>
-              <p className="text-body">Texte courant 400 — la précollecte, enfin pilotée.</p>
+              <p className="text-body">Texte courant 400 — la collecte des déchets, enfin simple et fiable.</p>
               <p className="num text-h2 font-bold text-brand-green">3 500 FCFA · 14 / 18</p>
               <p className="text-small text-muted-foreground">Chiffres à chasse fixe (tabular) pour les montants et compteurs.</p>
             </div>

@@ -181,7 +181,7 @@ export default async function PrecollecteurDashboard({
             <div>
               <h2>Commencez par vos clients</h2>
               <p className="mt-1 max-w-xl text-body-sm text-muted-foreground">
-                Enregistrez les ménages que vous servez déjà : l’abonnement est pris dans la grille
+                Enregistrez les abonnés que vous servez déjà : l’abonnement est pris dans la grille
                 tarifaire MyKlinTown et la première facture est émise automatiquement. Vous voulez
                 d’abord voir l’outil en action ? Chargez un jeu de démonstration, supprimable en un clic.
               </p>
@@ -203,7 +203,7 @@ export default async function PrecollecteurDashboard({
       {aDesDemo && (
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand-blue/20 bg-brand-blue/5 px-4 py-3">
           <p className="flex items-center gap-2 text-body-sm text-brand-blue">
-            <FlaskConical size={16} /> Des données de démonstration sont affichées (ménages marqués « démo »).
+            <FlaskConical size={16} /> Des données de démonstration sont affichées (abonnés marqués « démo »).
           </p>
           <ActionForm action={supprimerDemoAction}>
             <SubmitButton variant="ghost" pendingLabel="Suppression…">
@@ -231,7 +231,7 @@ export default async function PrecollecteurDashboard({
           className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-brand-blue/25 bg-brand-blue/5 px-4 py-3 text-body-sm font-semibold text-brand-blue"
         >
           <span className="flex items-center gap-2">
-            <Inbox size={18} /> {nbDemandesOuvertes} ménage{nbDemandesOuvertes > 1 ? 's attendent' : ' attend'} un précollecteur : prenez-le{nbDemandesOuvertes > 1 ? 's' : ''} en charge
+            <Inbox size={18} /> {nbDemandesOuvertes} abonné{nbDemandesOuvertes > 1 ? 's attendent' : ' attend'} un précollecteur : prenez-le{nbDemandesOuvertes > 1 ? 's' : ''} en charge
           </span>
           <span aria-hidden>→</span>
         </Link>

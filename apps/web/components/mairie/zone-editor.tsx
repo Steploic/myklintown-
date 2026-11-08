@@ -256,7 +256,7 @@ export function ZoneEditor({
                 <p className="flex items-center gap-2 text-h2-sm font-semibold text-brand-ink">
                   <span className="h-3.5 w-3.5 rounded-sm" style={{ background: zoneSel.couleur }} /> {zoneSel.nom}
                 </p>
-                <p className="text-small text-muted-foreground">{zoneSel.nb_clients} ménage{zoneSel.nb_clients > 1 ? 's' : ''} abonné{zoneSel.nb_clients > 1 ? 's' : ''}</p>
+                <p className="text-small text-muted-foreground">{zoneSel.nb_clients} abonné{zoneSel.nb_clients > 1 ? 's' : ''}</p>
               </div>
               <button type="button" onClick={() => setSelection(null)} className="text-muted-foreground" aria-label="Fermer"><X size={18} /></button>
             </div>
@@ -297,7 +297,7 @@ export function ZoneEditor({
               <button
                 type="button"
                 onClick={() => {
-                  if (confirm(`Supprimer la zone « ${zoneSel.nom} » ? Les ménages qui y sont rattachés perdront leur zone.`)) {
+                  if (confirm(`Supprimer la zone « ${zoneSel.nom} » ? Les abonnés qui y sont rattachés perdront leur zone.`)) {
                     agir(() => supprimerZoneAction(zoneSel.id));
                     setSelection(null);
                   }

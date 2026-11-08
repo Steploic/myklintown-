@@ -111,7 +111,7 @@ export function CameraCapture({ onChange }: { onChange: (c: Capture | null) => v
     const pos = posRef.current;
     const ligne = `MyKlinTown · ${maintenant.toLocaleString('fr-FR')}${pos ? ` · ${pos.lat.toFixed(5)}, ${pos.lng.toFixed(5)}` : ''}`;
     const h = Math.max(28, Math.round(canvas.height * 0.045));
-    ctx.fillStyle = 'rgba(13,36,56,0.72)';
+    ctx.fillStyle = 'rgba(11,30,59,0.72)';
     ctx.fillRect(0, canvas.height - h, canvas.width, h);
     ctx.fillStyle = '#fff';
     ctx.font = `600 ${Math.round(h * 0.5)}px sans-serif`;

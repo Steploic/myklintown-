@@ -71,7 +71,7 @@ export default async function IndicateursPage({ searchParams }: { searchParams: 
           {courant?.valeurs ? (
             <Section
               titre={`${courant.etat === 'en_cours' ? 'Mois en cours' : 'Dernier mois'} : ${dateFr(courant.debut, { month: 'long', year: 'numeric' })} (M${rangMois(t.cibles, courant.debut) + 1})`}
-              sousTitre={`Mesuré au ${dateFr(courant.valeurs.mesure_au, { day: 'numeric', month: 'long' })} · ${nombre(courant.valeurs.precollecteurs_actifs)} précollecteur${courant.valeurs.precollecteurs_actifs > 1 ? 's' : ''} avec des ménages inscrits · cibles de fin de mois`}
+              sousTitre={`Mesuré au ${dateFr(courant.valeurs.mesure_au, { day: 'numeric', month: 'long' })} · ${nombre(courant.valeurs.precollecteurs_actifs)} précollecteur${courant.valeurs.precollecteurs_actifs > 1 ? 's' : ''} avec des abonnés inscrits · cibles de fin de mois`}
             >
               <GrilleMoisCourant t={t} mois={courant} />
             </Section>

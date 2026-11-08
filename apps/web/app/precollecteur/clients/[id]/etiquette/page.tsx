@@ -39,7 +39,7 @@ export default async function EtiquettePage({ params }: { params: Promise<{ id: 
       <article className="impression-fidele mx-auto w-[9.5cm] overflow-hidden rounded-2xl border-2 border-brand-ink bg-white shadow-elevated print:shadow-none">
         <header className="flex items-center justify-between bg-brand-gradient-ink px-4 py-3 text-white">
           <Logo size={24} variant="bare" />
-          <span className="text-small font-semibold uppercase tracking-wider text-brand-leaf">Foyer abonné</span>
+          <span className="text-small font-semibold uppercase tracking-wider text-brand-leaf">Abonné</span>
         </header>
         <div className="px-5 pb-5 pt-4 text-center">
           <div className="mx-auto w-[6cm]" dangerouslySetInnerHTML={{ __html: qr }} />

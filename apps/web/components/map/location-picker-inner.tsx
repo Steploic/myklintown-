@@ -10,7 +10,7 @@ import { YAOUNDE, ZOOM_DEFAUT } from './use-centre-carte';
 
 export const pinIcon = L.divIcon({
   className: '',
-  html: `<div style="width:30px;height:30px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#3E9A5E;border:3px solid #fff;box-shadow:0 3px 8px rgba(13,36,56,.35)"></div>`,
+  html: `<div style="width:30px;height:30px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#30823A;border:3px solid #fff;box-shadow:0 3px 8px rgba(11,30,59,.35)"></div>`,
   iconSize: [30, 30],
   iconAnchor: [15, 30],
 });
