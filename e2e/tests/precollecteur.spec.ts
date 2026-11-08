@@ -43,7 +43,9 @@ test.describe('précollecteur : inscription et démarrage', () => {
     await expect(page.getByText('Autorisation déposée')).toBeVisible({ timeout: 30_000 });
 
     await page.getByRole('button', { name: 'Soumettre mon dossier pour vérification' }).click();
-    await expect(page.getByText('Dossier envoyé : MyKlinTown vérifie vos pièces.')).toBeVisible();
+    // Le formulaire disparaît avec la page mise à jour : on lit l'état du dossier, pas le message.
+    await expect(page.getByText('Votre dossier est entre les mains de l’équipe MyKlinTown.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Soumettre mon dossier pour vérification' })).toHaveCount(0);
     await page.reload();
     await expect(page.getByText('En vérification').first()).toBeVisible();
   });

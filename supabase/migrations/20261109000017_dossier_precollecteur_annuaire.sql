@@ -28,6 +28,35 @@
 begin;
 
 -- =============================================================================
+-- 0. Migrations préalables
+-- =============================================================================
+-- Sans elles, la migration échouerait sur une colonne ou une table absente
+-- (« column "niu" … does not exist »). On s'arrête avant toute modification,
+-- en nommant ce qu'il faut jouer d'abord. Contrôle : supabase/DIAGNOSTIC_MIGRATIONS.sql.
+do $$
+declare v_manque text[] := '{}';
+begin
+  if to_regprocedure('public.garde_colonnes_systeme()') is null then
+    v_manque := v_manque || '20261011000009_audit_securite'::text;
+  end if;
+  if to_regprocedure('public.parametre_entier(text, integer)') is null then
+    v_manque := v_manque || '20261019000013_delai_grace_blocage'::text;
+  end if;
+  if to_regclass('public.documents_legaux') is null or to_regclass('public.acceptations_documents') is null
+     or not exists (select 1 from information_schema.columns
+                     where table_schema = 'public' and table_name = 'entreprises' and column_name = 'niu') then
+    v_manque := v_manque || '20261019000014_charte_facture_conforme'::text;
+  end if;
+  if to_regclass('public.mairie_communes') is null or to_regprocedure('public.supervise_entreprise(uuid)') is null then
+    v_manque := v_manque || '20261019000016_mairie_par_commune'::text;
+  end if;
+  if cardinality(v_manque) > 0 then
+    raise exception 'Migrations à jouer d''abord, dans l''ordre : %', array_to_string(v_manque, ', ')
+      using hint = 'Rien n''a été modifié. Liste complète : supabase/DIAGNOSTIC_MIGRATIONS.sql';
+  end if;
+end $$;
+
+-- =============================================================================
 -- 1. Entreprise : vitrine et état du dossier
 -- =============================================================================
 -- `niu` (20261019000014) et `siege` existent déjà ; `siege` devient l'adresse
