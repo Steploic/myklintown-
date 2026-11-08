@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 import { CLE_SERVICE, clientServiceTest, compte, supprimerClientsDeTest } from '../../apps/web/tests/support/fixtures';
+import { normaliserNom } from '../../apps/web/lib/metier';
 import { expect, etat, RUN, SANS_MIGRATION_0018, session, test } from './base';
 import { CODE_LIEN, TEL_LIEN } from './global-setup';
 
@@ -134,7 +135,8 @@ test.describe('nouvel abonné : demande de devis', () => {
   });
 
   test('liste d’attente : demande enregistrée, puis retirée', async ({ page }) => {
-    const quartier = `Quartier Attente ${RUN}`;
+    // Le quartier est enregistré remis en forme (« Quartier Attente Mh7k2x ») : on attend cette forme-là.
+    const quartier = normaliserNom(`Quartier Attente ${RUN}`);
     await demander(page, quartier);
     await expect(page.getByText('Votre demande est enregistrée')).toBeVisible();
     await expect(page.getByText(new RegExp(`pour ${quartier}`)).first()).toBeVisible();
@@ -146,7 +148,7 @@ test.describe('nouvel abonné : demande de devis', () => {
   test('devis : le précollecteur vérifié propose son tarif, l’abonné l’accepte', async ({ page, browser }) => {
     test.skip(!CLE_SERVICE, 'Clé de service de la base de test absente');
     const sb = clientServiceTest();
-    const quartier = `Quartier Devis ${RUN}`;
+    const quartier = normaliserNom(`Quartier Devis ${RUN}`);
     const A = await compte('precoA', 'precollecteur');
     await sb.from('entreprises').update({ dossier_statut: 'valide', quartiers: [quartier] }).eq('id', etat().precoA);
     await sb.from('parametres_plateforme').update({ valeur: '1' }).eq('cle', 'devis_ouverts');
