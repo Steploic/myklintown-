@@ -117,8 +117,9 @@ test.describe('connexion et déconnexion', () => {
 
 test.describe('R1 — accès Mairie sur demande', () => {
   test('page publique : explication et formulaire complet', async ({ page }) => {
+    // L'encart Mairies a quitté l'accueil (retours de l'équipe, 08/11/2026) : l'accès reste au pied de page.
     await page.goto('/');
-    await page.getByRole('link', { name: 'Demander un accès' }).first().click();
+    await page.locator('footer').getByRole('link', { name: 'Mairie (sur demande)' }).click();
     await expect(page).toHaveURL(/\/acces-mairie$/);
     await expect(page.getByRole('heading', { name: 'Accès Mairie' })).toBeVisible();
     for (const champ of ['Nom complet *', 'E-mail professionnel *', 'Mot de passe *', 'Commune *', 'Fonction *']) {

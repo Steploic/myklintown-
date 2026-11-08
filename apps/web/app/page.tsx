@@ -62,7 +62,7 @@ export default function HomePage() {
                 <span className="h-1.5 w-1.5 rounded-full bg-brand-leaf" /> Lancement officiel · décembre 2026
               </p>
               <h1 className="mt-5 text-[2.35rem] font-bold leading-[1.08] tracking-tight text-white md:text-[3.4rem]">
-                La collecte des déchets,
+                La collecte des déchets,{' '}
                 <br />
                 <span className="bg-gradient-to-r from-brand-blue-clair via-brand-teal-clair to-brand-leaf bg-clip-text text-transparent">
                   enfin simple et fiable pour tous.
