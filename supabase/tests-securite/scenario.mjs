@@ -54,6 +54,44 @@ const avec0016 = (db) => valeur(db, `select to_regclass('public.mairie_communes'
 const avecCodes = (db) => valeur(db, `select to_regclass('public.codes_agrement') is not null`);
 /** Migration 0017 (dossier du précollecteur, annuaire) présente dans la base ? */
 const avec0017 = (db) => valeur(db, `select to_regclass('public.entreprise_communes') is not null`);
+/** Migration 0018 (demandes de devis, tarif par abonné) présente dans la base ? */
+const avec0018 = (db) => valeur(db, `select to_regclass('public.demandes_devis') is not null`);
+
+/** Une demande de devis complète (commerce de Yaoundé III), modifiable par `extra`. */
+const demandeDevis = (commune, extra = {}) => JSON.stringify({
+  categorie: 'commerce', nom: 'Boulangerie du Lac', telephone: '699001122', whatsapp: '699001122',
+  commune_id: commune, quartier: 'Nsam', repere: 'Portail rouge, face à la station',
+  acces_voie: 'goudronnee', gabarit_max: 'tricycle', passages_semaine: 3, sacs_besoin: true, sacs_volume_litres: 50,
+  details: { type_commerce: 'boulangerie', dechets: ['organiques', 'emballages'] },
+  lat: 3.851, lng: 11.501, position_sur_place: true, ...extra,
+});
+
+/** Précollecteur vérifié qui travaille dans la commune ; à défaire avec `secteurAnnule`. */
+async function secteurValide(db, ent, commune) {
+  await db.query(`insert into public.entreprise_communes (entreprise_id, commune_id) values ($1, $2) on conflict do nothing`, [ent, commune]);
+  await db.query(`update public.entreprises set dossier_statut = 'valide' where id = $1`, [ent]);
+}
+async function secteurAnnule(db, ents, commune) {
+  for (const ent of ents) {
+    await db.query(`update public.entreprises set dossier_statut = 'incomplet' where id = $1`, [ent]);
+    await db.query(`delete from public.entreprise_communes where entreprise_id = $1 and commune_id = $2`, [ent, commune]);
+  }
+}
+const devisOuverts = (db, ouverts) => db.query(`update public.parametres_plateforme set valeur = $1::jsonb where cle = 'devis_ouverts'`, [ouverts ? '1' : '0']);
+
+/** Nouveau compte abonné, avec sa demande de devis déposée. */
+async function abonneAvecDemande(db, commune, extra) {
+  const u = await creerCompte(db, `devis.${Date.now()}.${Math.random().toString(36).slice(2, 7)}@test.cm`);
+  const d = await comme(db, u, (tx) => valeur(tx, `select public.deposer_demande_devis($1::jsonb)`, [demandeDevis(commune, extra)]));
+  return { u, d };
+}
+
+/** Efface une demande de devis du banc, ses devis et le client éventuellement créé. */
+async function effacerDemande(db, demande) {
+  const client = await valeur(db, `select client_id from public.demandes_devis where id = $1`, [demande]);
+  await db.query(`delete from public.demandes_devis where id = $1`, [demande]);
+  if (client) await db.query(`delete from public.clients where id = $1`, [client]);
+}
 
 /**
  * Précollecteur agréé par une Mairie pour sa commune (code d'agrément, depuis
@@ -878,6 +916,125 @@ export const ATTAQUES = [
       return false;
     },
   },
+  {
+    id: 'devis-identite-abonne',
+    titre: 'Un précollecteur vérifié lit l’identité d’un abonné qui demande un devis (nom, téléphone, repère, position)',
+    async jouer(db, s) {
+      if (!(await avec0018(db))) return false;
+      await secteurValide(db, s.entA, s.yde3);
+      const { d } = await abonneAvecDemande(db, s.yde3);
+      try {
+        const lignes = await comme(db, s.gerantA, async (tx) => (await tx.query(`select * from public.demandes_devis_ouvertes()`)).rows);
+        const vue = lignes.find((l) => l.id === d);
+        const fuite = vue && ['nom', 'telephone', 'whatsapp', 'repere', 'lat', 'lng', 'user_id'].some((k) => k in vue);
+        const direct = await comme(db, s.gerantA, (tx) => valeur(tx, `select count(*)::int from public.demandes_devis where id = $1`, [d]));
+        return !vue || fuite || direct > 0;
+      } finally {
+        await effacerDemande(db, d);
+        await secteurAnnule(db, [s.entA], s.yde3);
+      }
+    },
+  },
+  {
+    id: 'devis-non-verifie-ou-hors-secteur',
+    titre: 'Un précollecteur non vérifié, ou hors de la commune, voit la demande ou propose un devis',
+    async jouer(db, s) {
+      if (!(await avec0018(db))) return false;
+      await db.query(`insert into public.entreprise_communes (entreprise_id, commune_id) values ($1, $2) on conflict do nothing`, [s.entB, s.yde3]);
+      await secteurValide(db, s.entD, s.dla1);
+      await devisOuverts(db, true);
+      const { d } = await abonneAvecDemande(db, s.yde3);
+      try {
+        for (const g of [s.gerantB, s.gerantD]) {
+          const vue = await comme(db, g, (tx) => valeur(tx, `select count(*)::int from public.demandes_devis_ouvertes() where id = $1`, [d]));
+          if (vue > 0) return true;
+          if (await accepte(db, g, `select public.proposer_devis($1, 3000, 1, 2)`, [d])) return true;
+        }
+        return false;
+      } finally {
+        await devisOuverts(db, false);
+        await effacerDemande(db, d);
+        await secteurAnnule(db, [s.entB], s.yde3);
+        await secteurAnnule(db, [s.entD], s.dla1);
+      }
+    },
+  },
+  {
+    id: 'devis-avant-lancement',
+    titre: 'Un précollecteur vérifié propose un devis avant l’ouverture des devis (liste d’attente)',
+    async jouer(db, s) {
+      if (!(await avec0018(db))) return false;
+      await secteurValide(db, s.entA, s.yde3);
+      await devisOuverts(db, false);
+      const { d } = await abonneAvecDemande(db, s.yde3);
+      try {
+        return await accepte(db, s.gerantA, `select public.proposer_devis($1, 3000, 1, 2)`, [d]);
+      } finally {
+        await effacerDemande(db, d);
+        await secteurAnnule(db, [s.entA], s.yde3);
+      }
+    },
+  },
+  {
+    id: 'devis-reponse-autrui',
+    titre: 'Un autre abonné, ou le précollecteur lui-même, accepte ou refuse le devis adressé à un abonné',
+    async jouer(db, s) {
+      if (!(await avec0018(db))) return false;
+      await secteurValide(db, s.entA, s.yde3);
+      await devisOuverts(db, true);
+      const { d } = await abonneAvecDemande(db, s.yde3);
+      try {
+        const devis = await comme(db, s.gerantA, (tx) => valeur(tx, `select public.proposer_devis($1, 4000, 1, 2)`, [d]));
+        for (const qui of [s.victime, s.gerantA, s.gerantB]) {
+          if (await accepte(db, qui, `select public.accepter_devis($1)`, [devis])) return true;
+          if (await accepte(db, qui, `select public.refuser_devis($1)`, [devis])) return true;
+        }
+        return (await valeur(db, `select statut from public.devis where id = $1`, [devis])) !== 'propose';
+      } finally {
+        await devisOuverts(db, false);
+        await effacerDemande(db, d);
+        await secteurAnnule(db, [s.entA], s.yde3);
+      }
+    },
+  },
+  {
+    id: 'devis-ecriture-directe',
+    titre: 'Un abonné ou un précollecteur écrit directement une demande ou un devis (montant changé après coup, demande d’autrui)',
+    async jouer(db, s) {
+      if (!(await avec0018(db))) return false;
+      await secteurValide(db, s.entA, s.yde3);
+      await devisOuverts(db, true);
+      const { u, d } = await abonneAvecDemande(db, s.yde3);
+      try {
+        const devis = await comme(db, s.gerantA, (tx) => valeur(tx, `select public.proposer_devis($1, 4000, 1, 2)`, [d]));
+        const essais = [
+          [u, `update public.devis set tarif_fcfa = 1 where id = '${devis}'`],
+          [s.gerantA, `update public.devis set tarif_fcfa = 99000 where id = '${devis}'`],
+          [u, `update public.demandes_devis set statut = 'acceptee', entreprise_id = '${s.entB}' where id = '${d}'`],
+          [u, `insert into public.devis (demande_id, entreprise_id, tarif_fcfa, passages_semaine) values ('${d}', '${s.entB}', 1, 1)`],
+          [s.gerantB, `insert into public.demandes_devis (categorie, nom, telephone, quartier, repere, passages_semaine) values ('residentiel', 'Faux', '600', 'X', 'Y', 1)`],
+        ];
+        for (const [qui, sql] of essais) await accepte(db, qui, sql);
+        const etat = (await db.query(`select v.tarif_fcfa, d.statut from public.devis v join public.demandes_devis d on d.id = v.demande_id where v.id = $1`, [devis])).rows[0];
+        const intrus = await valeur(db, `select count(*)::int from public.devis where demande_id = $1`, [d]);
+        const faux = await valeur(db, `select count(*)::int from public.demandes_devis where nom = 'Faux'`);
+        return etat.tarif_fcfa !== 4000 || etat.statut !== 'devis_recu' || intrus !== 1 || faux > 0;
+      } finally {
+        await devisOuverts(db, false);
+        await effacerDemande(db, d);
+        await secteurAnnule(db, [s.entA], s.yde3);
+      }
+    },
+  },
+  {
+    id: 'tarif-client-autrui',
+    titre: 'Un précollecteur change le tarif d’un abonné d’un autre précollecteur',
+    async jouer(db, s) {
+      if (!(await avec0018(db))) return false;
+      await accepte(db, s.gerantB, `update public.clients set tarif_fcfa = 1 where id = $1`, [s.clientA]);
+      return (await valeur(db, `select tarif_fcfa from public.clients where id = $1`, [s.clientA])) === 1;
+    },
+  },
 ];
 
 /** Migration 0014 (facture inaltérable, charte) présente dans la base ? */
@@ -1366,6 +1523,74 @@ export const PARCOURS = [
     },
   },
   {
+    titre: 'Demande de devis : deux précollecteurs vérifiés proposent, l’abonné refuse l’un et accepte l’autre ; il devient client à ce tarif',
+    async jouer(db, s) {
+      if (!(await avec0018(db))) return;
+      await secteurValide(db, s.entA, s.yde3);
+      await secteurValide(db, s.entB, s.yde3);
+      await devisOuverts(db, true);
+      const { u, d } = await abonneAvecDemande(db, s.yde3);
+      try {
+        // Une seule demande ouverte à la fois.
+        if (await accepte(db, u, `select public.deposer_demande_devis($1::jsonb)`, [demandeDevis(s.yde3)])) throw new Error('deux demandes ouvertes');
+        const dA = await comme(db, s.gerantA, (tx) => valeur(tx, `select public.proposer_devis($1, 5000, 1, 3, true, 50, 'Passage le matin')`, [d]));
+        const dB = await comme(db, s.gerantB, (tx) => valeur(tx, `select public.proposer_devis($1, 4500, 1, 3)`, [d]));
+        // Le précollecteur corrige son devis tant qu'il n'a pas de réponse.
+        await comme(db, s.gerantA, (tx) => tx.query(`select public.proposer_devis($1, 4800, 1, 3, true, 50, 'Passage le matin')`, [d]));
+        const recus = await comme(db, u, async (tx) => (await tx.query(`select devis_id, tarif_fcfa, entreprise_nom, statut from public.mes_devis()`)).rows);
+        if (recus.map((r) => r.tarif_fcfa).join() !== '4500,4800' || !recus[0].entreprise_nom.startsWith('Entreprise B') || !recus[1].entreprise_nom.startsWith('Entreprise A')) {
+          throw new Error(JSON.stringify(recus));
+        }
+        await comme(db, u, (tx) => tx.query(`select public.refuser_devis($1)`, [dB]));
+        if ((await valeur(db, `select statut from public.demandes_devis where id = $1`, [d])) !== 'devis_recu') throw new Error('demande refermée après un seul refus');
+        const client = await comme(db, u, (tx) => valeur(tx, `select public.accepter_devis($1)`, [dA]));
+        const c = (await db.query(`select entreprise_id, user_id, nom, telephone, adresse, tarif_fcfa, facturation_mois, passages_semaine, sacs_inclus, sacs_volume_litres, statut, zone_id
+                                    from public.clients where id = $1`, [client])).rows[0];
+        if (c.entreprise_id !== s.entA || c.user_id !== u || c.tarif_fcfa !== 4800 || c.passages_semaine !== 3 || !c.sacs_inclus
+            || c.sacs_volume_litres !== 50 || c.statut !== 'actif' || c.adresse !== 'Portail rouge, face à la station' || c.zone_id !== s.zone) {
+          throw new Error(JSON.stringify(c));
+        }
+        const statuts = (await db.query(`select id, statut from public.devis where demande_id = $1 order by tarif_fcfa`, [d])).rows.map((r) => r.statut).join();
+        if (statuts !== 'refuse,accepte') throw new Error(`devis : ${statuts}`);
+        // Le précollecteur retenu voit désormais son client, nom et téléphone compris ; l'autre non.
+        const voitA = await comme(db, s.gerantA, (tx) => valeur(tx, `select count(*)::int from public.clients where id = $1 and telephone = '699001122'`, [client]));
+        const voitB = await comme(db, s.gerantB, (tx) => valeur(tx, `select count(*)::int from public.clients where id = $1`, [client]));
+        if (voitA !== 1 || voitB !== 0) throw new Error(`fiche visible : A ${voitA}, B ${voitB}`);
+        const vue = (await comme(db, s.gerantA, async (tx) => (await tx.query(`select plan_prix, plan_duree_mois from public.v_clients_statut where id = $1`, [client])).rows))[0];
+        if (vue?.plan_prix !== 4800 || vue?.plan_duree_mois !== 1) throw new Error(`vue : ${JSON.stringify(vue)}`);
+      } finally {
+        await devisOuverts(db, false);
+        await effacerDemande(db, d);
+        await secteurAnnule(db, [s.entA, s.entB], s.yde3);
+      }
+    },
+  },
+  {
+    titre: 'Liste d’attente : la demande attend le lancement, le précollecteur vérifié la voit sans pouvoir répondre ; l’abonné la retire',
+    async jouer(db, s) {
+      if (!(await avec0018(db))) return;
+      await secteurValide(db, s.entA, s.yde3);
+      await devisOuverts(db, false);
+      const { u, d } = await abonneAvecDemande(db, s.yde3, { commune_id: null, quartier: 'Ekounou', lat: null, lng: null, position_sur_place: true });
+      try {
+        // Sans commune, le quartier desservi suffit.
+        await comme(db, s.gerantA, (tx) => tx.query(`select public.mettre_a_jour_ma_vitrine(null, array['Ékounou'])`));
+        const vue = (await comme(db, s.gerantA, async (tx) => (await tx.query(`select * from public.demandes_devis_ouvertes() where id = $1`, [d])).rows))[0];
+        if (!vue || vue.categorie !== 'commerce' || vue.passages_semaine !== 3 || vue.details.type_commerce !== 'boulangerie') throw new Error(JSON.stringify(vue));
+        let message = '';
+        await comme(db, s.gerantA, (tx) => tx.query(`select public.proposer_devis($1, 3000, 1, 2)`, [d])).catch((e) => { message = e.message; });
+        if (!/lancement officiel/.test(message)) throw new Error(`devis avant le lancement : ${message || 'accepté'}`);
+        if ((await valeur(db, `select position_sur_place from public.demandes_devis where id = $1`, [d])) !== false) throw new Error('« sur place » sans position');
+        await comme(db, u, (tx) => tx.query(`select public.annuler_demande_devis()`));
+        if ((await valeur(db, `select statut from public.demandes_devis where id = $1`, [d])) !== 'annulee') throw new Error('demande non retirée');
+      } finally {
+        await comme(db, s.gerantA, (tx) => tx.query(`select public.mettre_a_jour_ma_vitrine(null, '{}')`));
+        await effacerDemande(db, d);
+        await secteurAnnule(db, [s.entA], s.yde3);
+      }
+    },
+  },
+  {
     titre: 'Migration 0015 rejouée : comptes « enterprise » et « collecteur » convertis en ménage, rôle d’origine gardé, centre affiné conservé',
     async jouer(db) {
       const sql = migration('20261019000015');
@@ -1771,6 +1996,37 @@ export const PARCOURS = [
       if (avant !== apres) throw new Error(`avant ${avant}\naprès ${apres}`);
       const ko = resultats.at(-1).rows.filter((r) => r.resultat !== 'OK');
       if (ko.length) throw new Error(JSON.stringify(ko));
+    },
+  },
+  // Tout à la fin : reprend les formules du jeu de données en tarifs, et les demandes d'abonnement en attente.
+  {
+    titre: 'Migration 0018 rejouée : tarifs repris des formules à l’identique, demandes en attente reprises, rien ne bouge au second passage ; contrôle « OK »',
+    async jouer(db) {
+      const sql = migration('20261110000018');
+      if (!sql) return;
+      const enAttente = (await db.query(`select da.nom from public.demandes_abonnement da
+        where da.statut = 'en_attente'
+          and not exists (select 1 from public.clients c where c.user_id = da.user_id and c.statut <> 'resilie')
+        order by da.nom`)).rows.map((r) => r.nom);
+      const premier = await db.exec(sql);
+      const ecarts = await valeur(db, `select count(*)::int from public.clients c join public.plans_tarifaires p on p.id = c.plan_id
+                                        where c.tarif_fcfa is distinct from p.prix_fcfa or c.facturation_mois <> p.duree_mois`);
+      if (ecarts) throw new Error(`${ecarts} tarif(s) différent(s) de la formule`);
+      const reprises = (await db.query(`select nom from public.demandes_devis
+        where statut = 'en_attente' and categorie = 'residentiel' and nom = any($1) order by nom`, [enAttente])).rows.map((r) => r.nom);
+      if (reprises.join() !== enAttente.join()) throw new Error(`demandes reprises : ${reprises.join()} / attendues : ${enAttente.join()}`);
+      if ((await valeur(db, `select count(*)::int from public.demandes_abonnement where statut = 'en_attente'`)) !== 0) throw new Error('anciennes demandes encore en attente');
+      const photo = async () => JSON.stringify((await db.query(`select
+        (select string_agg(id || ':' || coalesce(tarif_fcfa::text, '-') || ':' || facturation_mois, ',' order by id) from public.clients) as clients,
+        (select string_agg(id || ':' || statut, ',' order by id) from public.demandes_devis) as demandes,
+        (select string_agg(id || ':' || statut, ',' order by id) from public.demandes_abonnement) as anciennes`)).rows[0]);
+      const avant = await photo();
+      const second = await db.exec(sql);
+      if ((await photo()) !== avant) throw new Error('le second passage a modifié les données');
+      for (const r of [premier, second]) {
+        const ko = r.at(-1).rows.filter((x) => x.resultat !== 'OK');
+        if (ko.length) throw new Error(JSON.stringify(ko));
+      }
     },
   },
 ];
