@@ -9,6 +9,7 @@ import { cheminInterne, normaliserNom, periodeFacture } from '@/lib/metier';
 import { CATEGORIES_CHARGES, MONTANT_MAX, lireMontant, moisValide } from '@/lib/charges';
 import { enregistrerAcceptation } from '@/lib/acceptations';
 import { estTypeDocument } from '@/lib/documents';
+import { lireQuartiers, type Piece } from '@/lib/dossier';
 import type { ActionState, ClientStatut, Plan } from '@/lib/types';
 
 const txt = (fd: FormData, k: string) => {
@@ -41,21 +42,89 @@ function erreurLisible(message: string | undefined): string {
 // Entreprise
 // =============================================================================
 
+/**
+ * Création de l'espace : plus de code d'agrément (retours de l'équipe,
+ * 08/11/2026). L'inscription est libre et se fait sans pièces ; les pièces du
+ * dossier se déposent ensuite, et l'entreprise n'apparaît dans l'annuaire
+ * qu'une fois le dossier vérifié par MyKlinTown.
+ */
 export async function creerEntrepriseAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   const supabase = await getSupabase();
   const nom = txt(fd, 'nom');
   if (!nom) return { error: 'Le nom de l’entreprise est obligatoire.' };
+  if (fd.get('conditions') !== 'on') {
+    return { error: 'Cochez la case pour accepter les conditions d’utilisation et la charte du précollecteur.' };
+  }
 
-  const { error } = await rpc(supabase, 'creer_mon_entreprise', {
+  const { error } = await rpc(supabase, 'inscrire_mon_entreprise', {
     p_nom: nom,
     p_telephone: txt(fd, 'telephone'),
     p_siege: txt(fd, 'siege'),
-    p_commune: txt(fd, 'commune_id'),
-    p_code: txt(fd, 'code'),
+    p_niu: txt(fd, 'niu'),
+    p_devise: txt(fd, 'devise'),
+    p_communes: fd.getAll('communes').map(String).filter(Boolean),
+    p_quartiers: lireQuartiers(txt(fd, 'quartiers')),
+    p_conditions_acceptees: true,
   });
   if (error) return { error: erreurLisible(error.message) };
   rafraichir();
   redirect('/precollecteur?bienvenue=1');
+}
+
+// =============================================================================
+// Dossier et vitrine (migration 20261109000017)
+// =============================================================================
+
+/** NIU et siège social depuis le dossier. Sur un dossier vérifié, la base le renvoie en vérification. */
+export async function majIdentiteAction(_p: ActionState, fd: FormData): Promise<ActionState> {
+  const { supabase, entreprise } = await requireEntreprise();
+  const niu = txt(fd, 'niu')?.replace(/[\s.-]+/g, '').toUpperCase() ?? null;
+  if (niu && !/^[A-Z0-9]{6,30}$/.test(niu)) return { error: 'NIU illisible : lettres et chiffres seulement (ex. M012345678901A).' };
+  const { error } = await supabase.from('entreprises').update({ niu, siege: txt(fd, 'siege') }).eq('id', entreprise.id);
+  if (error) return { error: erreurLisible(error.message) };
+  rafraichir();
+  return { ok: 'Identité enregistrée.' };
+}
+
+export async function majVitrineAction(_p: ActionState, fd: FormData): Promise<ActionState> {
+  const { supabase } = await requireEntreprise();
+  const { error } = await rpc(supabase, 'mettre_a_jour_ma_vitrine', {
+    p_devise: txt(fd, 'devise'),
+    p_quartiers: lireQuartiers(txt(fd, 'quartiers')),
+  });
+  if (error) return { error: erreurLisible(error.message) };
+  rafraichir();
+  return { ok: 'Vitrine enregistrée.' };
+}
+
+export async function definirCommunesAction(_p: ActionState, fd: FormData): Promise<ActionState> {
+  const { supabase } = await requireEntreprise();
+  const communes = fd.getAll('communes').map(String).filter(Boolean);
+  const { error } = await rpc(supabase, 'definir_mes_communes', { p_communes: communes });
+  if (error) return { error: erreurLisible(error.message) };
+  rafraichir();
+  return { ok: communes.length ? 'Communes d’activité enregistrées.' : 'Aucune commune d’activité : ajoutez-en au moins une.' };
+}
+
+/** Pièce déjà téléversée par le navigateur dans le stockage : on l'inscrit au dossier. */
+export async function enregistrerPieceAction(input: { piece: Piece; chemin: string; commune?: string | null }): Promise<ActionState> {
+  const { supabase } = await requireEntreprise();
+  const { error } = await rpc(supabase, 'enregistrer_piece_dossier', {
+    p_piece: input.piece,
+    p_chemin: input.chemin,
+    p_commune: input.commune ?? null,
+  });
+  if (error) return { error: erreurLisible(error.message) };
+  rafraichir();
+  return { ok: input.piece === 'logo' ? 'Logo enregistré.' : 'Pièce enregistrée.' };
+}
+
+export async function soumettreDossierAction(_p: ActionState, _fd: FormData): Promise<ActionState> {
+  const { supabase } = await requireEntreprise();
+  const { error } = await rpc(supabase, 'soumettre_mon_dossier');
+  if (error) return { error: erreurLisible(error.message) };
+  rafraichir();
+  return { ok: 'Dossier envoyé : MyKlinTown vérifie vos pièces.' };
 }
 
 export async function majEntrepriseAction(_p: ActionState, fd: FormData): Promise<ActionState> {

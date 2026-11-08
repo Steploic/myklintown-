@@ -1,4 +1,5 @@
-import { expect, pasDeDebordement, session, test } from './base';
+import { CLE_SERVICE, clientServiceTest } from '../../apps/web/tests/support/fixtures';
+import { etat, expect, pasDeDebordement, RUN, session, test } from './base';
 
 test.describe('pages publiques', () => {
   test('accueil : message, appels à l’action, plus de grille tarifaire', async ({ page }) => {
@@ -124,6 +125,41 @@ test.describe('pages publiques', () => {
     await page.getByLabel(/e-mail/i).fill('personne.inexistante.mkt@gmail.com');
     await page.getByRole('button', { name: /Envoyer/ }).click();
     await expect(page.getByText(/Si un compte existe|L’envoi a échoué/)).toBeVisible();
+  });
+});
+
+// Annuaire public (retours de l'équipe, 08/11/2026, § 1.4) : seuls les
+// précollecteurs au dossier vérifié, avec leur nom, leur logo et leur devise.
+test.describe('annuaire des précollecteurs', () => {
+  test('un précollecteur vérifié apparaît dans son quartier, sans aucune coordonnée', async ({ page }) => {
+    test.skip(!CLE_SERVICE, 'Clé de service de la base de test absente');
+    const sb = clientServiceTest();
+    const quartier = `Quartier Annuaire ${RUN}`;
+    await sb.from('entreprises').update({ dossier_statut: 'valide', quartiers: [quartier], devise: 'Devise de test' }).eq('id', etat().precoA);
+    try {
+      await page.goto('/');
+      await page.getByRole('link', { name: 'Trouver un précollecteur près de chez moi' }).click();
+      await expect(page).toHaveURL(/\/annuaire$/);
+      await page.getByLabel('Votre quartier de résidence').fill(quartier.toUpperCase());
+      await page.getByRole('button', { name: 'Rechercher' }).click();
+      await expect(page.getByText('Test Propreté A')).toBeVisible();
+      await expect(page.getByText('« Devise de test »')).toBeVisible();
+      await expect(page.getByText(/1 précollecteur vérifié/)).toBeVisible();
+      // Ni téléphone, ni adresse : la vitrine seulement.
+      await expect(page.locator('main').getByText(/6\s?\d{2}\s?\d{2}\s?\d{2}\s?\d{2}/)).toHaveCount(0);
+    } finally {
+      await sb.from('entreprises').update({ dossier_statut: 'incomplet', quartiers: [], devise: null }).eq('id', etat().precoA);
+    }
+    // Dossier non vérifié : plus dans l'annuaire.
+    await page.goto(`/annuaire?quartier=${encodeURIComponent(quartier)}`);
+    await expect(page.getByText(/Aucun précollecteur vérifié/)).toBeVisible();
+  });
+
+  test('sans résultat : invitation à s’inscrire ; page sans débordement', async ({ page }) => {
+    await page.goto('/annuaire?quartier=Quartierquinexistepas');
+    await expect(page.getByText(/Aucun précollecteur vérifié pour « Quartierquinexistepas »/)).toBeVisible();
+    await expect(page.getByRole('link', { name: /Faire ramasser mes déchets/ }).first()).toHaveAttribute('href', '/signup?role=citoyen');
+    await pasDeDebordement(page);
   });
 });
 

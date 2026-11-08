@@ -78,7 +78,7 @@ export default async function SettingsPage() {
                 <input id="e-tel" name="telephone" type="tel" defaultValue={entreprise.telephone ?? ''} className="field" />
               </div>
               <div className="sm:col-span-2">
-                <label className="field-label" htmlFor="e-siege">Quartier / siège</label>
+                <label className="field-label" htmlFor="e-siege">Adresse du siège social</label>
                 <input id="e-siege" name="siege" defaultValue={entreprise.siege ?? ''} className="field" />
               </div>
               <fieldset className="grid gap-4 rounded-lg border border-border p-4 sm:col-span-2 sm:grid-cols-2">

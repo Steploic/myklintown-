@@ -1,10 +1,10 @@
 import { Truck } from 'lucide-react';
 import { PortalShell } from '@/components/portal-shell';
 import { EmptyState, PageHeader } from '@/components/ui/blocks';
-import { CodesAgrement } from '@/components/mairie/codes-agrement';
+import { DossiersPrecollecteurs, type DossierEntreprise } from '@/components/admin/dossiers-precollecteurs';
 import { accesCommunes, nomsCommunes } from '@/lib/mairie/communes';
-import { getSupabase, origineDemande, rows, rpc } from '@/lib/server';
-import type { CodeAgrement } from '@/lib/agrement';
+import { getSupabase, rows, rpc } from '@/lib/server';
+import { urlsPieces } from '@/lib/dossier-pieces';
 import { nombre, pct, telLisible } from '@/lib/format';
 
 export const metadata = { title: 'Précollecteurs' };
@@ -31,27 +31,30 @@ const STATUT: Record<string, { label: string; chip: string }> = {
 
 export default async function PrecollecteursPage() {
   const supabase = await getSupabase();
-  const [{ data }, co, acces, origine] = await Promise.all([
-    rpc(supabase, 'supervision_precollecteurs'),
-    supabase
-      .from('codes_agrement')
-      .select('id, code, destinataire, telephone, created_at, expire_at, revoque_at, utilise_at, communes(nom), entreprises(nom)')
-      .order('created_at', { ascending: false })
-      .limit(50),
-    accesCommunes(supabase),
-    origineDemande(),
-  ]);
+  const [{ data }, acces] = await Promise.all([rpc(supabase, 'supervision_precollecteurs'), accesCommunes(supabase)]);
   const liste = rows<Ligne>(data);
-  // L'administrateur délivre pour n'importe quelle commune (ou sans) ; une Mairie, pour les siennes.
-  const choixLibre = acces.estAdmin || !acces.cloisonne;
-  const territoire = choixLibre ? 'sur le territoire' : `à ${nomsCommunes(acces.communes) || 'votre commune'}`;
+  const territoire = acces.estAdmin || !acces.cloisonne ? 'sur le territoire' : `à ${nomsCommunes(acces.communes) || 'votre commune'}`;
+
+  // Dossiers des précollecteurs (20261109000017) : vérifiés par l'équipe MyKlinTown seulement.
+  let dossiers: DossierEntreprise[] | null = null;
+  let urls = new Map<string, string>();
+  if (acces.estAdmin) {
+    const { data: d, error } = await supabase
+      .from('entreprises')
+      .select('id, nom, telephone, email, niu, siege, devise, quartiers, logo_path, permis_env_path, dossier_statut, dossier_motif, dossier_soumis_at, dossier_statue_at, entreprise_communes(commune_id, autorisation_path, communes(nom))')
+      .order('nom');
+    if (!error) {
+      dossiers = rows<DossierEntreprise>(d);
+      urls = await urlsPieces(supabase, dossiers.flatMap((x) => [x.permis_env_path, ...(x.entreprise_communes ?? []).map((c) => c.autorisation_path)]));
+    }
+  }
 
   return (
     <PortalShell portalKey="mairie" currentPath="/dashboard/precollecteurs">
       <PageHeader titre="Précollecteurs" sousTitre={`Entreprises actives ${territoire} et leur performance sur 30 jours.`} />
       {liste.length === 0 ? (
         <div className="card-soft">
-          <EmptyState icon={Truck} titre="Aucun précollecteur inscrit" texte="Un précollecteur crée son espace depuis la page d’accueil MyKlinTown, avec un code d’agrément délivré ci-dessous." />
+          <EmptyState icon={Truck} titre="Aucun précollecteur inscrit" texte="Un précollecteur crée son espace depuis la page d’accueil MyKlinTown ; son dossier est vérifié par l’équipe avant son entrée dans l’annuaire." />
         </div>
       ) : (
         <div className="card-soft overflow-x-auto">
@@ -91,8 +94,8 @@ export default async function PrecollecteursPage() {
           </table>
         </div>
       )}
-      {/* Sans la migration 20261013000012, la table n'existe pas : la section ne s'affiche pas. */}
-      {!co.error && <CodesAgrement codes={rows<CodeAgrement>(co.data)} communes={acces.communes} choixLibre={choixLibre} origine={origine} />}
+      {/* Les codes d'agrément ne servent plus à l'inscription (retours de l'équipe, 08/11/2026) : le dossier vérifié les remplace. */}
+      {dossiers && <DossiersPrecollecteurs dossiers={dossiers} urls={urls} />}
     </PortalShell>
   );
 }

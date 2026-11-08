@@ -5,7 +5,7 @@ import { MobileSiteMenu } from './mobile-site-menu';
 const NAV = [
   { href: '/#precollecteurs', label: 'Précollecteurs' },
   { href: '/#abonnes', label: 'Abonnés' },
-  { href: '/#fonctionnement', label: 'Comment ça marche' },
+  { href: '/annuaire', label: 'Trouver un précollecteur' },
 ];
 
 export function SiteHeader() {

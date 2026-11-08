@@ -67,7 +67,8 @@ describe('Invariants (valables pour toute future migration)', () => {
   });
 
   test('fonctions SECURITY DEFINER ouvertes aux visiteurs : uniquement la liste autorisée', async () => {
-    const autorisees = ['apercu_invitation', 'est_admin'];
+    // annuaire_precollecteurs (20261109000017) : nom, logo et devise des dossiers validés, rien d'autre.
+    const autorisees = ['annuaire_precollecteurs', 'apercu_invitation', 'est_admin'];
     const r = await lignes(`
       select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
        where n.nspname = 'public' and p.prosecdef and has_function_privilege('anon', p.oid, 'execute')
