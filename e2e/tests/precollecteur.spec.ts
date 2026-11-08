@@ -64,12 +64,13 @@ test.describe('précollecteur : exploitation', () => {
     await expect(page.getByText(/Commission MyKlinTown 10 %/)).toBeVisible();
   });
 
-  test('nouveau client : carte, formule de la grille, première facture, QR', async ({ page }) => {
+  test('nouveau client : carte, tarif convenu, première facture, QR', async ({ page }) => {
     await page.goto('/precollecteur/clients/nouveau');
     await page.getByLabel('Nom de l’abonné (personne ou structure) *').fill(NOM);
     await page.getByLabel('Téléphone').fill('677 55 66 77');
     await page.getByLabel('Quartier').fill('Nsam');
-    await page.getByRole('radio', { name: /Trimestriel/ }).check({ force: true });
+    await page.getByLabel('Montant de chaque facture (FCFA) *').fill('9500');
+    await page.getByLabel('Période facturée').selectOption('3');
     const carte = page.locator('.leaflet-container');
     await expect(carte).toBeVisible();
     await carte.click({ position: { x: 200, y: 150 } });
@@ -280,11 +281,11 @@ test.describe('précollecteur : exploitation', () => {
     await expect(page.getByText(/enregistrées : 30\s000\sFCFA au total/)).toBeVisible();
   });
 
-  test('grille tarifaire en lecture seule', async ({ page }) => {
+  // Plus de grille commune (retours du 08/11/2026) : l'ancienne adresse mène aux devis.
+  test('ancienne grille tarifaire : renvoi vers les demandes de devis', async ({ page }) => {
     await page.goto('/precollecteur/grille');
-    await expect(page.getByText(/35\s000\sFCFA/)).toBeVisible();
-    await expect(page.getByText(/Vous recevez/).first()).toBeVisible();
-    await expect(page.locator('main input')).toHaveCount(0);
+    await expect(page).toHaveURL(/\/precollecteur\/demandes$/);
+    await expect(page.getByRole('heading', { name: 'Demandes de devis' })).toBeVisible();
   });
 
   test('paramètres : profil et entreprise', async ({ page }) => {

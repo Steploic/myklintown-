@@ -16,10 +16,10 @@ export async function GET() {
   const { data } = await supabase.from('v_clients_statut').select('*').order('nom');
   const clients = rows<ClientStatut>(data);
 
-  const entetes = ['Code', 'Nom', 'Téléphone', 'Quartier', 'Adresse', 'Zone', 'Formule', 'Statut', 'Abonnement', 'Couvert jusqu’au', 'Reste dû (FCFA)'];
+  const entetes = ['Code', 'Nom', 'Téléphone', 'Quartier', 'Adresse', 'Zone', 'Tarif (FCFA)', 'Période facturée (mois)', 'Passages / semaine', 'Statut', 'Abonnement', 'Couvert jusqu’au', 'Reste dû (FCFA)'];
   const csv = documentCsv(
     entetes,
-    clients.map((c) => [c.code, c.nom, c.telephone, c.quartier, c.adresse, c.zone_nom, c.plan_nom, c.statut, statutAbonnement(c.statut_abonnement).label, c.couverture_fin, c.montant_impaye]),
+    clients.map((c) => [c.code, c.nom, c.telephone, c.quartier, c.adresse, c.zone_nom, c.plan_prix, c.plan_duree_mois, c.passages_semaine, c.statut, statutAbonnement(c.statut_abonnement).label, c.couverture_fin, c.montant_impaye]),
   );
   return new NextResponse(csv, {
     headers: {

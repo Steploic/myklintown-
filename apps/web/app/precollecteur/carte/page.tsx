@@ -6,6 +6,7 @@ import { CartePoints, type PointCarte, type Ton } from '@/components/map/carte-p
 import { requireEntreprise } from '@/lib/precollecteur/context';
 import { rows, rpc } from '@/lib/server';
 import { fcfa, heureFr, statutAbonnement, telLisible } from '@/lib/format';
+import { libelleTarif } from '@/lib/devis';
 import { RafraichissementAuto } from '@/components/ui/rafraichissement-auto';
 import type { ClientStatut, Zone } from '@/lib/types';
 
@@ -13,23 +14,24 @@ export const metadata = { title: 'Carte des clients' };
 
 /**
  * Tous les clients sur une carte, couleur = état du paiement (retour R7 de Julien
- * et retour de Pie). Les demandes de ménages sans précollecteur y figurent aussi.
+ * et retour de Pie). Les demandes de devis n'y figurent pas : leur adresse reste
+ * masquée tant que l'abonné n'a pas accepté un devis.
  */
 export default async function CarteClientsPage() {
   const { supabase, entreprise } = await requireEntreprise();
   const [cl, za, dem, live] = await Promise.all([
     supabase
       .from('v_clients_statut')
-      .select('id, nom, quartier, telephone, lat, lng, statut, statut_abonnement, plan_nom, montant_impaye')
+      .select('id, nom, quartier, telephone, lat, lng, statut, statut_abonnement, plan_prix, plan_duree_mois, montant_impaye')
       .eq('entreprise_id', entreprise.id)
       .neq('statut', 'resilie'),
     supabase.from('zone_affectations').select('zones(*)').eq('entreprise_id', entreprise.id),
-    rpc(supabase, 'demandes_ouvertes'),
+    rpc(supabase, 'demandes_devis_ouvertes'),
     rpc(supabase, 'positions_en_direct'),
   ]);
   const clients = rows<ClientStatut>(cl.data);
   const zones = rows<{ zones: Zone | null }>(za.data).map((a) => a.zones).filter((z): z is Zone => !!z);
-  const demandes = rows<{ id: string; quartier: string | null; lat: number; lng: number; plan_nom: string | null }>(dem.data);
+  const demandes = rows<{ mon_devis_statut: string | null }>(dem.data).filter((d) => d.mon_devis_statut !== 'propose');
 
   const points: PointCarte[] = clients
     .filter((c) => c.lat != null && c.lng != null)
@@ -42,22 +44,10 @@ export default async function CarteClientsPage() {
         ton: s.terrain as Ton,
         picto: 'maison',
         titre: c.nom,
-        lignes: [s.label + (Number(c.montant_impaye) > 0 ? ` · ${fcfa(c.montant_impaye)} dus` : ''), [c.quartier, c.plan_nom].filter(Boolean).join(' · '), telLisible(c.telephone)],
+        lignes: [s.label + (Number(c.montant_impaye) > 0 ? ` · ${fcfa(c.montant_impaye)} dus` : ''), [c.quartier, c.plan_prix != null && libelleTarif(c.plan_prix, c.plan_duree_mois)].filter(Boolean).join(' · '), telLisible(c.telephone)],
         lien: { href: `/precollecteur/clients/${c.id}`, label: 'Fiche' },
       };
     });
-  for (const d of demandes) {
-    points.push({
-      id: `demande-${d.id}`,
-      lat: d.lat,
-      lng: d.lng,
-      ton: 'info',
-      picto: 'demande',
-      titre: 'Abonné en attente de précollecteur',
-      lignes: [[d.quartier, d.plan_nom].filter(Boolean).join(' · ')],
-      lien: { href: '/precollecteur/demandes', label: 'Prendre en charge' },
-    });
-  }
 
   // Tricycles en tournée : dernière position envoyée par l'appli de l'équipe.
   const enDirect = rows<{ tournee_id: string; lat: number; lng: number; vu_at: string; tricycle_nom: string | null; zone_nom: string | null; equipe: string | null }>(live.data);
@@ -83,7 +73,7 @@ export default async function CarteClientsPage() {
         actions={
           demandes.length > 0 && (
             <Link href="/precollecteur/demandes" className="btn-secondary">
-              <Inbox size={16} /> {demandes.length} demande{demandes.length > 1 ? 's' : ''} en attente
+              <Inbox size={16} /> {demandes.length} demande{demandes.length > 1 ? 's' : ''} de devis
             </Link>
           )
         }
@@ -97,7 +87,6 @@ export default async function CarteClientsPage() {
             { ton: 'relance', label: 'À relancer' },
             { ton: 'stop', label: 'Impayé / expiré' },
             { ton: 'neutre', label: 'Autre' },
-            { ton: 'info', label: 'Demandes en attente' },
             { ton: 'direct', label: 'Équipes en tournée' },
           ]}
           hauteur={560}

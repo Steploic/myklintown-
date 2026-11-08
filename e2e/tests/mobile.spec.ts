@@ -19,7 +19,6 @@ const PRECOLLECTEUR = [
   '/precollecteur/flotte',
   '/precollecteur/incidents',
   '/precollecteur/incidents/nouveau',
-  '/precollecteur/grille',
   '/precollecteur/dossier',
   '/settings',
 ];

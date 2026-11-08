@@ -20,6 +20,7 @@ export const etat = () =>
     migration0011: boolean;
     migration0012: boolean;
     migration0016: boolean;
+    migration0018: boolean;
     adminPromu: boolean;
     adminEmail: string;
   };
@@ -32,6 +33,7 @@ export const session = (cle: string) => path.resolve(__dirname, '..', '.auth', `
 export const SANS_MIGRATION_0006 = 'Migration 20261004000006_retours_tests_equipe.sql non exécutée';
 export const SANS_MIGRATION_0011 = 'Migration 20261013000011_indicateurs_pilote.sql non exécutée';
 export const SANS_MIGRATION_0012 = 'Migration 20261013000012_codes_agrement.sql non exécutée';
+export const SANS_MIGRATION_0018 = 'Migration 20261110000018_devis_tarif_abonne.sql non exécutée';
 
 /** Connexion par le vrai formulaire (comptes dont la session ne doit pas être partagée). */
 export async function seConnecter(page: Page, email: string, motDePasse: string) {

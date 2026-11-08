@@ -46,6 +46,8 @@ const nextConfig = {
     return [
       { source: '/collecteur/:path*', destination: '/', permanent: false },
       { source: '/enterprise/:path*', destination: '/', permanent: false },
+      // Plus de grille commune (retours du 08/11/2026) : le tarif se fixe par devis.
+      { source: '/precollecteur/grille', destination: '/precollecteur/demandes', permanent: false },
     ];
   },
 };
