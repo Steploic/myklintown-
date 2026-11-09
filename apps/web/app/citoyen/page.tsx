@@ -69,7 +69,7 @@ export default async function CitoyenAccueil({
               <p className="mt-1 opacity-90">
                 {proposes.length
                   ? 'Comparez les propositions et acceptez celle qui vous convient : ce précollecteur devient le vôtre, à ce tarif.'
-                  : `Votre demande${enAttente.quartier ? ` pour ${enAttente.quartier}` : ''} du ${dateFr(enAttente.created_at, { day: 'numeric', month: 'long' })} est transmise aux précollecteurs vérifiés de votre secteur. Avant le lancement officiel (décembre 2026), elle reste en liste d’attente : vous serez parmi les premiers servis.`}
+                  : `Votre demande${enAttente.quartier ? ` pour ${enAttente.quartier}` : ''} du ${dateFr(enAttente.created_at, { day: 'numeric', month: 'long' })} est transmise aux précollecteurs vérifiés de votre commune et de votre quartier ; s’il n’y en a pas encore, l’équipe MyKlinTown vous met en relation. Avant le lancement officiel (décembre 2026), elle reste en liste d’attente : vous serez parmi les premiers servis.`}
               </p>
             </div>
           </div>

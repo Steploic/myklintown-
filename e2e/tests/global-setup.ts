@@ -84,6 +84,8 @@ export default async function globalSetup() {
   // Migration 20261110000018 (demande de devis, tarif par abonné) jouée ?
   const migration0018 = !(await A.sb.from('demandes_devis').select('id').limit(1)).error;
   if (migration0018) await S.sb.rpc('annuler_demande_devis');
+  // Migration 20261111000019 (routage des demandes de devis, demandes à orienter) jouée ?
+  const migration0019 = !(await A.sb.rpc('demandes_devis_a_orienter')).error;
   if (migration0011) await A.sb.from('couts_exploitation').delete().eq('entreprise_id', A.entrepriseId);
   if (migration0006) {
     // Rien ne reste « en attente » d'un essai précédent.
@@ -94,7 +96,7 @@ export default async function globalSetup() {
   genererVideoQr(CODE_SCAN, path.resolve(__dirname, '..', '.media', 'qr.y4m'));
   fs.writeFileSync(
     FICHIER_ETAT,
-    JSON.stringify({ precoA: A.entrepriseId, precoB: B.entrepriseId, clientScan: scan.id, clientLien: lien.id, mairiePromue: M.promue, mairieEmail: M.email, migration0006, migration0007, migration0008, migration0011, migration0012, migration0016, migration0018, adminPromu, adminEmail: ADM.email }, null, 2),
+    JSON.stringify({ precoA: A.entrepriseId, precoB: B.entrepriseId, clientScan: scan.id, clientLien: lien.id, mairiePromue: M.promue, mairieEmail: M.email, migration0006, migration0007, migration0008, migration0011, migration0012, migration0016, migration0018, migration0019, adminPromu, adminEmail: ADM.email }, null, 2),
   );
   if (!migration0006) {
     console.warn('\n⚠️  Tests « liste d’attente » et « accès Mairie » ignorés : exécuter supabase/migrations/20261004000006_retours_tests_equipe.sql\n');

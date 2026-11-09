@@ -2,6 +2,8 @@ import { Truck } from 'lucide-react';
 import { PortalShell } from '@/components/portal-shell';
 import { EmptyState, PageHeader } from '@/components/ui/blocks';
 import { DossiersPrecollecteurs, type DossierEntreprise } from '@/components/admin/dossiers-precollecteurs';
+import { DemandesAOrienter } from '@/components/admin/demandes-a-orienter';
+import type { DemandeAOrienter } from '@/lib/types';
 import { accesCommunes, nomsCommunes } from '@/lib/mairie/communes';
 import { getSupabase, rows, rpc } from '@/lib/server';
 import { urlsPieces } from '@/lib/dossier-pieces';
@@ -38,16 +40,25 @@ export default async function PrecollecteursPage() {
   // Dossiers des précollecteurs (20261109000017) : vérifiés par l'équipe MyKlinTown seulement.
   let dossiers: DossierEntreprise[] | null = null;
   let urls = new Map<string, string>();
+  // Demandes de devis qu'aucun précollecteur vérifié ne reçoit (20261111000019) : l'équipe les oriente.
+  let aOrienter: { demandes: DemandeAOrienter[]; communes: { id: string; nom: string }[] } | null = null;
   if (acces.estAdmin) {
-    const { data: d, error } = await supabase
-      .from('entreprises')
-      .select('id, nom, telephone, email, niu, siege, devise, quartiers, logo_path, permis_env_path, dossier_statut, dossier_motif, dossier_soumis_at, dossier_statue_at, entreprise_communes(commune_id, autorisation_path, communes(nom))')
-      .order('nom');
+    const [{ data: d, error }, orphelines, { data: co }] = await Promise.all([
+      supabase
+        .from('entreprises')
+        .select('id, nom, telephone, email, niu, siege, devise, quartiers, logo_path, permis_env_path, dossier_statut, dossier_motif, dossier_soumis_at, dossier_statue_at, entreprise_communes(commune_id, autorisation_path, communes(nom))')
+        .order('nom'),
+      rpc(supabase, 'demandes_devis_a_orienter'),
+      supabase.from('communes').select('id, nom').order('nom'),
+    ]);
     if (!error) {
       dossiers = rows<DossierEntreprise>(d);
       urls = await urlsPieces(supabase, dossiers.flatMap((x) => [x.permis_env_path, ...(x.entreprise_communes ?? []).map((c) => c.autorisation_path)]));
     }
+    // Base sans la migration 0019 : pas de liste (la fonction n'existe pas encore).
+    if (!orphelines.error) aOrienter = { demandes: rows<DemandeAOrienter>(orphelines.data), communes: rows<{ id: string; nom: string }>(co) };
   }
+  const verifies = (dossiers ?? []).filter((x) => x.dossier_statut === 'valide').map((x) => ({ id: x.id, nom: x.nom }));
 
   return (
     <PortalShell portalKey="mairie" currentPath="/dashboard/precollecteurs">
@@ -95,6 +106,7 @@ export default async function PrecollecteursPage() {
         </div>
       )}
       {/* Les codes d'agrément ne servent plus à l'inscription (retours de l'équipe, 08/11/2026) : le dossier vérifié les remplace. */}
+      {aOrienter && <DemandesAOrienter demandes={aOrienter.demandes} communes={aOrienter.communes} verifies={verifies} />}
       {dossiers && <DossiersPrecollecteurs dossiers={dossiers} urls={urls} />}
     </PortalShell>
   );

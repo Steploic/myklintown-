@@ -17,9 +17,9 @@
 --     des écarts : elles servent à l'analyse.
 --
 -- Fichier GÉNÉRÉ par supabase/tests-securite/empreinte.mjs à partir des
--- migrations du dépôt (dernière : 20261110000018_devis_tarif_abonne). Ne pas le modifier à la main :
+-- migrations du dépôt (dernière : 20261111000019_devis_routage). Ne pas le modifier à la main :
 -- après toute nouvelle migration, `npm run empreinte` dans supabase/tests-securite.
--- Empreinte attendue : 119 fonctions, 54 tables, 105 politiques, 53 déclencheurs, 128 index, 277 contraintes, 23 types, 3 stockages.
+-- Empreinte attendue : 123 fonctions, 54 tables, 105 politiques, 53 déclencheurs, 128 index, 277 contraintes, 23 types, 3 stockages.
 -- =============================================================================
 with attendu (categorie, objet, valeur, migration) as (
   values
@@ -356,7 +356,7 @@ with attendu (categorie, objet, valeur, migration) as (
     ('fonction', 'accepter_devis(p_devis uuid)', 'e2aefe75a163|definer|search_path=public, extensions|anon=non|connecte=oui', '20261110000018_devis_tarif_abonne'),
     ('fonction', 'accepter_documents(p_types text[], p_client uuid)', 'c88ec0148d4a|definer|search_path=public|anon=non|connecte=oui', '20261109000017_dossier_precollecteur_annuaire'),
     ('fonction', 'accorder_commune_mairie(p_user uuid, p_commune uuid)', '5afb59aa0b48|definer|search_path=public|anon=non|connecte=oui', '20261019000016_mairie_par_commune'),
-    ('fonction', 'annuaire_precollecteurs(p_recherche text)', 'b5e6c7410ae6|definer|search_path=public|anon=oui|connecte=oui', '20261109000017_dossier_precollecteur_annuaire'),
+    ('fonction', 'annuaire_precollecteurs(p_recherche text)', '8903df9723b3|definer|search_path=public|anon=oui|connecte=oui', '20261111000019_devis_routage'),
     ('fonction', 'annuler_demande_acces()', 'bdc8936e5701|definer|search_path=public|anon=non|connecte=oui', '20261004000006_retours_tests_equipe'),
     ('fonction', 'annuler_demande_devis()', 'a5a889d861df|definer|search_path=public|anon=non|connecte=oui', '20261110000018_devis_tarif_abonne'),
     ('fonction', 'apercu_invitation(p_code text)', '1c3a6ea6e39e|definer|search_path=public|anon=oui|connecte=oui', '20261005000007_espace_employe'),
@@ -378,10 +378,11 @@ with attendu (categorie, objet, valeur, migration) as (
     ('fonction', 'definir_mes_communes(p_communes uuid[])', '31725450e35e|definer|search_path=public|anon=non|connecte=oui', '20261109000017_dossier_precollecteur_annuaire'),
     ('fonction', 'demander_acces_mairie(p_commune uuid, p_fonction text, p_service text, p_telephone text, p_message text)', 'ccfad1ddcf20|definer|search_path=public|anon=non|connecte=oui', '20261004000006_retours_tests_equipe'),
     ('fonction', 'demandes_acces_a_traiter()', '74effc6c7b1f|definer|search_path=public|anon=non|connecte=oui', '20261011000009_audit_securite'),
-    ('fonction', 'demandes_devis_ouvertes()', 'bb0a8f797249|definer|search_path=public|anon=non|connecte=oui', '20261110000018_devis_tarif_abonne'),
+    ('fonction', 'demandes_devis_a_orienter()', 'f1bffa843971|definer|search_path=public|anon=non|connecte=oui', '20261111000019_devis_routage'),
+    ('fonction', 'demandes_devis_ouvertes()', 'e05f8ece014a|definer|search_path=public|anon=non|connecte=oui', '20261111000019_devis_routage'),
     ('fonction', 'demandes_ouvertes()', '0afc654cdc7b|definer|search_path=public|anon=non|connecte=oui', '20261019000016_mairie_par_commune'),
     ('fonction', 'deposer_demande_abonnement(p_plan uuid, p_nom text, p_telephone text, p_adresse text, p_quartier text, p_lat double precision, p_lng double precision)', 'f3231f4e5532|definer|search_path=public, extensions|anon=non|connecte=oui', '20261004000006_retours_tests_equipe'),
-    ('fonction', 'deposer_demande_devis(p jsonb)', 'd6a064c4bbaf|definer|search_path=public|anon=non|connecte=oui', '20261110000018_devis_tarif_abonne'),
+    ('fonction', 'deposer_demande_devis(p jsonb)', '8c3117c0e72f|definer|search_path=public|anon=non|connecte=oui', '20261111000019_devis_routage'),
     ('fonction', 'documents_a_accepter()', '31026d44d5e8|definer|search_path=public|anon=non|connecte=oui', '20261109000017_dossier_precollecteur_annuaire'),
     ('fonction', 'documents_legaux_fige()', 'f5a5be0a681b|invoker|search_path=public|anon=non|connecte=non', '20261019000014_charte_facture_conforme'),
     ('fonction', 'dossier_entreprise(p_nom text)', '789dbfbe62c5|invoker|search_path=public|anon=non|connecte=oui', '20261011000009_audit_securite'),
@@ -432,6 +433,7 @@ with attendu (categorie, objet, valeur, migration) as (
     ('fonction', 'normaliser_code_invitation(p text)', '195d67e4a0b5|invoker|search_path=public|anon=non|connecte=oui', '20261011000009_audit_securite'),
     ('fonction', 'normaliser_nom(p text)', '474d1a3e1831|invoker|search_path=public|anon=non|connecte=oui', '20261011000009_audit_securite'),
     ('fonction', 'nouveau_code_invitation()', '987441a43226|invoker|search_path=public|anon=non|connecte=non', '20261011000009_audit_securite'),
+    ('fonction', 'orienter_demande_devis(p_demande uuid, p_commune uuid, p_entreprise uuid)', 'ae9e085f2f11|definer|search_path=public|anon=non|connecte=oui', '20261111000019_devis_routage'),
     ('fonction', 'parametre_entier(p_cle text, p_defaut integer)', '97df44e4c98d|invoker|search_path=public|anon=non|connecte=oui', '20261019000013_delai_grace_blocage'),
     ('fonction', 'peut_agir_sur_tournee(p_tournee uuid)', 'ef20f4e1c52f|definer|search_path=public|anon=non|connecte=oui', '20261005000007_espace_employe'),
     ('fonction', 'pieces_manquantes(p_entreprise uuid)', '2dd51ea69041|invoker|search_path=public|anon=non|connecte=oui', '20261109000017_dossier_precollecteur_annuaire'),
@@ -442,6 +444,7 @@ with attendu (categorie, objet, valeur, migration) as (
     ('fonction', 'promouvoir_utilisateur(p_email text, p_role user_role)', 'bfad83078a1c|definer|search_path=public|anon=non|connecte=non', '20260831000003_securite_rls_et_roles'),
     ('fonction', 'proposer_devis(p_demande uuid, p_tarif integer, p_facturation_mois integer, p_passages integer, p_sacs boolean, p_volume integer, p_note text)', 'da9ea595debd|definer|search_path=public|anon=non|connecte=oui', '20261110000018_devis_tarif_abonne'),
     ('fonction', 'purger_donnees_de_test(p_entreprise uuid, p_clients uuid[])', '9a09c0fd96f1|definer|search_path=public|anon=non|connecte=non', '20261019000014_charte_facture_conforme'),
+    ('fonction', 'quartier_correspond(p_a text, p_b text)', '322a154c0061|invoker|search_path=public|anon=non|connecte=non', '20261111000019_devis_routage'),
     ('fonction', 'quartiers_normalises(p text[])', 'da5b91e307ea|invoker|search_path=public|anon=non|connecte=oui', '20261109000017_dossier_precollecteur_annuaire'),
     ('fonction', 'rattacher_mon_compte(p_code text, p_telephone text)', 'c66f49fb571e|definer|search_path=public|anon=non|connecte=oui', '20260928000005_rattachement_client'),
     ('fonction', 'refuser_devis(p_devis uuid)', '8b624081aba6|definer|search_path=public|anon=non|connecte=oui', '20261110000018_devis_tarif_abonne'),
@@ -452,6 +455,7 @@ with attendu (categorie, objet, valeur, migration) as (
     ('fonction', 'revoquer_code_agrement(p_id uuid)', 'abbe424a8d40|definer|search_path=public|anon=non|connecte=oui', '20261019000016_mairie_par_commune'),
     ('fonction', 'role_courant()', 'f2c9d1766465|definer|search_path=public|anon=non|connecte=oui', '20261011000009_audit_securite'),
     ('fonction', 'scanner_passage(p_tournee uuid, p_code text, p_horodatage timestamp with time zone)', 'caae735a9d37|definer|search_path=public|anon=non|connecte=oui', '20261019000013_delai_grace_blocage'),
+    ('fonction', 'secteur_couvre(p_entreprise uuid, p_quartiers text[], p_commune uuid, p_quartier text)', '5748102e6233|invoker|search_path=public|anon=non|connecte=non', '20261111000019_devis_routage'),
     ('fonction', 'set_updated_at()', 'ba151046deb2|invoker|search_path=public|anon=non|connecte=oui', '20261011000009_audit_securite'),
     ('fonction', 'soumettre_mon_dossier()', '579ab7e41848|definer|search_path=public|anon=non|connecte=oui', '20261109000017_dossier_precollecteur_annuaire'),
     ('fonction', 'souscrire_client(p_entreprise uuid, p_plan uuid, p_nom text, p_telephone text, p_adresse text, p_quartier text, p_lat double precision, p_lng double precision)', 'f71e2ed639e4|definer|search_path=public, extensions|anon=non|connecte=oui', '20260928000004_pivot_precollecteurs'),
@@ -913,7 +917,7 @@ infos (categorie, objet, detail) as (
 select etat, categorie, objet, migration, detail
 from (
   select 0 as rang, 'OK' as etat, 'synthèse' as categorie, 'aucun écart' as objet,
-         '20261110000018_devis_tarif_abonne' as migration,
+         '20261111000019_devis_routage' as migration,
          (select count(*) from attendu)::text || ' objets conformes aux migrations' as detail
    where not exists (select 1 from ecarts)
   union all

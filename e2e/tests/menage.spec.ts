@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { CLE_SERVICE, clientServiceTest, compte, supprimerClientsDeTest } from '../../apps/web/tests/support/fixtures';
 import { normaliserNom } from '../../apps/web/lib/metier';
-import { expect, etat, RUN, SANS_MIGRATION_0018, session, test } from './base';
+import { expect, etat, RUN, SANS_MIGRATION_0018, SANS_MIGRATION_0019, session, test } from './base';
 import { CODE_LIEN, TEL_LIEN } from './global-setup';
 
 const CONTESTATION = `Bac toujours plein ${RUN}`;
@@ -106,13 +106,17 @@ test.describe('nouvel abonné : demande de devis', () => {
   test.describe.configure({ mode: 'serial' });
   test.use({ storageState: session('souscripteur') });
 
-  /** Remplit la demande jusqu'à l'envoi ; `choisir` : le précollecteur à cibler dans l'annuaire. */
-  async function demander(page: Page, quartier: string, choisir?: RegExp) {
+  /**
+   * Remplit la demande jusqu'à l'envoi ; `choisir` : le précollecteur à cibler
+   * dans l'annuaire ; `commune` : obligatoire depuis 20261111000019.
+   */
+  async function demander(page: Page, quartier: string, choisir?: RegExp, commune = 'Yaoundé III') {
     await page.goto('/citoyen');
     await page.getByRole('link', { name: /Demander un devis/ }).click();
     await expect(page).toHaveURL(/\/citoyen\/souscrire$/);
     await page.getByRole('button', { name: /Mon domicile/ }).click();
     await page.getByRole('button', { name: /Continuer/ }).click();
+    await page.getByLabel('Arrondissement (commune) *').selectOption({ label: commune });
     await page.getByLabel('Quartier *').fill(quartier);
     await page.getByLabel('Repère exact *').fill('Portail bleu face à la pharmacie');
     await page.getByRole('button', { name: /Continuer/ }).click();
@@ -161,7 +165,7 @@ test.describe('nouvel abonné : demande de devis', () => {
       await p2.goto('/precollecteur/demandes');
       const carte = p2.locator('li', { hasText: quartier }).first();
       await expect(carte).toBeVisible();
-      await expect(carte).toContainText('Vous a choisi');
+      await expect(carte).toContainText('Adressée à vous');
       await expect(carte).toContainText('3 fois par semaine · sacs demandés (50 L)');
       await expect(carte).not.toContainText(/Test souscripteur/i);
       await expect(carte).not.toContainText('690000000');
@@ -188,6 +192,30 @@ test.describe('nouvel abonné : demande de devis', () => {
       await sb.from('parametres_plateforme').update({ valeur: '0' }).eq('cle', 'devis_ouverts');
       await sb.from('entreprises').update({ dossier_statut: 'incomplet', quartiers: [] }).eq('id', etat().precoA);
       await supprimerClientsDeTest(A.sb, etat().precoA, { quartier });
+    }
+  });
+
+  // Revue du 09/11/2026 : le quartier était comparé à l'identique, une demande
+  // « Nsam » n'arrivait pas au précollecteur de « Nsam Efoulan » que l'annuaire
+  // montrait pourtant. Ici, sans le choisir, et hors de ses communes.
+  test('devis sans choisir : la demande arrive au précollecteur d’un quartier au nom voisin', async ({ page, browser }) => {
+    test.skip(!CLE_SERVICE, 'Clé de service de la base de test absente');
+    test.skip(!etat().migration0019, SANS_MIGRATION_0019);
+    const sb = clientServiceTest();
+    const quartier = normaliserNom(`Quartier Voisin ${RUN}`);
+    await sb.from('entreprises').update({ dossier_statut: 'valide', quartiers: [`${quartier} Centre`] }).eq('id', etat().precoA);
+    try {
+      await demander(page, quartier, undefined, 'Yaoundé IV');
+      const ctx = await browser.newContext({ storageState: session('precoA') });
+      const p2 = await ctx.newPage();
+      await p2.goto('/precollecteur/demandes');
+      const carte = p2.locator('li', { hasText: quartier }).first();
+      await expect(carte).toBeVisible();
+      await expect(carte).toContainText('Yaoundé IV');
+      await expect(carte).not.toContainText('Adressée à vous');
+      await ctx.close();
+    } finally {
+      await sb.from('entreprises').update({ dossier_statut: 'incomplet', quartiers: [] }).eq('id', etat().precoA);
     }
   });
 });

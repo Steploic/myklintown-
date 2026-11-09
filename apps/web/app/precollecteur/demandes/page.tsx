@@ -72,7 +72,7 @@ export default async function DemandesPage({ searchParams }: { searchParams: Pro
                     </p>
                   </div>
                   <span className="flex flex-wrap gap-1.5">
-                    {d.ciblee && <span className="chip-ok">Vous a choisi</span>}
+                    {d.ciblee && <span className="chip-ok">Adressée à vous</span>}
                     {d.nb_devis > (enAttenteDeReponse ? 1 : 0) && <span className="chip-neutre">{d.nb_devis - (enAttenteDeReponse ? 1 : 0)} autre(s) devis</span>}
                   </span>
                 </div>
