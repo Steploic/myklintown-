@@ -8,7 +8,7 @@ import { useFormStatus } from 'react-dom';
 import { Logo, cn } from '@myklintown/ui';
 import { navPourRole, PORTALS, type PortalKey } from '@/lib/portal-config';
 import { signOutAction } from '@/lib/auth-actions';
-import { SelecteurEspace } from './selecteur-espace';
+import { aPlusieursEspaces, SelecteurEspace } from './selecteur-espace';
 
 interface MobileNavDrawerProps {
   portalKey: PortalKey;
@@ -73,9 +73,9 @@ export function MobileNavDrawer({ portalKey, currentPath, userName, titre, role 
             <p className="text-small font-semibold uppercase tracking-wider text-brand-leaf">{portal.role}</p>
             <p className="text-body-sm font-semibold">{titre ?? userName ?? portal.name}</p>
           </div>
-          {role === 'admin' && (
+          {aPlusieursEspaces(role) && (
             <div className="pt-3">
-              <SelecteurEspace courant={portalKey} />
+              <SelecteurEspace courant={portalKey} role={role} />
             </div>
           )}
 

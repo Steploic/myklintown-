@@ -47,17 +47,21 @@ describe('rattachement d’un ménage à sa fiche (code + téléphone)', () => {
     if (error) throw error;
     fiche = data;
   });
-  it('mauvais téléphone : refus, message neutre', async () => {
-    const { error } = await menage.sb.rpc('rattacher_mon_compte', { p_code: fiche.code, p_telephone: '699999999' });
-    expect(error?.message).toMatch(/Code ou téléphone incorrect/);
+  // Depuis 20261113000021, un essai refusé renvoie NULL (sans erreur) pour
+  // rester tracé ; l'application affiche « Code ou téléphone incorrect ».
+  it('mauvais téléphone : refus, sans rien rattacher', async () => {
+    const { data, error } = await menage.sb.rpc('rattacher_mon_compte', { p_code: fiche.code, p_telephone: '699999999' });
+    expect(error).toBeNull();
+    expect(data).toBeNull();
   });
-  it('code inconnu : exactement le même message (pas d’énumération)', async () => {
-    const { error } = await menage.sb.rpc('rattacher_mon_compte', { p_code: 'MKT-FFFFFFFF', p_telephone: '677112233' });
-    expect(error?.message).toMatch(/Code ou téléphone incorrect/);
+  it('code inconnu : exactement la même réponse (pas d’énumération)', async () => {
+    const { data, error } = await menage.sb.rpc('rattacher_mon_compte', { p_code: 'MKT-FFFFFFFF', p_telephone: '677112233' });
+    expect(error).toBeNull();
+    expect(data).toBeNull();
   });
   it('téléphone trop court : refus', async () => {
-    const { error } = await menage.sb.rpc('rattacher_mon_compte', { p_code: fiche.code, p_telephone: '2233' });
-    expect(error).toBeTruthy();
+    const { data } = await menage.sb.rpc('rattacher_mon_compte', { p_code: fiche.code, p_telephone: '2233' });
+    expect(data).toBeNull();
   });
   it('bon code (minuscules) + téléphone (autre format) : rattaché', async () => {
     const { data, error } = await menage.sb.rpc('rattacher_mon_compte', { p_code: fiche.code.toLowerCase(), p_telephone: '00237677112233' });
@@ -85,8 +89,8 @@ describe('rattachement d’un ménage à sa fiche (code + téléphone)', () => {
   });
   it('une fiche déjà prise ne peut pas être rattachée par un autre compte', async () => {
     const autre = await compte('intrus', 'citoyen');
-    const { error } = await autre.sb.rpc('rattacher_mon_compte', { p_code: fiche.code, p_telephone: '677112233' });
-    expect(error).toBeTruthy();
+    const { data } = await autre.sb.rpc('rattacher_mon_compte', { p_code: fiche.code, p_telephone: '677112233' });
+    expect(data ?? null).toBeNull();
   });
 
   describe('passages vus par le ménage', () => {

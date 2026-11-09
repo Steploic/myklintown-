@@ -1,4 +1,4 @@
-import { rows, type Supa } from '@/lib/server';
+import { rows, toutesLesLignes, type Supa } from '@/lib/server';
 
 export interface TourneeEquipe {
   id: string;
@@ -33,9 +33,10 @@ export async function tourneesDeLEquipe(supabase: Supa, quand: 'a_faire' | 'pass
   }>(data);
   if (brutes.length === 0) return [];
   const ids = brutes.map((t) => t.id);
+  // Lus en entier : 30 tournées passées dépassent vite les 1 000 passages que l'API renvoie en une fois.
   const [eq, co] = await Promise.all([
-    supabase.from('tournee_equipe').select('tournee_id, employes(nom)').in('tournee_id', ids),
-    supabase.from('collectes').select('tournee_id, statut').in('tournee_id', ids),
+    toutesLesLignes((de, a) => supabase.from('tournee_equipe').select('tournee_id, employe_id, employes(nom)').in('tournee_id', ids).order('tournee_id').order('employe_id').range(de, a)),
+    toutesLesLignes((de, a) => supabase.from('collectes').select('id, tournee_id, statut').in('tournee_id', ids).order('id').range(de, a)),
   ]);
   const equipes = rows<{ tournee_id: string; employes: { nom: string } | null }>(eq.data);
   const collectes = rows<{ tournee_id: string; statut: string }>(co.data);

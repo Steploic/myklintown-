@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { getSupabase, parametre, row, rows, rpc, type Supa } from '@/lib/server';
+import { getSupabase, parametre, row, rows, rpc, toutesLesLignes, type Supa } from '@/lib/server';
 import { requireEntreprise } from './context';
 import { ajouterJours, ajouterMois, dateFr, estErreurReseau, fcfa, isoJour, MESSAGE_RESEAU, STATUTS_A_FACTURER } from '@/lib/format';
 import { cheminInterne, normaliserNom, periodeFacture } from '@/lib/metier';
@@ -148,8 +148,54 @@ export async function majEntrepriseAction(_p: ActionState, fd: FormData): Promis
   return { ok: 'Informations enregistrées.' };
 }
 
+/** Tarif saisi (fiche client ou devis) : montant par facture, période, passages, sacs. */
+function lireTarif(fd: FormData):
+  | { tarif_fcfa: number; facturation_mois: number; passages_semaine: number; sacs_inclus: boolean; sacs_volume_litres: number | null }
+  | { error: string } {
+  const tarif = num(fd, 'tarif_fcfa');
+  if (tarif == null || !Number.isInteger(tarif) || tarif < 0 || tarif > 10_000_000) {
+    return { error: 'Indiquez le montant de chaque facture, en FCFA (nombre entier).' };
+  }
+  const mois = num(fd, 'facturation_mois') ?? 1;
+  const passages = num(fd, 'passages_semaine') ?? 2;
+  if (![1, 3, 6, 12].includes(mois)) return { error: 'Période facturée : 1, 3, 6 ou 12 mois.' };
+  if (!Number.isInteger(passages) || passages < 1 || passages > 7) return { error: 'Passages par semaine : de 1 à 7.' };
+  const sacs = fd.get('sacs_inclus') === 'on';
+  const volume = sacs ? num(fd, 'sacs_volume_litres') : null;
+  return { tarif_fcfa: tarif, facturation_mois: mois, passages_semaine: passages, sacs_inclus: sacs, sacs_volume_litres: volume };
+}
+
 // =============================================================================
-// Facturation — cœur : une facture = une période de couverture, prix de la grille
+// Devis (migration 20261110000018)
+// =============================================================================
+
+export async function proposerDevisAction(_p: ActionState, fd: FormData): Promise<ActionState> {
+  const { supabase } = await requireEntreprise();
+  const tarif = lireTarif(fd);
+  if ('error' in tarif) return { error: tarif.error };
+  const { error } = await rpc(supabase, 'proposer_devis', {
+    p_demande: String(fd.get('demande_id')),
+    p_tarif: tarif.tarif_fcfa,
+    p_facturation_mois: tarif.facturation_mois,
+    p_passages: tarif.passages_semaine,
+    p_sacs: tarif.sacs_inclus,
+    p_volume: tarif.sacs_volume_litres,
+    p_note: txt(fd, 'note'),
+  });
+  if (error) return { error: erreurLisible(error.message) };
+  rafraichir();
+  return { ok: 'Devis envoyé : l’abonné le voit dans son espace.' };
+}
+
+export async function retirerDevisAction(fd: FormData) {
+  const { supabase } = await requireEntreprise();
+  const { error } = await rpc(supabase, 'retirer_devis', { p_devis: String(fd.get('devis_id')) });
+  rafraichir();
+  if (error) redirect(`/precollecteur/demandes?erreur=${encodeURIComponent(error.message)}`);
+}
+
+// =============================================================================
+// Facturation — cœur : une facture = une période de couverture, au tarif convenu avec l'abonné
 // =============================================================================
 
 async function emettreFacturePour(
@@ -159,17 +205,25 @@ async function emettreFacturePour(
 ): Promise<{ error?: string; numero?: string }> {
   const { data: c } = await supabase
     .from('clients')
-    .select('id, nom, plan_id, statut')
+    .select('id, nom, plan_id, statut, tarif_fcfa, facturation_mois')
     .eq('id', clientId)
     .eq('entreprise_id', entrepriseId)
     .maybeSingle();
-  const client = row<{ id: string; nom: string; plan_id: string | null; statut: string }>(c);
+  const client = row<{ id: string; nom: string; plan_id: string | null; statut: string; tarif_fcfa: number | null; facturation_mois: number | null }>(c);
   if (!client) return { error: 'Client introuvable.' };
-  if (!client.plan_id) return { error: 'Choisissez d’abord une formule dans la grille tarifaire.' };
 
-  const { data: p } = await supabase.from('plans_tarifaires').select('*').eq('id', client.plan_id).single();
-  const plan = row<Plan>(p);
-  if (!plan) return { error: 'Formule introuvable.' };
+  // Tarif convenu avec l'abonné ; à défaut, l'ancienne formule de sa fiche.
+  let montant = client.tarif_fcfa;
+  let dureeMois = client.facturation_mois ?? 1;
+  if (montant == null && client.plan_id) {
+    const { data: p } = await supabase.from('plans_tarifaires').select('*').eq('id', client.plan_id).single();
+    const plan = row<Plan>(p);
+    if (plan) {
+      montant = plan.prix_fcfa;
+      dureeMois = plan.duree_mois;
+    }
+  }
+  if (montant == null) return { error: 'Fixez d’abord le tarif de cet abonné, depuis sa fiche.' };
 
   const { data: attente } = await supabase
     .from('factures')
@@ -193,7 +247,7 @@ async function emettreFacturePour(
   const { debut, fin, echeance } = periodeFacture({
     aujourdhui: isoJour(),
     finPrecedente,
-    dureeMois: plan.duree_mois,
+    dureeMois,
     grace,
   });
 
@@ -202,15 +256,20 @@ async function emettreFacturePour(
     .insert({
       entreprise_id: entrepriseId,
       client_id: clientId,
-      plan_id: plan.id,
-      libelle: `Abonnement ${plan.nom} · du ${dateFr(debut)} au ${dateFr(fin)}`,
+      plan_id: client.plan_id,
+      libelle: `Abonnement de précollecte · du ${dateFr(debut)} au ${dateFr(fin)}`,
       periode_debut: debut,
       periode_fin: fin,
-      montant_fcfa: plan.prix_fcfa,
+      montant_fcfa: montant,
       echeance,
     })
     .select('numero')
     .single();
+  // Deux émissions simultanées (deux onglets, « Générer » pendant une émission) :
+  // la base n'en garde qu'une (migration 20261112000020).
+  if (error && /factures_une_emise_par_client/.test(error.message)) {
+    return { error: 'Une facture est déjà en attente de paiement pour ce client.' };
+  }
   if (error) return { error: erreurLisible(error.message) };
   return { numero: row<{ numero: string }>(f)?.numero };
 }
@@ -226,11 +285,15 @@ export async function emettreFactureAction(_p: ActionState, fd: FormData): Promi
 /** Rappels d'échéance : facture la période suivante de tous les clients qui arrivent au bout. */
 export async function genererFacturesAction(_p: ActionState, _fd: FormData): Promise<ActionState> {
   const { supabase, entreprise } = await requireEntreprise();
-  const { data } = await supabase
-    .from('v_clients_statut')
-    .select('id, statut_abonnement, nb_impayees')
-    .eq('entreprise_id', entreprise.id)
-    .eq('statut', 'actif');
+  const { data } = await toutesLesLignes((de, a) =>
+    supabase
+      .from('v_clients_statut')
+      .select('id, statut_abonnement, nb_impayees')
+      .eq('entreprise_id', entreprise.id)
+      .eq('statut', 'actif')
+      .order('id')
+      .range(de, a),
+  );
   const cibles = rows<Pick<ClientStatut, 'id' | 'statut_abonnement' | 'nb_impayees'>>(data).filter(
     (c) =>
       Number(c.nb_impayees) === 0 &&
@@ -291,6 +354,23 @@ export async function enregistrerPaiementAction(_p: ActionState, fd: FormData): 
     return { error: 'Pour un paiement Mobile Money ou un virement, saisissez la référence de la transaction.' };
   }
 
+  // Jamais au-delà du reste dû (encaissements validés et espèces à valider
+  // déduits) : 35 000 au lieu de 3 500 réglait la facture et gonflait le chiffre
+  // du mois. La base refuse aussi (migration 20261112000020).
+  const { data: dp } = await supabase
+    .from('paiements_clients')
+    .select('montant_fcfa')
+    .eq('facture_id', facture.id)
+    .in('statut', ['valide', 'a_valider']);
+  const reste = facture.montant_fcfa - rows<{ montant_fcfa: number }>(dp).reduce((s, p) => s + p.montant_fcfa, 0);
+  if (Math.round(montant) > reste) {
+    return {
+      error: reste > 0
+        ? `Le reste dû sur cette facture est de ${fcfa(reste)} : un encaissement ne peut pas le dépasser.`
+        : 'Cette facture est déjà entièrement réglée (espèces à valider comprises).',
+    };
+  }
+
   const { error } = await supabase.from('paiements_clients').insert({
     facture_id: facture.id,
     entreprise_id: entreprise.id,
@@ -314,13 +394,15 @@ export async function enregistrerPaiementAction(_p: ActionState, fd: FormData): 
 }
 
 /** Espèces reçues par un employé : le gérant les valide (la facture se règle) ou les rejette. */
-export async function validerPaiementAction(fd: FormData) {
+export async function validerPaiementAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   const { supabase } = await requireEntreprise();
-  await rpc(supabase, 'valider_paiement', {
+  const { error } = await rpc(supabase, 'valider_paiement', {
     p_paiement: String(fd.get('paiement_id')),
     p_valider: fd.get('decision') === 'valider',
   });
+  if (error) return { error: erreurLisible(error.message) };
   rafraichir();
+  return {};
 }
 
 export async function enregistrerRelanceAction(input: {
@@ -357,9 +439,9 @@ async function zoneDuPoint(supabase: Supa, lat: number | null, lng: number | nul
 export async function creerClientAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   const { supabase, entreprise } = await requireEntreprise();
   const nom = normaliserNom(txt(fd, 'nom')) || null;
-  const planId = txt(fd, 'plan_id');
   if (!nom) return { error: 'Le nom du client est obligatoire.' };
-  if (!planId) return { error: 'Choisissez une formule dans la grille tarifaire.' };
+  const tarif = lireTarif(fd);
+  if ('error' in tarif) return { error: tarif.error };
 
   const lat = num(fd, 'lat');
   const lng = num(fd, 'lng');
@@ -377,7 +459,7 @@ export async function creerClientAction(_p: ActionState, fd: FormData): Promise<
       lat,
       lng,
       zone_id: zone,
-      plan_id: planId,
+      ...tarif,
       notes: txt(fd, 'notes'),
       statut: 'actif',
     })
@@ -412,6 +494,8 @@ export async function majClientAction(_p: ActionState, fd: FormData): Promise<Ac
   const id = String(fd.get('id'));
   const nom = normaliserNom(txt(fd, 'nom')) || null;
   if (!nom) return { error: 'Le nom est obligatoire.' };
+  const tarif = lireTarif(fd);
+  if ('error' in tarif) return { error: tarif.error };
   const lat = num(fd, 'lat');
   const lng = num(fd, 'lng');
   const zone = txt(fd, 'zone_id') ?? (await zoneDuPoint(supabase, lat, lng));
@@ -422,7 +506,7 @@ export async function majClientAction(_p: ActionState, fd: FormData): Promise<Ac
       telephone: txt(fd, 'telephone'),
       adresse: txt(fd, 'adresse'),
       quartier: normaliserNom(txt(fd, 'quartier')) || null,
-      plan_id: txt(fd, 'plan_id'),
+      ...tarif,
       notes: txt(fd, 'notes'),
       lat,
       lng,
@@ -435,20 +519,26 @@ export async function majClientAction(_p: ActionState, fd: FormData): Promise<Ac
   return { ok: 'Fiche client mise à jour.' };
 }
 
-export async function changerStatutClientAction(fd: FormData) {
+export async function changerStatutClientAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   const { supabase, entreprise } = await requireEntreprise();
   const id = String(fd.get('client_id'));
   const statut = String(fd.get('statut'));
-  if (!['actif', 'suspendu', 'resilie'].includes(statut)) return;
+  if (!['actif', 'suspendu', 'resilie'].includes(statut)) return { error: 'Statut inconnu.' };
 
-  const { data: avant } = await supabase.from('clients').select('statut').eq('id', id).single();
-  await supabase.from('clients').update({ statut }).eq('id', id).eq('entreprise_id', entreprise.id);
+  const { data: avant } = await supabase.from('clients').select('statut').eq('id', id).eq('entreprise_id', entreprise.id).maybeSingle();
+  const { data: maj, error } = await supabase.from('clients').update({ statut }).eq('id', id).eq('entreprise_id', entreprise.id).select('id');
+  if (error) return { error: erreurLisible(error.message) };
+  if (!rows(maj).length) return { error: 'Client introuvable : rechargez la page.' };
 
   // Accepter une demande en ligne = ouvrir l'abonnement : on émet la première facture.
   if (row<{ statut: string }>(avant)?.statut === 'demande' && statut === 'actif') {
-    await emettreFacturePour(supabase, entreprise.id, id);
+    const r = await emettreFacturePour(supabase, entreprise.id, id);
+    rafraichir();
+    if (r.error) return { error: `Client accepté, mais la première facture n’a pas pu être émise : ${r.error}` };
+    return {};
   }
   rafraichir();
+  return {};
 }
 
 // =============================================================================
@@ -470,14 +560,18 @@ export async function creerEmployeAction(_p: ActionState, fd: FormData): Promise
   return { ok: `${nom} a rejoint l’équipe.` };
 }
 
-export async function basculerEmployeAction(fd: FormData) {
+export async function basculerEmployeAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   const { supabase, entreprise } = await requireEntreprise();
-  await supabase
+  const { data, error } = await supabase
     .from('employes')
     .update({ actif: fd.get('actif') === 'true' })
     .eq('id', String(fd.get('employe_id')))
-    .eq('entreprise_id', entreprise.id);
+    .eq('entreprise_id', entreprise.id)
+    .select('id');
+  if (error) return { error: erreurLisible(error.message) };
+  if (!rows(data).length) return { error: 'Employé introuvable : rechargez la page.' };
   rafraichir();
+  return {};
 }
 
 /**
@@ -493,10 +587,12 @@ export async function inviterEmployeAction(fd: FormData) {
 }
 
 /** Départ d'un employé : son compte perd l'accès, sa fiche et son historique restent. */
-export async function retirerAccesEmployeAction(fd: FormData) {
+export async function retirerAccesEmployeAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   const { supabase } = await requireEntreprise();
-  await rpc(supabase, 'retirer_acces_employe', { p_employe: String(fd.get('employe_id')) });
+  const { error } = await rpc(supabase, 'retirer_acces_employe', { p_employe: String(fd.get('employe_id')) });
+  if (error) return { error: erreurLisible(error.message) };
   rafraichir();
+  return {};
 }
 
 export async function creerTricycleAction(_p: ActionState, fd: FormData): Promise<ActionState> {
@@ -514,23 +610,27 @@ export async function creerTricycleAction(_p: ActionState, fd: FormData): Promis
   return { ok: `${nom} ajouté à la flotte.` };
 }
 
-export async function statutTricycleAction(fd: FormData) {
+export async function statutTricycleAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   const { supabase, entreprise } = await requireEntreprise();
   const statut = String(fd.get('statut'));
-  if (!['actif', 'maintenance', 'hors_service'].includes(statut)) return;
-  await supabase
+  if (!['actif', 'maintenance', 'hors_service'].includes(statut)) return { error: 'État inconnu.' };
+  const { data, error } = await supabase
     .from('tricycles')
     .update({ statut })
     .eq('id', String(fd.get('tricycle_id')))
-    .eq('entreprise_id', entreprise.id);
+    .eq('entreprise_id', entreprise.id)
+    .select('id');
+  if (error) return { error: erreurLisible(error.message) };
+  if (!rows(data).length) return { error: 'Tricycle introuvable : rechargez la page.' };
   rafraichir();
+  return {};
 }
 
-export async function affecterEmployeAction(fd: FormData) {
+export async function affecterEmployeAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   const { supabase, entreprise } = await requireEntreprise();
   const tricycle_id = String(fd.get('tricycle_id'));
   const employe_id = String(fd.get('employe_id') ?? '');
-  if (!employe_id) return;
+  if (!employe_id) return { error: 'Choisissez l’employé à affecter.' };
   // La RLS vérifie le tricycle ; l'employé doit lui aussi être de la maison.
   const { data: e } = await supabase
     .from('employes')
@@ -538,19 +638,23 @@ export async function affecterEmployeAction(fd: FormData) {
     .eq('id', employe_id)
     .eq('entreprise_id', entreprise.id)
     .maybeSingle();
-  if (!e) return;
-  await supabase.from('tricycle_employes').upsert({ tricycle_id, employe_id });
+  if (!e) return { error: 'Employé introuvable : rechargez la page.' };
+  const { error } = await supabase.from('tricycle_employes').upsert({ tricycle_id, employe_id });
+  if (error) return { error: erreurLisible(error.message) };
   rafraichir();
+  return {};
 }
 
-export async function retirerEmployeAction(fd: FormData) {
+export async function retirerEmployeAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   const { supabase } = await requireEntreprise();
-  await supabase
+  const { error } = await supabase
     .from('tricycle_employes')
     .delete()
     .eq('tricycle_id', String(fd.get('tricycle_id')))
     .eq('employe_id', String(fd.get('employe_id')));
+  if (error) return { error: erreurLisible(error.message) };
   rafraichir();
+  return {};
 }
 
 // =============================================================================
@@ -584,21 +688,31 @@ export async function planifierTourneeAction(_p: ActionState, fd: FormData): Pro
     .single();
   if (error) return { error: erreurLisible(error.message) };
   const tourneeId = row<{ id: string }>(t)!.id;
+  // Une tournée sans son équipe ou sans ses passages ne sert à rien : on la
+  // retire et on dit pourquoi (auparavant, les passages manquaient en silence).
+  const abandonner = async (message: string): Promise<ActionState> => {
+    await supabase.from('tournees_precollecte').delete().eq('id', tourneeId).eq('entreprise_id', entreprise.id);
+    rafraichir();
+    return { error: `Tournée non créée : ${erreurLisible(message)}` };
+  };
   if (equipe.length) {
     const { error: e2 } = await supabase
       .from('tournee_equipe')
       .insert(equipe.map((id) => ({ tournee_id: tourneeId, employe_id: id, entreprise_id: entreprise.id })));
-    if (e2) return { error: erreurLisible(e2.message) };
+    if (e2) return abandonner(e2.message);
   }
 
-  // Les passages prévus = tous les clients actifs de la zone (ou de l'entreprise).
-  let q = supabase.from('clients').select('id').eq('entreprise_id', entreprise.id).eq('statut', 'actif');
-  if (zoneId) q = q.eq('zone_id', zoneId);
-  const { data: cl } = await q;
+  // Les passages prévus = tous les clients actifs de la zone (ou de l'entreprise), au-delà de 1 000.
+  const { data: cl, error: e3 } = await toutesLesLignes((de, a) => {
+    let q = supabase.from('clients').select('id').eq('entreprise_id', entreprise.id).eq('statut', 'actif');
+    if (zoneId) q = q.eq('zone_id', zoneId);
+    return q.order('id').range(de, a);
+  });
+  if (e3) return abandonner(e3.message);
   const clients = rows<{ id: string }>(cl);
-  if (clients.length) {
-    await supabase.from('collectes').insert(
-      clients.map((c) => ({
+  for (let i = 0; i < clients.length; i += 500) {
+    const { error: e4 } = await supabase.from('collectes').insert(
+      clients.slice(i, i + 500).map((c) => ({
         entreprise_id: entreprise.id,
         tournee_id: tourneeId,
         client_id: c.id,
@@ -606,6 +720,7 @@ export async function planifierTourneeAction(_p: ActionState, fd: FormData): Pro
         employe_id: employeId,
       })),
     );
+    if (e4) return abandonner(e4.message);
   }
   rafraichir();
   redirect(`/precollecteur/tournees/${tourneeId}`);
@@ -696,14 +811,18 @@ export async function creerIncidentAction(input: {
   return { ok: 'Incident enregistré avec sa preuve.' };
 }
 
-export async function statutIncidentAction(fd: FormData) {
+export async function statutIncidentAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   const { supabase, entreprise } = await requireEntreprise();
-  await supabase
+  const { data, error } = await supabase
     .from('incidents_precollecte')
     .update({ statut: String(fd.get('statut')) })
     .eq('id', String(fd.get('incident_id')))
-    .eq('entreprise_id', entreprise.id);
+    .eq('entreprise_id', entreprise.id)
+    .select('id');
+  if (error) return { error: erreurLisible(error.message) };
+  if (!rows(data).length) return { error: 'Incident introuvable : rechargez la page.' };
   rafraichir();
+  return {};
 }
 
 // =============================================================================
@@ -729,9 +848,8 @@ export async function chargerDemoAction(_p: ActionState, _fd: FormData): Promise
     .limit(1);
   if (rows(dejà).length) return { error: 'Les données de démonstration sont déjà chargées.' };
 
-  const { data: pl } = await supabase.from('plans_tarifaires').select('*').eq('actif', true).order('ordre');
-  const plans = rows<Plan>(pl);
-  if (!plans.length) return { error: 'La grille tarifaire est vide : impossible de créer des abonnements.' };
+  // Plus de grille commune : chaque abonné de démonstration a son tarif (mensuel, ou trimestriel un sur cinq).
+  const tarifDemo = (i: number) => (i % 5 === 0 ? { tarif: 9500, mois: 3 } : { tarif: 3500, mois: 1 });
 
   const { data: emps } = await supabase
     .from('employes')
@@ -768,7 +886,9 @@ export async function chargerDemoAction(_p: ActionState, _fd: FormData): Promise
         adresse: `Rue ${i + 3}, porte ${10 + i}`,
         lat: 3.8285 + (Math.sin(i * 1.7) * 0.012),
         lng: 11.4985 + (Math.cos(i * 2.3) * 0.014),
-        plan_id: plans[i % 5 === 0 ? Math.min(1, plans.length - 1) : 0]!.id,
+        tarif_fcfa: tarifDemo(i).tarif,
+        facturation_mois: tarifDemo(i).mois,
+        passages_semaine: 2,
         statut: i === 17 ? 'demande' : 'actif',
         est_demo: true,
       })),
@@ -781,18 +901,17 @@ export async function chargerDemoAction(_p: ActionState, _fd: FormData): Promise
   const auj = isoJour();
   const factures: Record<string, unknown>[] = [];
   clients.slice(0, 17).forEach((c, i) => {
-    const plan = plans[i % 5 === 0 ? Math.min(1, plans.length - 1) : 0]!;
+    const t = tarifDemo(i);
     const decalage = i < 10 ? -10 : i < 13 ? -26 : -40;
     const debut = ajouterJours(auj, decalage);
-    const fin = ajouterJours(ajouterMois(debut, plan.duree_mois), -1);
+    const fin = ajouterJours(ajouterMois(debut, t.mois), -1);
     factures.push({
       entreprise_id: entreprise.id,
       client_id: c.id,
-      plan_id: plan.id,
-      libelle: `Abonnement ${plan.nom} · du ${dateFr(debut)} au ${dateFr(fin)}`,
+      libelle: `Abonnement de précollecte · du ${dateFr(debut)} au ${dateFr(fin)}`,
       periode_debut: debut,
       periode_fin: fin,
-      montant_fcfa: plan.prix_fcfa,
+      montant_fcfa: t.tarif,
       echeance: ajouterJours(debut, 7),
     });
   });
@@ -868,11 +987,21 @@ export async function chargerDemoAction(_p: ActionState, _fd: FormData): Promise
 
 export async function supprimerDemoAction(_p: ActionState, _fd: FormData): Promise<ActionState> {
   const { supabase, entreprise } = await requireEntreprise();
-  await supabase.from('clients').delete().eq('entreprise_id', entreprise.id).eq('est_demo', true);
-  await supabase.from('tournees_precollecte').delete().eq('entreprise_id', entreprise.id).eq('notes', 'démo');
-  await supabase.from('employes').delete().eq('entreprise_id', entreprise.id).like('nom', '%(démo)');
-  await supabase.from('incidents_precollecte').delete().eq('entreprise_id', entreprise.id).like('description', '%(démo%');
-  await supabase.from('tricycles').delete().eq('entreprise_id', entreprise.id).like('nom', '%(démo)');
+  // Dans l'ordre des dépendances ; arrêt à la première erreur, sans annoncer un succès.
+  const etapes = [
+    () => supabase.from('clients').delete().eq('entreprise_id', entreprise.id).eq('est_demo', true),
+    () => supabase.from('tournees_precollecte').delete().eq('entreprise_id', entreprise.id).eq('notes', 'démo'),
+    () => supabase.from('employes').delete().eq('entreprise_id', entreprise.id).like('nom', '%(démo)'),
+    () => supabase.from('incidents_precollecte').delete().eq('entreprise_id', entreprise.id).like('description', '%(démo%'),
+    () => supabase.from('tricycles').delete().eq('entreprise_id', entreprise.id).like('nom', '%(démo)'),
+  ];
+  for (const etape of etapes) {
+    const { error } = await etape();
+    if (error) {
+      rafraichir();
+      return { error: `Suppression interrompue : ${erreurLisible(error.message)}` };
+    }
+  }
   rafraichir();
   return { ok: 'Données de démonstration supprimées.' };
 }
@@ -881,13 +1010,3 @@ export async function supprimerDemoAction(_p: ActionState, _fd: FormData): Promi
 // R3 — Demandes de ménages sans précollecteur
 // =============================================================================
 
-export async function prendreDemandeAction(fd: FormData) {
-  const { supabase, entreprise } = await requireEntreprise();
-  const { data, error } = await rpc(supabase, 'prendre_demande', { p_demande: String(fd.get('demande_id')) });
-  if (error) redirect(`/precollecteur/demandes?erreur=${encodeURIComponent(error.message)}`);
-  const clientId = data as string;
-  // Paiement avant service : la première période est facturée tout de suite.
-  await emettreFacturePour(supabase, entreprise.id, clientId);
-  rafraichir();
-  redirect(`/precollecteur/clients/${clientId}?pris=1`);
-}

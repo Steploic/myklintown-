@@ -95,13 +95,18 @@ export async function retirerAffectationAction(zoneId: string, entrepriseId: str
   return { ok: 'Affectation retirée.' };
 }
 
-export async function statutIncidentMairieAction(fd: FormData) {
+export async function statutIncidentMairieAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   const supabase = await getSupabase();
-  await supabase
+  const { data, error } = await supabase
     .from('incidents_precollecte')
     .update({ statut: String(fd.get('statut')) })
-    .eq('id', String(fd.get('incident_id')));
+    .eq('id', String(fd.get('incident_id')))
+    .select('id');
+  if (error) return { error: error.message };
+  // Hors de ses communes, la base ne trouve pas la ligne : on le dit.
+  if (!data?.length) return { error: 'Incident hors de votre commune, ou déjà traité : rechargez la page.' };
   rafraichir();
+  return {};
 }
 
 // -----------------------------------------------------------------------------

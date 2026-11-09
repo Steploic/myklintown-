@@ -1,18 +1,18 @@
 import { redirect } from 'next/navigation';
 import { PortalShell } from '@/components/portal-shell';
 import { PageHeader } from '@/components/ui/blocks';
-import { Souscription } from '@/components/client/souscription';
+import { DemandeDevis } from '@/components/client/demande-devis';
 import { getMonAbonnement } from '@/lib/client/context';
 import { row, rows } from '@/lib/server';
-import type { Plan } from '@/lib/types';
 
-export const metadata = { title: 'M’abonner' };
+export const metadata = { title: 'Demander un devis' };
 
 export default async function SouscrirePage() {
-  const { supabase, user, client } = await getMonAbonnement();
-  if (client) redirect('/citoyen');
-  const [{ data: pl }, { data: pr }] = await Promise.all([
-    supabase.from('plans_tarifaires').select('*').eq('actif', true).order('ordre'),
+  const { supabase, user, client, demande } = await getMonAbonnement();
+  // Déjà abonné, ou une demande déjà en cours : l'accueil la montre.
+  if (client || demande) redirect('/citoyen');
+  const [{ data: co }, { data: pr }] = await Promise.all([
+    supabase.from('communes').select('id, nom').order('nom'),
     supabase.from('profiles').select('nom_complet, telephone').eq('id', user.id).maybeSingle(),
   ]);
   const profil = row<{ nom_complet: string | null; telephone: string | null }>(pr);
@@ -20,11 +20,15 @@ export default async function SouscrirePage() {
   return (
     <PortalShell portalKey="citoyen" currentPath="/citoyen">
       <PageHeader
-        titre="M’abonner à la collecte"
-        sousTitre="Trois étapes : votre formule, votre adresse, votre précollecteur."
+        titre="Demander un devis"
+        sousTitre="Le lieu, vos coordonnées, vos besoins : les précollecteurs vérifiés de votre quartier vous proposent leur tarif."
         retour={{ href: '/citoyen', label: 'Mon espace' }}
       />
-      <Souscription plans={rows<Plan>(pl)} nomDefaut={profil?.nom_complet ?? ''} telDefaut={profil?.telephone ?? ''} />
+      <DemandeDevis
+        communes={rows<{ id: string; nom: string }>(co)}
+        nomDefaut={profil?.nom_complet ?? ''}
+        telDefaut={profil?.telephone ?? ''}
+      />
     </PortalShell>
   );
 }

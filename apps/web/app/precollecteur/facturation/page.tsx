@@ -8,7 +8,7 @@ import { RelanceButtons } from '@/components/precollecteur/relance-buttons';
 import { PaiementForm } from '@/components/precollecteur/facture-bits';
 import { requireEntreprise } from '@/lib/precollecteur/context';
 import { genererFacturesAction, validerPaiementAction } from '@/lib/precollecteur/actions';
-import { parametre, rows } from '@/lib/server';
+import { parametre, rows, toutesLesLignes } from '@/lib/server';
 import {
   dateFr,
   dateHeureFr,
@@ -46,32 +46,78 @@ export default async function FacturationPage({
   const auj = isoJour();
   const debutMois = auj.slice(0, 8) + '01';
 
-  const [fa, pa, re, cl, em, taux] = await Promise.all([
-    supabase
-      .from('factures')
-      .select('*, clients(id, nom, telephone, code)')
-      .eq('entreprise_id', entreprise.id)
-      .eq('statut', 'emise')
-      .order('echeance'),
+  // Minuit à Douala (UTC+1, sans heure d'été) le premier du mois.
+  const debutMoisDouala = `${debutMois}T00:00:00+01:00`;
+
+  // Listes lues en entier, au-delà des 1 000 lignes que l'API renvoie en une
+  // fois ; seul le journal se limite aux 100 derniers paiements. Auparavant, les
+  // espèces à valider et l'encaissé du mois ne lisaient que ces 100 derniers.
+  const [fa, pa, aval, mois, re, cl, em, taux, pf] = await Promise.all([
+    toutesLesLignes((de, a) =>
+      supabase
+        .from('factures')
+        .select('*, clients(id, nom, telephone, code)')
+        .eq('entreprise_id', entreprise.id)
+        .eq('statut', 'emise')
+        .order('echeance')
+        .order('id')
+        .range(de, a),
+    ),
     supabase
       .from('paiements_clients')
       .select('*, clients(nom), factures(numero)')
       .eq('entreprise_id', entreprise.id)
       .order('created_at', { ascending: false })
       .limit(100),
+    toutesLesLignes((de, a) =>
+      supabase
+        .from('paiements_clients')
+        .select('*, clients(nom), factures(numero)')
+        .eq('entreprise_id', entreprise.id)
+        .eq('statut', 'a_valider')
+        .order('created_at')
+        .order('id')
+        .range(de, a),
+    ),
+    toutesLesLignes((de, a) =>
+      supabase
+        .from('paiements_clients')
+        .select('montant_fcfa')
+        .eq('entreprise_id', entreprise.id)
+        .eq('statut', 'valide')
+        .gte('created_at', debutMoisDouala)
+        .order('id')
+        .range(de, a),
+    ),
     supabase
       .from('relances')
       .select('facture_id, client_id, canal, niveau, created_at')
       .eq('entreprise_id', entreprise.id)
       .order('created_at', { ascending: false })
       .limit(300),
-    supabase
-      .from('v_clients_statut')
-      .select('id, nom, telephone, plan_prix, couverture_fin, statut_abonnement, statut, nb_impayees')
-      .eq('entreprise_id', entreprise.id)
-      .eq('statut', 'actif'),
+    toutesLesLignes((de, a) =>
+      supabase
+        .from('v_clients_statut')
+        .select('id, nom, telephone, plan_prix, couverture_fin, statut_abonnement, statut, nb_impayees')
+        .eq('entreprise_id', entreprise.id)
+        .eq('statut', 'actif')
+        .order('id')
+        .range(de, a),
+    ),
     supabase.from('employes').select('id, nom, actif').eq('entreprise_id', entreprise.id),
     parametre(supabase, 'commission_taux', 0.1),
+    // Déjà encaissé sur les factures en attente, sans envoyer leurs identifiants
+    // dans l'adresse de la requête (trop longue au-delà de quelques centaines).
+    toutesLesLignes((de, a) =>
+      supabase
+        .from('paiements_clients')
+        .select('facture_id, montant_fcfa, statut, factures!inner(statut)')
+        .eq('entreprise_id', entreprise.id)
+        .in('statut', ['valide', 'a_valider'])
+        .eq('factures.statut', 'emise')
+        .order('id')
+        .range(de, a),
+    ),
   ]);
 
   const factures = rows<FactureClient>(fa.data);
@@ -82,18 +128,17 @@ export default async function FacturationPage({
   const employes = tousEmployes.filter((e) => e.actif);
   const nomEmploye = new Map(tousEmployes.map((e) => [e.id, e.nom]));
   // Espèces reçues sur le terrain par un employé : à valider avant de compter.
-  const aValider = paiements.filter((p) => p.statut === 'a_valider');
-  const valides = paiements.filter((p) => (p.statut ?? 'valide') === 'valide');
+  const aValider = rows<Paiement & { clients: { nom: string } | null; factures: { numero: string } | null }>(aval.data);
 
-  const factureIds = factures.map((f) => f.id);
-  const { data: pf } = factureIds.length
-    ? await supabase.from('paiements_clients').select('facture_id, montant_fcfa').in('facture_id', factureIds).eq('statut', 'valide')
-    : { data: [] };
+  // Reste dû : encaissements validés déduits ; à encaisser : espèces à valider aussi.
   const deja = new Map<string, number>();
-  for (const p of rows<{ facture_id: string; montant_fcfa: number }>(pf)) {
-    deja.set(p.facture_id, (deja.get(p.facture_id) ?? 0) + p.montant_fcfa);
+  const enValidation = new Map<string, number>();
+  for (const p of rows<{ facture_id: string; montant_fcfa: number; statut: string }>(pf.data)) {
+    const m = p.statut === 'valide' ? deja : enValidation;
+    m.set(p.facture_id, (m.get(p.facture_id) ?? 0) + p.montant_fcfa);
   }
   const reste = (f: Facture) => Math.max(0, f.montant_fcfa - (deja.get(f.id) ?? 0));
+  const resteAEncaisser = (f: Facture) => Math.max(0, reste(f) - (enValidation.get(f.id) ?? 0));
 
   const enRetard = factures.filter((f) => f.echeance < auj);
   const totalRetard = enRetard.reduce((s, f) => s + reste(f), 0);
@@ -101,7 +146,7 @@ export default async function FacturationPage({
   const aEcheance = clients.filter(
     (c) => STATUTS_A_FACTURER.includes(c.statut_abonnement),
   );
-  const encaisseMois = valides.filter((p) => p.created_at.slice(0, 10) >= debutMois).reduce((s, p) => s + p.montant_fcfa, 0);
+  const encaisseMois = rows<{ montant_fcfa: number }>(mois.data).reduce((s, p) => s + p.montant_fcfa, 0);
   const derniereRelance = (fid: string) => relances.find((r) => r.facture_id === fid);
 
   return (
@@ -143,16 +188,16 @@ export default async function FacturationPage({
                 </span>
                 <span className="flex items-center gap-2">
                   <span className="num font-semibold">{fcfa(p.montant_fcfa)}</span>
-                  <form action={validerPaiementAction}>
+                  <ActionForm action={validerPaiementAction}>
                     <input type="hidden" name="paiement_id" value={p.id} />
                     <input type="hidden" name="decision" value="rejeter" />
                     <SubmitButton variant="outline" pendingLabel="…"><X size={16} /> Rejeter</SubmitButton>
-                  </form>
-                  <form action={validerPaiementAction}>
+                  </ActionForm>
+                  <ActionForm action={validerPaiementAction}>
                     <input type="hidden" name="paiement_id" value={p.id} />
                     <input type="hidden" name="decision" value="valider" />
                     <SubmitButton pendingLabel="…"><Check size={16} /> Valider</SubmitButton>
-                  </form>
+                  </ActionForm>
                 </span>
               </li>
             ))}
@@ -232,7 +277,7 @@ export default async function FacturationPage({
                         />
                       </div>
                       <div className="mt-3">
-                        <PaiementForm factureId={f.id} resteDu={reste(f)} employes={employes} compact />
+                        <PaiementForm factureId={f.id} resteDu={resteAEncaisser(f)} employes={employes} compact />
                       </div>
                     </li>
                   );

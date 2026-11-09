@@ -19,7 +19,9 @@ import { Section } from '@/components/ui/blocks';
 import { ConfirmationPassage } from '@/components/client/confirmation-passage';
 import { ActionForm, SubmitButton } from '@/components/ui/action-form';
 import { rattacherCompteAction } from '@/lib/compte-actions';
-import { annulerDemandeAction } from '@/lib/client/actions';
+import { accepterDevisAction, annulerDemandeDevisAction, refuserDevisAction } from '@/lib/client/actions';
+import { CarteVitrine } from '@/components/annuaire/carte-vitrine';
+import { libelleFrequence, libelleTarif } from '@/lib/devis';
 import { BandeauAccesMairie } from '@/components/client/bandeau-acces';
 import { BandeauCharte } from '@/components/client/bandeau-charte';
 import { getMonAbonnement } from '@/lib/client/context';
@@ -40,37 +42,73 @@ const HERO = {
 export default async function CitoyenAccueil({
   searchParams,
 }: {
-  searchParams: Promise<{ demande?: string; rattache?: string }>;
+  searchParams: Promise<{ devis?: string; erreur?: string; rattache?: string }>;
 }) {
-  const { demande, rattache } = await searchParams;
-  const { supabase, client, entreprise, demande: enAttente } = await getMonAbonnement();
+  const { devis: reponse, erreur, rattache } = await searchParams;
+  const { supabase, client, entreprise, demande: enAttente, devis } = await getMonAbonnement();
   const profile = await getCurrentProfile();
   const prenom = profile?.nom?.split(' ')[0] ?? '';
 
   if (!client && enAttente) {
+    const proposes = devis.filter((d) => d.statut === 'propose');
     return (
       <PortalShell portalKey="citoyen" currentPath="/citoyen">
         <BandeauAccesMairie />
         <BandeauCharte />
+        {erreur && (
+          <p role="alert" className="mb-5 rounded-lg border border-terrain-stop/25 bg-terrain-stop/5 px-4 py-3 text-body-sm text-terrain-stop">{erreur}</p>
+        )}
         <section className="rounded-2xl bg-brand-blue p-6 text-white sm:p-8">
           <div className="flex items-start gap-4">
             <Clock size={40} className="shrink-0" />
             <div>
-              <p className="text-small font-semibold uppercase tracking-wider opacity-85">Demande transmise</p>
-              <h1 className="text-[1.6rem] font-bold leading-tight text-white sm:text-[2rem]">Un précollecteur va vous contacter</h1>
+              <p className="text-small font-semibold uppercase tracking-wider opacity-85">Demande de devis envoyée</p>
+              <h1 className="text-[1.6rem] font-bold leading-tight text-white sm:text-[2rem]">
+                {proposes.length ? `${proposes.length} devis reçu${proposes.length > 1 ? 's' : ''}` : 'Votre demande est enregistrée'}
+              </h1>
               <p className="mt-1 opacity-90">
-                Votre demande{enAttente.quartier ? ` pour ${enAttente.quartier}` : ''} est proposée aux précollecteurs
-                MyKlinTown depuis le {dateFr(enAttente.created_at, { day: 'numeric', month: 'long' })}. Dès qu’il la prend en
-                charge, votre abonnement apparaît ici.
+                {proposes.length
+                  ? 'Comparez les propositions et acceptez celle qui vous convient : ce précollecteur devient le vôtre, à ce tarif.'
+                  : `Votre demande${enAttente.quartier ? ` pour ${enAttente.quartier}` : ''} du ${dateFr(enAttente.created_at, { day: 'numeric', month: 'long' })} est transmise aux précollecteurs vérifiés de votre commune et de votre quartier ; s’il n’y en a pas encore, l’équipe MyKlinTown vous met en relation. Avant le lancement officiel (décembre 2026), elle reste en liste d’attente : vous serez parmi les premiers servis.`}
               </p>
             </div>
           </div>
         </section>
+        {devis.length > 0 && (
+          <div className="mt-6 space-y-3">
+            {devis.map((d) => (
+              <article key={d.devis_id} className="card-soft grid gap-4 p-4 sm:grid-cols-[1fr_auto] sm:items-center">
+                <div className="space-y-2">
+                  <CarteVitrine nom={d.entreprise_nom} devise={d.entreprise_devise} logoPath={d.entreprise_logo} />
+                  <p className="num text-h2 font-bold text-brand-green">{libelleTarif(d.tarif_fcfa, d.facturation_mois)}</p>
+                  <p className="text-body-sm text-muted-foreground">
+                    {libelleFrequence(d.passages_semaine)}
+                    {d.sacs_inclus ? ` · sacs de ${d.sacs_volume_litres} L fournis` : ''}
+                  </p>
+                  {d.note && <p className="text-body-sm italic">« {d.note} »</p>}
+                </div>
+                {d.statut === 'propose' ? (
+                  <div className="flex flex-wrap gap-2">
+                    <form action={accepterDevisAction}>
+                      <input type="hidden" name="devis_id" value={d.devis_id} />
+                      <SubmitButton pendingLabel="Validation…">Accepter ce devis</SubmitButton>
+                    </form>
+                    <form action={refuserDevisAction}>
+                      <input type="hidden" name="devis_id" value={d.devis_id} />
+                      <SubmitButton variant="outline" pendingLabel="Refus…">Refuser</SubmitButton>
+                    </form>
+                  </div>
+                ) : (
+                  <span className="chip-neutre">Refusé</span>
+                )}
+              </article>
+            ))}
+          </div>
+        )}
         <div className="mt-4 flex flex-wrap gap-2">
-          <form action={annulerDemandeAction}>
-            <input type="hidden" name="demande_id" value={enAttente.id} />
-            <SubmitButton variant="outline" pendingLabel="Annulation…">Annuler ma demande</SubmitButton>
-          </form>
+          <ActionForm action={annulerDemandeDevisAction}>
+            <SubmitButton variant="outline" pendingLabel="Retrait…">Retirer ma demande</SubmitButton>
+          </ActionForm>
         </div>
       </PortalShell>
     );
@@ -86,11 +124,11 @@ export default async function CitoyenAccueil({
             Faites collecter vos déchets par un précollecteur de votre quartier.
           </h1>
           <p className="mt-3 max-w-xl text-white/75">
-            Choisissez une formule, indiquez votre domicile : MyKlinTown trouve le précollecteur qui dessert votre zone.
-            Vous suivez ensuite chaque passage et chaque paiement depuis votre téléphone.
+            Décrivez votre domicile, votre commerce ou votre institution et la fréquence souhaitée : les précollecteurs
+            vérifiés de votre quartier vous proposent leur tarif. Vous suivez ensuite chaque passage et chaque paiement.
           </p>
           <Link href="/citoyen/souscrire" className="btn-primary mt-6">
-            <Sparkles size={16} /> M’abonner maintenant
+            <Sparkles size={16} /> Demander un devis
           </Link>
         </section>
         <section className="card-soft mt-6 p-5 sm:p-6">
@@ -116,7 +154,7 @@ export default async function CitoyenAccueil({
         <div className="mt-6 grid gap-4 md:grid-cols-3">
           {[
             { icon: CalendarCheck, t: 'Passages suivis', d: 'Vous voyez quand le précollecteur est passé, et vous confirmez.' },
-            { icon: FileText, t: 'Factures claires', d: 'Même grille de prix partout, reçus consultables à tout moment.' },
+            { icon: FileText, t: 'Factures claires', d: 'Le tarif convenu avec votre précollecteur, reçus consultables à tout moment.' },
             { icon: AlertTriangle, t: 'Un problème ?', d: 'Signalez-le avec une photo ou une vidéo prise sur place.' },
           ].map(({ icon: Icon, t, d }) => (
             <div key={t} className="card-soft p-5">
@@ -156,9 +194,9 @@ export default async function CitoyenAccueil({
           <CheckCircle2 size={18} /> Compte rattaché : voici votre abonnement chez {entreprise?.nom}.
         </p>
       )}
-      {demande && (
+      {reponse === 'accepte' && (
         <p className="mb-5 flex items-center gap-2 rounded-lg border border-terrain-ok/25 bg-terrain-ok/5 px-4 py-3 text-body-sm font-medium text-terrain-ok">
-          <CheckCircle2 size={18} /> Demande envoyée à {entreprise?.nom}. Il vous contactera pour valider et encaisser la première période.
+          <CheckCircle2 size={18} /> Devis accepté : {entreprise?.nom} est votre précollecteur. Il vous contactera pour le premier passage et la première facture.
         </p>
       )}
 
@@ -174,8 +212,8 @@ export default async function CitoyenAccueil({
                 : client.statut_abonnement === 'grace' && client.fin_grace
                   ? `Période payée terminée : réglez au plus tard le ${dateFr(client.fin_grace, { day: 'numeric', month: 'long' })} pour continuer à être collecté.`
                   : client.couverture_fin
-                  ? `Formule ${client.plan_nom} · couvert jusqu’au ${dateFr(client.couverture_fin, { day: 'numeric', month: 'long', year: 'numeric' })}`
-                  : `Formule ${client.plan_nom} · première période à régler`}
+                  ? `${libelleTarif(client.plan_prix, client.plan_duree_mois)} · couvert jusqu’au ${dateFr(client.couverture_fin, { day: 'numeric', month: 'long', year: 'numeric' })}`
+                  : `${libelleTarif(client.plan_prix, client.plan_duree_mois)} · première période à régler`}
             </p>
             {Number(client.montant_impaye) > 0 && (
               <p className="num mt-3 inline-block rounded-lg bg-white/15 px-3 py-1.5 font-semibold">

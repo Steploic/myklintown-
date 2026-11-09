@@ -20,9 +20,9 @@ import { ActionForm, SubmitButton } from '@/components/ui/action-form';
 import { CollectesChart, EncaissementsChart } from '@/components/precollecteur/charts';
 import { requireEntreprise } from '@/lib/precollecteur/context';
 import { chargerDemoAction, supprimerDemoAction } from '@/lib/precollecteur/actions';
-import { parametre, rows, rpc } from '@/lib/server';
+import { parametre, rows, rpc, toutesLesLignes } from '@/lib/server';
 import { ETATS_DOSSIER, etatDossier } from '@/lib/dossier';
-import { ajouterJours, dateFr, fcfa, isoJour, nombre, pct, STATUT_TOURNEE } from '@/lib/format';
+import { ajouterJours, dateFr, fcfa, isoJour, jourDouala, nombre, pct, STATUT_TOURNEE } from '@/lib/format';
 
 export const metadata = { title: 'Tableau de bord' };
 
@@ -39,29 +39,42 @@ export default async function PrecollecteurDashboard({
   const debutMois = auj.slice(0, 8) + '01';
   const il12sem = ajouterJours(auj, -84);
 
+  // Listes lues en entier (au-delà des 1 000 lignes que l'API renvoie en une fois).
   const [cl, co, to, pa, em, tr, inc, taux] = await Promise.all([
-    supabase
-      .from('v_clients_statut')
-      .select('id, statut, statut_abonnement, montant_impaye, nb_impayees, couverture_fin, est_demo')
-      .eq('entreprise_id', entreprise.id),
-    supabase
-      .from('collectes')
-      // « * » : `refus_abonnement` n'existe qu'après la migration 20261019000013.
-      .select('*')
-      .eq('entreprise_id', entreprise.id)
-      .gte('date_prevue', il30),
+    toutesLesLignes((de, a) =>
+      supabase
+        .from('v_clients_statut')
+        .select('id, statut, statut_abonnement, montant_impaye, nb_impayees, couverture_fin, est_demo')
+        .eq('entreprise_id', entreprise.id)
+        .order('id')
+        .range(de, a),
+    ),
+    toutesLesLignes((de, a) =>
+      supabase
+        .from('collectes')
+        // « * » : `refus_abonnement` n'existe qu'après la migration 20261019000013.
+        .select('*')
+        .eq('entreprise_id', entreprise.id)
+        .gte('date_prevue', il30)
+        .order('id')
+        .range(de, a),
+    ),
     supabase
       .from('tournees_precollecte')
       .select('id, date, statut, tricycle_id, employe_id')
       .eq('entreprise_id', entreprise.id)
       .order('date', { ascending: false })
       .limit(60),
-    supabase
-      .from('paiements_clients')
-      .select('montant_fcfa, created_at')
-      .eq('entreprise_id', entreprise.id)
-      .eq('statut', 'valide')
-      .gte('created_at', il12sem),
+    toutesLesLignes((de, a) =>
+      supabase
+        .from('paiements_clients')
+        .select('montant_fcfa, created_at')
+        .eq('entreprise_id', entreprise.id)
+        .eq('statut', 'valide')
+        .gte('created_at', il12sem)
+        .order('id')
+        .range(de, a),
+    ),
     supabase.from('employes').select('id, nom').eq('entreprise_id', entreprise.id),
     supabase.from('tricycles').select('id, nom, statut').eq('entreprise_id', entreprise.id),
     supabase
@@ -71,13 +84,14 @@ export default async function PrecollecteurDashboard({
       .neq('statut', 'resolu'),
     parametre(supabase, 'commission_taux', 0.1),
   ]);
-  const { data: ouvertes } = await rpc(supabase, 'demandes_ouvertes');
+  // Demandes de devis du secteur auxquelles il n'a pas encore répondu.
+  const { data: ouvertes } = await rpc(supabase, 'demandes_devis_ouvertes');
   const { count: nbEspecesAValider } = await supabase
     .from('paiements_clients')
     .select('id', { count: 'exact', head: true })
     .eq('entreprise_id', entreprise.id)
     .eq('statut', 'a_valider');
-  const nbDemandesOuvertes = rows(ouvertes).length;
+  const nbDemandesOuvertes = rows<{ mon_devis_statut: string | null }>(ouvertes).filter((d) => d.mon_devis_statut !== 'propose').length;
 
   const clients = rows<{
     id: string;
@@ -105,7 +119,7 @@ export default async function PrecollecteurDashboard({
   const aDesDemo = clients.some((c) => c.est_demo);
 
   const caMois = paiements
-    .filter((p) => p.created_at.slice(0, 10) >= debutMois)
+    .filter((p) => jourDouala(p.created_at) >= debutMois)
     .reduce((s, p) => s + p.montant_fcfa, 0);
   const commission = caMois * taux;
 
@@ -131,7 +145,7 @@ export default async function PrecollecteurDashboard({
     return {
       semaine: i === 11 ? 'Cette sem.' : dateFr(debut, { day: 'numeric', month: 'short' }),
       encaisse: paiements
-        .filter((p) => p.created_at.slice(0, 10) >= debut && p.created_at.slice(0, 10) <= fin)
+        .filter((p) => jourDouala(p.created_at) >= debut && jourDouala(p.created_at) <= fin)
         .reduce((s, p) => s + p.montant_fcfa, 0),
     };
   });
@@ -202,8 +216,8 @@ export default async function PrecollecteurDashboard({
             <div>
               <h2>Commencez par vos clients</h2>
               <p className="mt-1 max-w-xl text-body-sm text-muted-foreground">
-                Enregistrez les abonnés que vous servez déjà : l’abonnement est pris dans la grille
-                tarifaire MyKlinTown et la première facture est émise automatiquement. Vous voulez
+                Enregistrez les abonnés que vous servez déjà, au tarif que vous avez convenu avec
+                chacun : la première facture est émise automatiquement. Vous voulez
                 d’abord voir l’outil en action ? Chargez un jeu de démonstration, supprimable en un clic.
               </p>
             </div>
@@ -252,7 +266,7 @@ export default async function PrecollecteurDashboard({
           className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-brand-blue/25 bg-brand-blue/5 px-4 py-3 text-body-sm font-semibold text-brand-blue"
         >
           <span className="flex items-center gap-2">
-            <Inbox size={18} /> {nbDemandesOuvertes} abonné{nbDemandesOuvertes > 1 ? 's attendent' : ' attend'} un précollecteur : prenez-le{nbDemandesOuvertes > 1 ? 's' : ''} en charge
+            <Inbox size={18} /> {nbDemandesOuvertes} demande{nbDemandesOuvertes > 1 ? 's' : ''} de devis dans votre secteur : proposez votre tarif
           </span>
           <span aria-hidden>→</span>
         </Link>

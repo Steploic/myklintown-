@@ -72,16 +72,16 @@ export default async function DemandesAccesPage() {
                 {d.message && <p className="mt-1 text-body-sm text-muted-foreground">« {d.message} »</p>}
               </div>
               <div className="flex shrink-0 gap-2">
-                <form action={traiterDemandeAccesAction}>
+                <ActionForm action={traiterDemandeAccesAction}>
                   <input type="hidden" name="demande_id" value={d.id} />
                   <input type="hidden" name="decision" value="refuser" />
                   <SubmitButton variant="outline" pendingLabel="…"><X size={16} /> Refuser</SubmitButton>
-                </form>
-                <form action={traiterDemandeAccesAction}>
+                </ActionForm>
+                <ActionForm action={traiterDemandeAccesAction}>
                   <input type="hidden" name="demande_id" value={d.id} />
                   <input type="hidden" name="decision" value="accepter" />
                   <SubmitButton pendingLabel="…"><Check size={16} /> Accepter</SubmitButton>
-                </form>
+                </ActionForm>
               </div>
             </li>
           ))}
@@ -115,7 +115,7 @@ export default async function DemandesAccesPage() {
                           <span className="chip-relance">Aucune commune : ne voit rien</span>
                         ) : (
                           c.communes.map((m) => (
-                            <form key={m.id} action={retirerCommuneMairieAction} className="inline-flex">
+                            <ActionForm key={m.id} action={retirerCommuneMairieAction} className="inline-flex">
                               <input type="hidden" name="user_id" value={c.user_id} />
                               <input type="hidden" name="commune_id" value={m.id} />
                               <span className="chip-info inline-flex items-center gap-1">
@@ -124,7 +124,7 @@ export default async function DemandesAccesPage() {
                                   <X size={12} />
                                 </button>
                               </span>
-                            </form>
+                            </ActionForm>
                           ))
                         )}
                       </div>

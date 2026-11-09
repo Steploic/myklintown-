@@ -79,8 +79,12 @@ export function listeMigrations({ jusqua, exclure = [] } = {}) {
     .filter((f) => !jusqua || f.slice(0, 14) <= jusqua);
 }
 
-/** Base neuve, habillée comme Supabase, migrations appliquées dans l'ordre. */
-export async function creerBase({ jusqua, exclure, migrationsEnPlus = [], journal = () => {} } = {}) {
+/**
+ * Base neuve, habillée comme Supabase, migrations appliquées dans l'ordre.
+ * `apresChaque(nom, db)` est appelé après chaque migration (empreinte.mjs y
+ * relève ce que chacune a créé ou modifié).
+ */
+export async function creerBase({ jusqua, exclure, migrationsEnPlus = [], journal = () => {}, apresChaque } = {}) {
   const db = await PGlite.create({ extensions: { postgis, uuid_ossp } });
   await db.exec(HABILLAGE_SUPABASE);
   const fichiers = listeMigrations({ jusqua, exclure }).map((f) => ({ nom: f, sql: readFileSync(join(DOSSIER_MIGRATIONS, f), 'utf8') }));
@@ -91,6 +95,7 @@ export async function creerBase({ jusqua, exclure, migrationsEnPlus = [], journa
     } catch (e) {
       throw new Error(`Migration ${m.nom} en échec : ${e.message}`);
     }
+    if (apresChaque) await apresChaque(m.nom, db);
   }
   return db;
 }

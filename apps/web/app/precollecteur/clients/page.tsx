@@ -4,8 +4,9 @@ import { cn } from '@myklintown/ui';
 import { PrecoShell } from '@/components/precollecteur/shell';
 import { EmptyState, PageHeader } from '@/components/ui/blocks';
 import { requireEntreprise } from '@/lib/precollecteur/context';
-import { rows } from '@/lib/server';
+import { rows, toutesLesLignes } from '@/lib/server';
 import { dateFr, fcfa, statutAbonnement, STATUTS_A_FACTURER, telLisible } from '@/lib/format';
+import { libelleTarif } from '@/lib/devis';
 import type { ClientStatut } from '@/lib/types';
 
 export const metadata = { title: 'Clients' };
@@ -43,11 +44,10 @@ export default async function ClientsPage({
 }) {
   const { filtre = 'tous', q = '' } = await searchParams;
   const { supabase, entreprise } = await requireEntreprise();
-  const { data } = await supabase
-    .from('v_clients_statut')
-    .select('*')
-    .eq('entreprise_id', entreprise.id)
-    .order('nom');
+  // Tous les clients, au-delà des 1 000 lignes que l'API renvoie en une fois.
+  const { data } = await toutesLesLignes((de, a) =>
+    supabase.from('v_clients_statut').select('*').eq('entreprise_id', entreprise.id).order('nom').order('id').range(de, a),
+  );
   const tous = rows<ClientStatut>(data);
   const recherche = q.trim().toLowerCase();
   const liste = tous
@@ -136,7 +136,7 @@ export default async function ClientsPage({
                         {c.nom} {c.est_demo && <span className="chip-neutre ml-1">démo</span>}
                       </span>
                       <span className="block truncate text-small text-muted-foreground">
-                        {[c.quartier, c.plan_nom].filter(Boolean).join(' · ') || c.code}
+                        {[c.quartier, c.plan_prix != null && libelleTarif(c.plan_prix, c.plan_duree_mois)].filter(Boolean).join(' · ') || c.code}
                       </span>
                     </span>
                     <span className="flex flex-col items-end gap-1">
@@ -158,7 +158,7 @@ export default async function ClientsPage({
                 <tr>
                   <th>Client</th>
                   <th>Quartier · zone</th>
-                  <th>Formule</th>
+                  <th>Tarif</th>
                   <th>Abonnement</th>
                   <th>Couvert jusqu’au</th>
                   <th className="text-right">Reste dû</th>
@@ -182,7 +182,7 @@ export default async function ClientsPage({
                         {c.quartier ?? '—'}
                         {c.zone_nom && <span className="block text-small">{c.zone_nom}</span>}
                       </td>
-                      <td>{c.plan_nom ?? '—'}</td>
+                      <td className="num">{c.plan_prix != null ? libelleTarif(c.plan_prix, c.plan_duree_mois) : '—'}</td>
                       <td><span className={s.chip}>{s.label}</span></td>
                       <td className="num text-muted-foreground">{dateFr(c.couverture_fin)}</td>
                       <td className={cn('num text-right font-semibold', Number(c.montant_impaye) > 0 ? 'text-terrain-stop' : 'text-muted-foreground')}>

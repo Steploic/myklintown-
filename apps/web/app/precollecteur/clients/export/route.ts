@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getSupabase, rows } from '@/lib/server';
-import { statutAbonnement } from '@/lib/format';
+import { getSupabase, toutesLesLignes } from '@/lib/server';
+import { jourDouala, statutAbonnement } from '@/lib/format';
 import type { ClientStatut } from '@/lib/types';
 import { documentCsv } from '@/lib/csv';
 
@@ -13,18 +13,21 @@ export async function GET() {
   if (!user) return NextResponse.redirect(new URL('/login', process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'));
 
   // La RLS limite d'elle-même la lecture aux clients de l'entreprise du compte.
-  const { data } = await supabase.from('v_clients_statut').select('*').order('nom');
-  const clients = rows<ClientStatut>(data);
+  // Tous les clients, au-delà des 1 000 que l'API renvoie en une fois.
+  const { data: clients, error } = await toutesLesLignes<ClientStatut>((de, a) =>
+    supabase.from('v_clients_statut').select('*').order('nom').order('id').range(de, a),
+  );
+  if (error) return new NextResponse('Export impossible pour le moment : réessayez.', { status: 503 });
 
-  const entetes = ['Code', 'Nom', 'Téléphone', 'Quartier', 'Adresse', 'Zone', 'Formule', 'Statut', 'Abonnement', 'Couvert jusqu’au', 'Reste dû (FCFA)'];
+  const entetes = ['Code', 'Nom', 'Téléphone', 'Quartier', 'Adresse', 'Zone', 'Tarif (FCFA)', 'Période facturée (mois)', 'Passages / semaine', 'Statut', 'Abonnement', 'Couvert jusqu’au', 'Reste dû (FCFA)'];
   const csv = documentCsv(
     entetes,
-    clients.map((c) => [c.code, c.nom, c.telephone, c.quartier, c.adresse, c.zone_nom, c.plan_nom, c.statut, statutAbonnement(c.statut_abonnement).label, c.couverture_fin, c.montant_impaye]),
+    clients.map((c) => [c.code, c.nom, c.telephone, c.quartier, c.adresse, c.zone_nom, c.plan_prix, c.plan_duree_mois, c.passages_semaine, c.statut, statutAbonnement(c.statut_abonnement).label, c.couverture_fin, c.montant_impaye]),
   );
   return new NextResponse(csv, {
     headers: {
       'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': `attachment; filename="clients-myklintown-${new Date().toISOString().slice(0, 10)}.csv"`,
+      'Content-Disposition': `attachment; filename="clients-myklintown-${jourDouala(new Date().toISOString())}.csv"`,
     },
   });
 }

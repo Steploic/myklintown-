@@ -65,6 +65,17 @@ jobs:
           NEXT_PUBLIC_SITE_URL=http://localhost:3100
           EOF
 
+      # Le script de contrôle de la production, passé sur cette base neuve (le
+      # vrai Postgres de Supabase, toutes les migrations) : il doit répondre
+      # « OK ». Sinon il signalerait à tort des écarts en production.
+      - name: Empreinte du schéma (script de contrôle de la production)
+        if: matrix.suite == 'integration'
+        run: |
+          eval "$(supabase status -o env)"
+          psql "$DB_URL" -X -v ON_ERROR_STOP=1 -At -F ' | ' -f supabase/EMPREINTE_SCHEMA.sql > empreinte.txt
+          grep -v '^INFO' empreinte.txt
+          grep -q '^OK | ' empreinte.txt || { echo "::error::supabase/EMPREINTE_SCHEMA.sql signale des écarts sur une base neuve : régénérer le script (npm run empreinte) ou revoir sa requête"; exit 1; }
+
       - name: Tests d'intégration
         if: matrix.suite == 'integration'
         run: pnpm test:integration

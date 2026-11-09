@@ -79,7 +79,7 @@ test.describe('précollecteur : retours de test', () => {
       await page.getByLabel('Nom de l’abonné (personne ou structure) *').fill('  famille   NGONO-ESSO ');
       await page.getByLabel('Téléphone').fill('677 11 22 33');
       await page.getByLabel('Quartier').fill('mvog-ada');
-      await page.getByRole('radio', { name: /Mensuel/ }).check({ force: true });
+      await page.getByLabel('Montant de chaque facture (FCFA) *').fill('3500');
       await page.locator('.leaflet-container').click({ position: { x: 200, y: 150 } });
       await page.getByRole('button', { name: 'Enregistrer le client' }).click();
       await expect(page).toHaveURL(/\/precollecteur\/clients\/[0-9a-f-]+\?cree=1/);

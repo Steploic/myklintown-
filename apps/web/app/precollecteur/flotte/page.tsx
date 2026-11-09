@@ -14,7 +14,7 @@ import {
   retirerEmployeAction,
   statutTricycleAction,
 } from '@/lib/precollecteur/actions';
-import { origineDemande, rows } from '@/lib/server';
+import { origineDemande, rows, toutesLesLignes } from '@/lib/server';
 import { ajouterJours, dateFr, isoJour, telInternational, telLisible } from '@/lib/format';
 import type { Employe, Tricycle } from '@/lib/types';
 
@@ -41,7 +41,7 @@ export default async function FlottePage({ searchParams }: { searchParams: Promi
     supabase.from('tricycles').select('*').eq('entreprise_id', entreprise.id).order('nom'),
     supabase.from('employes').select('*').eq('entreprise_id', entreprise.id).order('nom'),
     supabase.from('tricycle_employes').select('tricycle_id, employe_id'),
-    supabase.from('collectes').select('employe_id, statut').eq('entreprise_id', entreprise.id).gte('date_prevue', il30),
+    toutesLesLignes((de, a) => supabase.from('collectes').select('id, employe_id, statut').eq('entreprise_id', entreprise.id).gte('date_prevue', il30).order('id').range(de, a)),
     supabase.from('tournees_precollecte').select('tricycle_id, employe_id').eq('entreprise_id', entreprise.id).gte('date', il30),
     supabase
       .from('invitations_employe')
@@ -88,7 +88,7 @@ export default async function FlottePage({ searchParams }: { searchParams: Promi
                           </p>
                         </div>
                       </div>
-                      <form action={statutTricycleAction} className="flex items-center gap-2">
+                      <ActionForm action={statutTricycleAction} className="flex items-center gap-2">
                         <input type="hidden" name="tricycle_id" value={t.id} />
                         <span className={s.chip}>{s.label}</span>
                         <select name="statut" defaultValue={t.statut} className="field min-h-[36px] w-auto py-1 text-body-sm" aria-label="Changer l’état">
@@ -97,20 +97,20 @@ export default async function FlottePage({ searchParams }: { searchParams: Promi
                           ))}
                         </select>
                         <SubmitButton variant="ghost" pendingLabel="…">OK</SubmitButton>
-                      </form>
+                      </ActionForm>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       {equipage.map((a) => (
-                        <form key={a.employe_id} action={retirerEmployeAction} className="inline-flex">
+                        <ActionForm key={a.employe_id} action={retirerEmployeAction} className="inline-flex">
                           <input type="hidden" name="tricycle_id" value={t.id} />
                           <input type="hidden" name="employe_id" value={a.employe_id} />
                           <button type="submit" className="chip-info gap-1 py-1 hover:bg-brand-blue/20" title="Retirer de ce tricycle">
                             <UserRound size={12} /> {nomEmploye.get(a.employe_id)} <X size={12} />
                           </button>
-                        </form>
+                        </ActionForm>
                       ))}
                       {libres.length > 0 && (
-                        <form action={affecterEmployeAction} className="flex items-center gap-1.5">
+                        <ActionForm action={affecterEmployeAction} className="flex items-center gap-1.5">
                           <input type="hidden" name="tricycle_id" value={t.id} />
                           <select name="employe_id" className="field min-h-[34px] w-auto py-1 text-small" defaultValue="" aria-label="Affecter un employé">
                             <option value="" disabled>+ Affecter…</option>
@@ -119,7 +119,7 @@ export default async function FlottePage({ searchParams }: { searchParams: Promi
                             ))}
                           </select>
                           <SubmitButton variant="ghost" pendingLabel="…">Affecter</SubmitButton>
-                        </form>
+                        </ActionForm>
                       )}
                       {equipage.length === 0 && libres.length === 0 && (
                         <span className="text-small text-muted-foreground">Ajoutez des employés pour former l’équipage.</span>
@@ -195,16 +195,16 @@ export default async function FlottePage({ searchParams }: { searchParams: Promi
                           </form>
                         )}
                         {e.user_id && (
-                          <form action={retirerAccesEmployeAction}>
+                          <ActionForm action={retirerAccesEmployeAction}>
                             <input type="hidden" name="employe_id" value={e.id} />
                             <SubmitButton variant="ghost" pendingLabel="…">Retirer l’accès</SubmitButton>
-                          </form>
+                          </ActionForm>
                         )}
-                        <form action={basculerEmployeAction}>
+                        <ActionForm action={basculerEmployeAction}>
                           <input type="hidden" name="employe_id" value={e.id} />
                           <input type="hidden" name="actif" value={e.actif ? 'false' : 'true'} />
                           <SubmitButton variant="ghost" pendingLabel="…">{e.actif ? 'Désactiver' : 'Réactiver'}</SubmitButton>
-                        </form>
+                        </ActionForm>
                       </div>
                     </div>
                     {invitation && !e.user_id && lien && (

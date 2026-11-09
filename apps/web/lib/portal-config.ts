@@ -12,7 +12,6 @@ import {
   Truck,
   Users,
   Wallet,
-  Tags,
   Bike,
   FileText,
   CalendarCheck,
@@ -43,12 +42,11 @@ export const PRECOLLECTEUR_NAV: PortalNavItem[] = [
   { href: '/precollecteur/facturation', label: 'Factures & relances', icon: Receipt, court: 'Factures' },
   { href: '/precollecteur/tournees', label: 'Tournées', icon: Route },
   { href: '/precollecteur/carte', label: 'Carte', icon: MapIcon },
-  { href: '/precollecteur/demandes', label: 'Demandes en attente', icon: Inbox, court: 'Demandes' },
+  { href: '/precollecteur/demandes', label: 'Demandes de devis', icon: Inbox, court: 'Devis' },
   { href: '/precollecteur/flotte', label: 'Flotte & équipe', icon: Bike },
   { href: '/precollecteur/incidents', label: 'Incidents', icon: Camera },
   { href: '/precollecteur/charges', label: 'Charges du mois', icon: Wallet, court: 'Charges' },
   { href: '/precollecteur/dossier', label: 'Dossier & vitrine', icon: BadgeCheck, court: 'Dossier' },
-  { href: '/precollecteur/grille', label: 'Grille tarifaire', icon: Tags },
 ];
 
 /** Employé (chauffeur, ramasseur) : le terrain, rien d'autre (proposition de Pie). */

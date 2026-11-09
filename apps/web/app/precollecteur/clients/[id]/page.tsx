@@ -39,7 +39,8 @@ import {
   telInternational,
   telLisible,
 } from '@/lib/format';
-import type { ClientStatut, Collecte, Facture, Incident, Paiement, Plan, Zone } from '@/lib/types';
+import { libelleFrequence, libelleTarif } from '@/lib/devis';
+import type { ClientStatut, Collecte, Facture, Incident, Paiement, Zone } from '@/lib/types';
 
 export const metadata = { title: 'Fiche client' };
 
@@ -48,10 +49,10 @@ export default async function FicheClientPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ cree?: string; pris?: string; lien?: string; facture?: string; erreur?: string }>;
+  searchParams: Promise<{ cree?: string; lien?: string; facture?: string; erreur?: string }>;
 }) {
   const { id } = await params;
-  const { cree, pris, lien, facture: factureLien, erreur } = await searchParams;
+  const { cree, lien, facture: factureLien, erreur } = await searchParams;
   const { supabase, entreprise } = await requireEntreprise();
 
   const { data: c } = await supabase
@@ -66,17 +67,26 @@ export default async function FicheClientPage({
   const enLigne = paiementEnLigneDisponible() && entreprise.paiement_statut === 'actif';
   const urlLien = lien ? `${await origineDemande()}/payer/${lien}` : null;
 
-  const [fa, pa, co, inc, re, em, pl, za, ch] = await Promise.all([
+  const [fa, pa, co, inc, re, em, za, ch, ra] = await Promise.all([
     supabase.from('factures').select('*').eq('client_id', id).order('periode_debut', { ascending: false }),
     supabase.from('paiements_clients').select('*').eq('client_id', id).order('created_at', { ascending: false }),
     supabase.from('collectes').select('*').eq('client_id', id).order('date_prevue', { ascending: false }).limit(30),
     supabase.from('incidents_precollecte').select('*').eq('client_id', id).order('created_at', { ascending: false }),
     supabase.from('relances').select('canal, niveau, created_at').eq('client_id', id).order('created_at', { ascending: false }).limit(5),
     supabase.from('employes').select('id, nom').eq('entreprise_id', entreprise.id).eq('actif', true),
-    supabase.from('plans_tarifaires').select('*').eq('actif', true).order('ordre'),
     supabase.from('zone_affectations').select('zones(*)').eq('entreprise_id', entreprise.id),
     rpc(supabase, 'charte_du_client', { p_client: id }),
+    // Essais refusés de rattachement à ce code (migration 20261113000021) : alerte au gérant.
+    supabase
+      .from('rattachements_essais')
+      .select('created_at')
+      .eq('code', client.code)
+      .eq('reussi', false)
+      .gte('created_at', new Date(Date.now() - 30 * 86_400_000).toISOString())
+      .order('created_at', { ascending: false })
+      .limit(50),
   ]);
+  const essaisRefuses = ra.error ? [] : rows<{ created_at: string }>(ra.data);
   // Charte et contrat (migration 20261019000014) : absents si la base ne les connaît pas encore.
   const charte = ch.error ? null : rows<EtatDocumentClient>(ch.data);
   const aFaireAccepter = (charte ?? []).filter((d) => !d.acceptee);
@@ -86,7 +96,6 @@ export default async function FicheClientPage({
   const incidents = rows<Incident>(inc.data);
   const relances = rows<{ canal: string; niveau: number; created_at: string }>(re.data);
   const employes = rows<{ id: string; nom: string }>(em.data);
-  const plans = rows<Plan>(pl.data);
   const zones = rows<{ zones: Zone | null }>(za.data).map((a) => a.zones).filter((z): z is Zone => !!z);
   const nomEmploye = new Map(employes.map((e) => [e.id, e.nom]));
   const urls = await urlsPreuves(supabase, incidents.map((i) => i.media_path));
@@ -114,11 +123,6 @@ export default async function FicheClientPage({
         retour={{ href: '/precollecteur/clients', label: 'Clients' }}
       />
 
-      {pris && (
-        <p className="mb-5 flex items-center gap-2 rounded-lg border border-terrain-ok/25 bg-terrain-ok/5 px-4 py-3 text-body-sm font-medium text-terrain-ok">
-          <CheckCircle2 size={18} /> Demande prise en charge : cet abonné est votre client et sa première facture est émise. Appelez-le pour convenir du premier passage.
-        </p>
-      )}
       {cree && (
         <p className="mb-5 flex items-center gap-2 rounded-lg border border-terrain-ok/25 bg-terrain-ok/5 px-4 py-3 text-body-sm font-medium text-terrain-ok">
           <CheckCircle2 size={18} /> Client enregistré. Imprimez son QR code pour le coller à son portail.
@@ -132,20 +136,20 @@ export default async function FicheClientPage({
         <section className="mb-6 rounded-xl border border-brand-green/30 bg-brand-green/5 p-5">
           <h2 className="flex items-center gap-2"><UserCheck size={20} className="text-brand-green" /> Demande d’abonnement en ligne</h2>
           <p className="mt-1 text-body-sm text-muted-foreground">
-            Cet abonné s’est inscrit depuis l’application en choisissant la formule <strong>{client.plan_nom}</strong>.
+            Cet abonné s’est inscrit depuis l’application. Vérifiez son tarif dans « Modifier la fiche ».
             Accepter ouvre son abonnement et émet sa première facture.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
-            <form action={changerStatutClientAction}>
+            <ActionForm action={changerStatutClientAction}>
               <input type="hidden" name="client_id" value={client.id} />
               <input type="hidden" name="statut" value="actif" />
               <SubmitButton pendingLabel="Validation…">Accepter le client</SubmitButton>
-            </form>
-            <form action={changerStatutClientAction}>
+            </ActionForm>
+            <ActionForm action={changerStatutClientAction}>
               <input type="hidden" name="client_id" value={client.id} />
               <input type="hidden" name="statut" value="resilie" />
               <SubmitButton variant="outline" pendingLabel="…">Refuser</SubmitButton>
-            </form>
+            </ActionForm>
           </div>
         </section>
       )}
@@ -153,7 +157,15 @@ export default async function FicheClientPage({
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <div className="space-y-6">
           {/* Abonnement */}
-          <Section titre="Abonnement" sousTitre={client.plan_nom ? `${client.plan_nom} · ${fcfa(client.plan_prix)}` : 'Aucune formule'}>
+          <Section titre="Abonnement" sousTitre={
+              client.plan_prix != null
+                ? [
+                    libelleTarif(client.plan_prix, client.plan_duree_mois),
+                    client.passages_semaine && libelleFrequence(client.passages_semaine).toLowerCase(),
+                    client.sacs_inclus && 'sacs fournis',
+                  ].filter(Boolean).join(' · ')
+                : 'Tarif à fixer dans « Modifier la fiche »'
+            }>
             <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
               <div>
                 <dt className="text-small text-muted-foreground">Couvert jusqu’au</dt>
@@ -196,25 +208,25 @@ export default async function FicheClientPage({
                 </ActionForm>
               )}
               {client.statut === 'actif' && (
-                <form action={changerStatutClientAction}>
+                <ActionForm action={changerStatutClientAction}>
                   <input type="hidden" name="client_id" value={client.id} />
                   <input type="hidden" name="statut" value="suspendu" />
                   <SubmitButton variant="outline" pendingLabel="…">Suspendre le service</SubmitButton>
-                </form>
+                </ActionForm>
               )}
               {(client.statut === 'suspendu' || client.statut === 'resilie') && (
-                <form action={changerStatutClientAction}>
+                <ActionForm action={changerStatutClientAction}>
                   <input type="hidden" name="client_id" value={client.id} />
                   <input type="hidden" name="statut" value="actif" />
                   <SubmitButton variant="outline" pendingLabel="…">Réactiver</SubmitButton>
-                </form>
+                </ActionForm>
               )}
               {client.statut !== 'resilie' && client.statut !== 'demande' && (
-                <form action={changerStatutClientAction}>
+                <ActionForm action={changerStatutClientAction}>
                   <input type="hidden" name="client_id" value={client.id} />
                   <input type="hidden" name="statut" value="resilie" />
                   <SubmitButton variant="ghost" pendingLabel="…">Résilier</SubmitButton>
-                </form>
+                </ActionForm>
               )}
             </div>
           </Section>
@@ -408,7 +420,7 @@ export default async function FicheClientPage({
             </summary>
             <ActionForm action={majClientAction} className="border-t border-border p-5">
               <input type="hidden" name="id" value={client.id} />
-              <ClientFields plans={plans} zones={zones} client={client} />
+              <ClientFields zones={zones} client={client} />
               <SubmitButton className="mt-4 w-full">Enregistrer</SubmitButton>
             </ActionForm>
           </details>
@@ -420,6 +432,13 @@ export default async function FicheClientPage({
             <div className="mx-auto w-44 rounded-lg border border-border p-2" dangerouslySetInnerHTML={{ __html: qr }} />
             <p className="num mt-2 text-center font-semibold tracking-wider text-brand-ink">{client.code}</p>
             <p className="mt-1 text-center text-small text-muted-foreground">Scanné à chaque passage pour prouver le service.</p>
+            {essaisRefuses.length > 0 && (
+              <p role="status" className="mt-3 rounded-md border border-terrain-relance/30 bg-terrain-relance/5 px-3 py-2 text-small text-terrain-relance">
+                {essaisRefuses.length} essai{essaisRefuses.length > 1 ? 's' : ''} refusé{essaisRefuses.length > 1 ? 's' : ''} de
+                rattachement d’un compte à ce code en 30 jours (dernier le {dateHeureFr(essaisRefuses[0]!.created_at)}). Si
+                l’abonné n’a rien tenté, prévenez MyKlinTown.
+              </p>
+            )}
             <Link href={`/precollecteur/clients/${client.id}/etiquette`} className="btn-outline mt-3 w-full">
               <Printer size={16} /> Imprimer l’étiquette
             </Link>

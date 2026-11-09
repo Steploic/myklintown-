@@ -54,6 +54,73 @@ const avec0016 = (db) => valeur(db, `select to_regclass('public.mairie_communes'
 const avecCodes = (db) => valeur(db, `select to_regclass('public.codes_agrement') is not null`);
 /** Migration 0017 (dossier du précollecteur, annuaire) présente dans la base ? */
 const avec0017 = (db) => valeur(db, `select to_regclass('public.entreprise_communes') is not null`);
+/** Migration 0018 (demandes de devis, tarif par abonné) présente dans la base ? */
+const avec0018 = (db) => valeur(db, `select to_regclass('public.demandes_devis') is not null`);
+/** Migration 0019 (routage des demandes de devis, demandes à orienter) présente dans la base ? */
+const avec0019 = (db) => valeur(db, `select to_regprocedure('public.demandes_devis_a_orienter()') is not null`);
+/** Migration 0020 (encaissement plafonné, une facture émise par abonné) présente dans la base ? */
+const avec0020 = (db) => valeur(db, `select to_regclass('public.factures_une_emise_par_client') is not null`);
+/** Migration 0021 (rattachement : essais limités et tracés) présente dans la base ? */
+const avec0021 = (db) => valeur(db, `select to_regclass('public.rattachements_essais') is not null`);
+
+/** Fiche de A, sans compte, au téléphone connu ; renvoie son id et son code. */
+async function ficheARattacher(db, s, nom) {
+  const id = await clientNeufA(db, s, nom);
+  return { id, code: await valeur(db, `select code from public.clients where id = $1`, [id]) };
+}
+/** Essai de rattachement : l'id de la fiche si rattachée, null si refusé, 'erreur' si la base lève. */
+async function rattacher(db, compte, code, telephone) {
+  try {
+    return await comme(db, compte, (tx) => valeur(tx, `select public.rattacher_mon_compte($1, $2)`, [code, telephone]));
+  } catch {
+    return 'erreur';
+  }
+}
+
+/** Une demande de devis complète (commerce de Yaoundé III), modifiable par `extra`. */
+const demandeDevis = (commune, extra = {}) => JSON.stringify({
+  categorie: 'commerce', nom: 'Boulangerie du Lac', telephone: '699001122', whatsapp: '699001122',
+  commune_id: commune, quartier: 'Nsam', repere: 'Portail rouge, face à la station',
+  acces_voie: 'goudronnee', gabarit_max: 'tricycle', passages_semaine: 3, sacs_besoin: true, sacs_volume_litres: 50,
+  details: { type_commerce: 'boulangerie', dechets: ['organiques', 'emballages'] },
+  lat: 3.851, lng: 11.501, position_sur_place: true, ...extra,
+});
+
+/** Précollecteur vérifié qui travaille dans la commune ; à défaire avec `secteurAnnule`. */
+async function secteurValide(db, ent, commune) {
+  await db.query(`insert into public.entreprise_communes (entreprise_id, commune_id) values ($1, $2) on conflict do nothing`, [ent, commune]);
+  await db.query(`update public.entreprises set dossier_statut = 'valide' where id = $1`, [ent]);
+}
+async function secteurAnnule(db, ents, commune) {
+  for (const ent of ents) {
+    await db.query(`update public.entreprises set dossier_statut = 'incomplet' where id = $1`, [ent]);
+    await db.query(`delete from public.entreprise_communes where entreprise_id = $1 and commune_id = $2`, [ent, commune]);
+  }
+}
+const devisOuverts = (db, ouverts) => db.query(`update public.parametres_plateforme set valeur = $1::jsonb where cle = 'devis_ouverts'`, [ouverts ? '1' : '0']);
+
+/** Nouveau compte abonné, avec sa demande de devis déposée. */
+async function abonneAvecDemande(db, commune, extra) {
+  const u = await creerCompte(db, `devis.${Date.now()}.${Math.random().toString(36).slice(2, 7)}@test.cm`);
+  const d = await comme(db, u, (tx) => valeur(tx, `select public.deposer_demande_devis($1::jsonb)`, [demandeDevis(commune, extra)]));
+  return { u, d };
+}
+
+/** Efface une demande de devis du banc, ses devis et le client éventuellement créé. */
+async function effacerDemande(db, demande) {
+  const client = await valeur(db, `select client_id from public.demandes_devis where id = $1`, [demande]);
+  await db.query(`delete from public.demandes_devis where id = $1`, [demande]);
+  if (client) await db.query(`delete from public.clients where id = $1`, [client]);
+}
+
+/**
+ * Un abonné de plus pour A, sans facture. Depuis 20261112000020, un abonné n'a
+ * qu'une facture « émise » à la fois : un scénario qui émet la sienne part
+ * d'une fiche neuve plutôt que de celle du client A (déjà facturée).
+ */
+async function clientNeufA(db, s, nom) {
+  return valeur(db, `insert into public.clients (entreprise_id, nom, plan_id, telephone) values ($1, $2, $3, '677000999') returning id`, [s.entA, nom, s.plan]);
+}
 
 /**
  * Précollecteur agréé par une Mairie pour sa commune (code d'agrément, depuis
@@ -524,9 +591,10 @@ export const ATTAQUES = [
     titre: 'Le gérant émet une facture antidatée d’un an',
     async jouer(db, s) {
       if (!(await avec0014(db))) return false;
+      const client = await clientNeufA(db, s, 'Foyer antidaté');
       const id = await comme(db, s.gerantA, (tx) => valeur(tx,
         `insert into public.factures (entreprise_id, client_id, periode_debut, periode_fin, montant_fcfa, echeance, created_at)
-         values ($1, $2, current_date, current_date + 30, 3500, current_date + 7, now() - interval '1 year') returning id`, [s.entA, s.clientA]));
+         values ($1, $2, current_date, current_date + 30, 3500, current_date + 7, now() - interval '1 year') returning id`, [s.entA, client]));
       return (await valeur(db, `select created_at < now() - interval '1 day' from public.factures where id = $1`, [id])) === true;
     },
   },
@@ -535,9 +603,10 @@ export const ATTAQUES = [
     titre: 'Une facture annulée est remise « émise » (même par un administrateur)',
     async jouer(db, s) {
       if (!(await avec0014(db))) return false;
+      const client = await clientNeufA(db, s, 'Foyer facture rouverte');
       const f = await comme(db, s.gerantA, async (tx) => {
         const id = await valeur(tx, `insert into public.factures (entreprise_id, client_id, periode_debut, periode_fin, montant_fcfa, echeance)
-          values ($1, $2, current_date, current_date + 30, 3500, current_date + 7) returning id`, [s.entA, s.clientA]);
+          values ($1, $2, current_date, current_date + 30, 3500, current_date + 7) returning id`, [s.entA, client]);
         await tx.query(`update public.factures set statut = 'annulee', motif_annulation = 'Erreur de formule' where id = $1`, [id]);
         return id;
       });
@@ -878,6 +947,242 @@ export const ATTAQUES = [
       return false;
     },
   },
+  {
+    id: 'devis-identite-abonne',
+    titre: 'Un précollecteur vérifié lit l’identité d’un abonné qui demande un devis (nom, téléphone, repère, position)',
+    async jouer(db, s) {
+      if (!(await avec0018(db))) return false;
+      await secteurValide(db, s.entA, s.yde3);
+      const { d } = await abonneAvecDemande(db, s.yde3);
+      try {
+        const lignes = await comme(db, s.gerantA, async (tx) => (await tx.query(`select * from public.demandes_devis_ouvertes()`)).rows);
+        const vue = lignes.find((l) => l.id === d);
+        const fuite = vue && ['nom', 'telephone', 'whatsapp', 'repere', 'lat', 'lng', 'user_id'].some((k) => k in vue);
+        const direct = await comme(db, s.gerantA, (tx) => valeur(tx, `select count(*)::int from public.demandes_devis where id = $1`, [d]));
+        return !vue || fuite || direct > 0;
+      } finally {
+        await effacerDemande(db, d);
+        await secteurAnnule(db, [s.entA], s.yde3);
+      }
+    },
+  },
+  {
+    id: 'devis-non-verifie-ou-hors-secteur',
+    titre: 'Un précollecteur non vérifié, ou hors de la commune, voit la demande ou propose un devis',
+    async jouer(db, s) {
+      if (!(await avec0018(db))) return false;
+      await db.query(`insert into public.entreprise_communes (entreprise_id, commune_id) values ($1, $2) on conflict do nothing`, [s.entB, s.yde3]);
+      await secteurValide(db, s.entD, s.dla1);
+      await devisOuverts(db, true);
+      const { d } = await abonneAvecDemande(db, s.yde3);
+      try {
+        for (const g of [s.gerantB, s.gerantD]) {
+          const vue = await comme(db, g, (tx) => valeur(tx, `select count(*)::int from public.demandes_devis_ouvertes() where id = $1`, [d]));
+          if (vue > 0) return true;
+          if (await accepte(db, g, `select public.proposer_devis($1, 3000, 1, 2)`, [d])) return true;
+        }
+        return false;
+      } finally {
+        await devisOuverts(db, false);
+        await effacerDemande(db, d);
+        await secteurAnnule(db, [s.entB], s.yde3);
+        await secteurAnnule(db, [s.entD], s.dla1);
+      }
+    },
+  },
+  {
+    id: 'devis-avant-lancement',
+    titre: 'Un précollecteur vérifié propose un devis avant l’ouverture des devis (liste d’attente)',
+    async jouer(db, s) {
+      if (!(await avec0018(db))) return false;
+      await secteurValide(db, s.entA, s.yde3);
+      await devisOuverts(db, false);
+      const { d } = await abonneAvecDemande(db, s.yde3);
+      try {
+        return await accepte(db, s.gerantA, `select public.proposer_devis($1, 3000, 1, 2)`, [d]);
+      } finally {
+        await effacerDemande(db, d);
+        await secteurAnnule(db, [s.entA], s.yde3);
+      }
+    },
+  },
+  {
+    id: 'devis-reponse-autrui',
+    titre: 'Un autre abonné, ou le précollecteur lui-même, accepte ou refuse le devis adressé à un abonné',
+    async jouer(db, s) {
+      if (!(await avec0018(db))) return false;
+      await secteurValide(db, s.entA, s.yde3);
+      await devisOuverts(db, true);
+      const { d } = await abonneAvecDemande(db, s.yde3);
+      try {
+        const devis = await comme(db, s.gerantA, (tx) => valeur(tx, `select public.proposer_devis($1, 4000, 1, 2)`, [d]));
+        for (const qui of [s.victime, s.gerantA, s.gerantB]) {
+          if (await accepte(db, qui, `select public.accepter_devis($1)`, [devis])) return true;
+          if (await accepte(db, qui, `select public.refuser_devis($1)`, [devis])) return true;
+        }
+        return (await valeur(db, `select statut from public.devis where id = $1`, [devis])) !== 'propose';
+      } finally {
+        await devisOuverts(db, false);
+        await effacerDemande(db, d);
+        await secteurAnnule(db, [s.entA], s.yde3);
+      }
+    },
+  },
+  {
+    id: 'devis-ecriture-directe',
+    titre: 'Un abonné ou un précollecteur écrit directement une demande ou un devis (montant changé après coup, demande d’autrui)',
+    async jouer(db, s) {
+      if (!(await avec0018(db))) return false;
+      await secteurValide(db, s.entA, s.yde3);
+      await devisOuverts(db, true);
+      const { u, d } = await abonneAvecDemande(db, s.yde3);
+      try {
+        const devis = await comme(db, s.gerantA, (tx) => valeur(tx, `select public.proposer_devis($1, 4000, 1, 2)`, [d]));
+        const essais = [
+          [u, `update public.devis set tarif_fcfa = 1 where id = '${devis}'`],
+          [s.gerantA, `update public.devis set tarif_fcfa = 99000 where id = '${devis}'`],
+          [u, `update public.demandes_devis set statut = 'acceptee', entreprise_id = '${s.entB}' where id = '${d}'`],
+          [u, `insert into public.devis (demande_id, entreprise_id, tarif_fcfa, passages_semaine) values ('${d}', '${s.entB}', 1, 1)`],
+          [s.gerantB, `insert into public.demandes_devis (categorie, nom, telephone, quartier, repere, passages_semaine) values ('residentiel', 'Faux', '600', 'X', 'Y', 1)`],
+        ];
+        for (const [qui, sql] of essais) await accepte(db, qui, sql);
+        const etat = (await db.query(`select v.tarif_fcfa, d.statut from public.devis v join public.demandes_devis d on d.id = v.demande_id where v.id = $1`, [devis])).rows[0];
+        const intrus = await valeur(db, `select count(*)::int from public.devis where demande_id = $1`, [d]);
+        const faux = await valeur(db, `select count(*)::int from public.demandes_devis where nom = 'Faux'`);
+        return etat.tarif_fcfa !== 4000 || etat.statut !== 'devis_recu' || intrus !== 1 || faux > 0;
+      } finally {
+        await devisOuverts(db, false);
+        await effacerDemande(db, d);
+        await secteurAnnule(db, [s.entA], s.yde3);
+      }
+    },
+  },
+  {
+    id: 'tarif-client-autrui',
+    titre: 'Un précollecteur change le tarif d’un abonné d’un autre précollecteur',
+    async jouer(db, s) {
+      if (!(await avec0018(db))) return false;
+      await accepte(db, s.gerantB, `update public.clients set tarif_fcfa = 1 where id = $1`, [s.clientA]);
+      return (await valeur(db, `select tarif_fcfa from public.clients where id = $1`, [s.clientA])) === 1;
+    },
+  },
+  {
+    id: 'devis-sans-commune',
+    titre: 'Une demande de devis sans commune est enregistrée (elle pourrait n’arriver à personne)',
+    async jouer(db) {
+      if (!(await avec0019(db))) return false;
+      const u = await creerCompte(db, `sans.commune.${Date.now()}@test.cm`);
+      const enregistree = await accepte(db, u, `select public.deposer_demande_devis($1::jsonb)`, [demandeDevis(null)]);
+      await db.query(`delete from public.demandes_devis where user_id = $1`, [u]);
+      return enregistree;
+    },
+  },
+  {
+    id: 'devis-orientation-reservee',
+    titre: 'Un précollecteur, un abonné, la Mairie ou un visiteur voit les demandes à orienter, ou oriente une demande vers lui',
+    async jouer(db, s) {
+      if (!(await avec0019(db))) return false;
+      await secteurValide(db, s.entA, s.dla1);
+      // Yaoundé III : aucun précollecteur vérifié n'y travaille, la demande est à orienter.
+      const { d } = await abonneAvecDemande(db, s.yde3);
+      try {
+        for (const qui of [s.gerantA, s.menage, s.mairie, 'anon']) {
+          let vues = 0;
+          try {
+            vues = await comme(db, qui, async (tx) => (await tx.query(`select id from public.demandes_devis_a_orienter()`)).rows.length);
+          } catch {
+            vues = 0;
+          }
+          if (vues > 0) return true;
+          if (await accepte(db, qui, `select public.orienter_demande_devis($1, p_entreprise => $2)`, [d, s.entA])) return true;
+          if (await accepte(db, qui, `select public.orienter_demande_devis($1, p_commune => $2)`, [d, s.dla1])) return true;
+        }
+        const apres = (await db.query(`select commune_id, entreprise_cible from public.demandes_devis where id = $1`, [d])).rows[0];
+        return apres.entreprise_cible !== null || apres.commune_id !== s.yde3;
+      } finally {
+        await effacerDemande(db, d);
+        await secteurAnnule(db, [s.entA], s.dla1);
+      }
+    },
+  },
+  {
+    id: 'encaissement-trop-percu',
+    titre: 'Le gérant encaisse plus que le reste dû d’une facture (35 000 au lieu de 3 500, ou un solde déjà réglé)',
+    async jouer(db, s) {
+      if (!(await avec0020(db))) return false;
+      const client = await clientNeufA(db, s, 'Foyer trop-perçu');
+      const f = await comme(db, s.gerantA, (tx) => valeur(tx, `insert into public.factures (entreprise_id, client_id, periode_debut, periode_fin, montant_fcfa, echeance)
+        values ($1, $2, current_date, current_date + 30, 3500, current_date + 7) returning id`, [s.entA, client]));
+      const payer = (montant) => accepte(db, s.gerantA, `insert into public.paiements_clients (facture_id, entreprise_id, client_id, montant_fcfa, methode) values ($1, $2, $3, $4, 'especes')`, [f, s.entA, client, montant]);
+      if (await payer(35000)) return true;
+      if (!(await payer(2000))) throw new Error('acompte de 2 000 refusé à tort');
+      if (await payer(2000)) return true;
+      if (!(await payer(1500))) throw new Error('solde exact de 1 500 refusé à tort');
+      return payer(1);
+    },
+  },
+  {
+    id: 'facture-emise-en-double',
+    titre: 'Le gérant émet une seconde facture « émise » pour un abonné qui en a déjà une en attente',
+    async jouer(db, s) {
+      if (!(await avec0020(db))) return false;
+      const client = await clientNeufA(db, s, 'Foyer deux factures');
+      const emettre = () => accepte(db, s.gerantA, `insert into public.factures (entreprise_id, client_id, periode_debut, periode_fin, montant_fcfa, echeance)
+        values ($1, $2, current_date, current_date + 30, 3500, current_date + 7)`, [s.entA, client]);
+      if (!(await emettre())) throw new Error('première facture refusée à tort');
+      return emettre();
+    },
+  },
+  {
+    id: 'rattachement-force-brute-compte',
+    titre: 'Un compte essaie les téléphones un à un pour s’approprier la fiche d’un abonné (code lu sur l’étiquette)',
+    async jouer(db, s) {
+      if (!(await avec0021(db))) return false;
+      const fiche = await ficheARattacher(db, s, 'Foyer convoité');
+      const pirate = await creerCompte(db, `pirate.${Date.now()}@test.cm`);
+      for (let i = 0; i < 5; i++) {
+        if ((await rattacher(db, pirate, fiche.code, `6990000${10 + i}`)) === fiche.id) return true;
+      }
+      // Sixième essai, cette fois avec le bon téléphone : il doit être bloqué.
+      return (await rattacher(db, pirate, fiche.code, '677000999')) === fiche.id;
+    },
+  },
+  {
+    id: 'rattachement-force-brute-comptes',
+    titre: 'Plusieurs comptes se relaient sur le même code pour contourner la limite par compte',
+    async jouer(db, s) {
+      if (!(await avec0021(db))) return false;
+      const fiche = await ficheARattacher(db, s, 'Foyer convoité bis');
+      for (let c = 0; c < 2; c++) {
+        const pirate = await creerCompte(db, `pirate.${c}.${Date.now()}@test.cm`);
+        for (let i = 0; i < 5; i++) {
+          if ((await rattacher(db, pirate, fiche.code, `6980000${10 + i}`)) === fiche.id) return true;
+        }
+      }
+      const troisieme = await creerCompte(db, `pirate.3.${Date.now()}@test.cm`);
+      return (await rattacher(db, troisieme, fiche.code, '677000999')) === fiche.id;
+    },
+  },
+  {
+    id: 'rattachement-essais-autrui',
+    titre: 'Un autre précollecteur, un abonné ou un visiteur lit la trace des essais de rattachement',
+    async jouer(db, s) {
+      if (!(await avec0021(db))) return false;
+      const fiche = await ficheARattacher(db, s, 'Foyer tracé');
+      const curieux = await creerCompte(db, `curieux.${Date.now()}@test.cm`);
+      await rattacher(db, curieux, fiche.code, '600000000');
+      for (const qui of [s.gerantB, s.menage, 'anon']) {
+        let n = 0;
+        try {
+          n = await comme(db, qui, (tx) => valeur(tx, `select count(*)::int from public.rattachements_essais where code = $1`, [fiche.code]));
+        } catch {
+          n = 0;
+        }
+        if (n > 0) return true;
+      }
+      return accepte(db, s.gerantA, `insert into public.rattachements_essais (user_id, code) values ($1, 'MKT-FAUX')`, [s.gerantA]);
+    },
+  },
 ];
 
 /** Migration 0014 (facture inaltérable, charte) présente dans la base ? */
@@ -997,9 +1302,10 @@ export const PARCOURS = [
   {
     titre: 'Le gérant annule une facture émise, change le statut d’un incident, modifie une fiche',
     async jouer(db, s) {
+      const client = await clientNeufA(db, s, 'Foyer facture annulée');
       await comme(db, s.gerantA, async (tx) => {
         const f = await valeur(tx, `insert into public.factures (entreprise_id, client_id, periode_debut, periode_fin, montant_fcfa, echeance)
-          values ($1, $2, current_date, current_date + 30, 3500, current_date + 7) returning id`, [s.entA, s.clientA]);
+          values ($1, $2, current_date, current_date + 30, 3500, current_date + 7) returning id`, [s.entA, client]);
         await tx.query(`update public.factures set statut = 'annulee' where id = $1`, [f]);
         await tx.query(`update public.incidents_precollecte set statut = 'resolu' where id = $1`, [s.incidentA]);
         await tx.query(`update public.clients set nom = 'Foyer A modifié', telephone = '677112233' where id = $1`, [s.clientA]);
@@ -1366,6 +1672,76 @@ export const PARCOURS = [
     },
   },
   {
+    titre: 'Demande de devis : deux précollecteurs vérifiés proposent, l’abonné refuse l’un et accepte l’autre ; il devient client à ce tarif',
+    async jouer(db, s) {
+      if (!(await avec0018(db))) return;
+      await secteurValide(db, s.entA, s.yde3);
+      await secteurValide(db, s.entB, s.yde3);
+      await devisOuverts(db, true);
+      const { u, d } = await abonneAvecDemande(db, s.yde3);
+      try {
+        // Une seule demande ouverte à la fois.
+        if (await accepte(db, u, `select public.deposer_demande_devis($1::jsonb)`, [demandeDevis(s.yde3)])) throw new Error('deux demandes ouvertes');
+        const dA = await comme(db, s.gerantA, (tx) => valeur(tx, `select public.proposer_devis($1, 5000, 1, 3, true, 50, 'Passage le matin')`, [d]));
+        const dB = await comme(db, s.gerantB, (tx) => valeur(tx, `select public.proposer_devis($1, 4500, 1, 3)`, [d]));
+        // Le précollecteur corrige son devis tant qu'il n'a pas de réponse.
+        await comme(db, s.gerantA, (tx) => tx.query(`select public.proposer_devis($1, 4800, 1, 3, true, 50, 'Passage le matin')`, [d]));
+        const recus = await comme(db, u, async (tx) => (await tx.query(`select devis_id, tarif_fcfa, entreprise_nom, statut from public.mes_devis()`)).rows);
+        if (recus.map((r) => r.tarif_fcfa).join() !== '4500,4800' || !recus[0].entreprise_nom.startsWith('Entreprise B') || !recus[1].entreprise_nom.startsWith('Entreprise A')) {
+          throw new Error(JSON.stringify(recus));
+        }
+        await comme(db, u, (tx) => tx.query(`select public.refuser_devis($1)`, [dB]));
+        if ((await valeur(db, `select statut from public.demandes_devis where id = $1`, [d])) !== 'devis_recu') throw new Error('demande refermée après un seul refus');
+        const client = await comme(db, u, (tx) => valeur(tx, `select public.accepter_devis($1)`, [dA]));
+        const c = (await db.query(`select entreprise_id, user_id, nom, telephone, adresse, tarif_fcfa, facturation_mois, passages_semaine, sacs_inclus, sacs_volume_litres, statut, zone_id
+                                    from public.clients where id = $1`, [client])).rows[0];
+        if (c.entreprise_id !== s.entA || c.user_id !== u || c.tarif_fcfa !== 4800 || c.passages_semaine !== 3 || !c.sacs_inclus
+            || c.sacs_volume_litres !== 50 || c.statut !== 'actif' || c.adresse !== 'Portail rouge, face à la station' || c.zone_id !== s.zone) {
+          throw new Error(JSON.stringify(c));
+        }
+        const statuts = (await db.query(`select id, statut from public.devis where demande_id = $1 order by tarif_fcfa`, [d])).rows.map((r) => r.statut).join();
+        if (statuts !== 'refuse,accepte') throw new Error(`devis : ${statuts}`);
+        // Le précollecteur retenu voit désormais son client, nom et téléphone compris ; l'autre non.
+        const voitA = await comme(db, s.gerantA, (tx) => valeur(tx, `select count(*)::int from public.clients where id = $1 and telephone = '699001122'`, [client]));
+        const voitB = await comme(db, s.gerantB, (tx) => valeur(tx, `select count(*)::int from public.clients where id = $1`, [client]));
+        if (voitA !== 1 || voitB !== 0) throw new Error(`fiche visible : A ${voitA}, B ${voitB}`);
+        const vue = (await comme(db, s.gerantA, async (tx) => (await tx.query(`select plan_prix, plan_duree_mois from public.v_clients_statut where id = $1`, [client])).rows))[0];
+        if (vue?.plan_prix !== 4800 || vue?.plan_duree_mois !== 1) throw new Error(`vue : ${JSON.stringify(vue)}`);
+      } finally {
+        await devisOuverts(db, false);
+        await effacerDemande(db, d);
+        await secteurAnnule(db, [s.entA, s.entB], s.yde3);
+      }
+    },
+  },
+  {
+    titre: 'Liste d’attente : la demande attend le lancement, le précollecteur vérifié la voit sans pouvoir répondre ; l’abonné la retire',
+    async jouer(db, s) {
+      if (!(await avec0018(db))) return;
+      await secteurValide(db, s.entA, s.yde3);
+      await devisOuverts(db, false);
+      // Commune obligatoire depuis 20261111000019 : Douala I, où A ne travaille pas.
+      const commune = (await avec0019(db)) ? s.dla1 : null;
+      const { u, d } = await abonneAvecDemande(db, s.yde3, { commune_id: commune, quartier: 'Ekounou', lat: null, lng: null, position_sur_place: true });
+      try {
+        // Hors de ses communes, le quartier desservi suffit.
+        await comme(db, s.gerantA, (tx) => tx.query(`select public.mettre_a_jour_ma_vitrine(null, array['Ékounou'])`));
+        const vue = (await comme(db, s.gerantA, async (tx) => (await tx.query(`select * from public.demandes_devis_ouvertes() where id = $1`, [d])).rows))[0];
+        if (!vue || vue.categorie !== 'commerce' || vue.passages_semaine !== 3 || vue.details.type_commerce !== 'boulangerie') throw new Error(JSON.stringify(vue));
+        let message = '';
+        await comme(db, s.gerantA, (tx) => tx.query(`select public.proposer_devis($1, 3000, 1, 2)`, [d])).catch((e) => { message = e.message; });
+        if (!/lancement officiel/.test(message)) throw new Error(`devis avant le lancement : ${message || 'accepté'}`);
+        if ((await valeur(db, `select position_sur_place from public.demandes_devis where id = $1`, [d])) !== false) throw new Error('« sur place » sans position');
+        await comme(db, u, (tx) => tx.query(`select public.annuler_demande_devis()`));
+        if ((await valeur(db, `select statut from public.demandes_devis where id = $1`, [d])) !== 'annulee') throw new Error('demande non retirée');
+      } finally {
+        await comme(db, s.gerantA, (tx) => tx.query(`select public.mettre_a_jour_ma_vitrine(null, '{}')`));
+        await effacerDemande(db, d);
+        await secteurAnnule(db, [s.entA], s.yde3);
+      }
+    },
+  },
+  {
     titre: 'Migration 0015 rejouée : comptes « enterprise » et « collecteur » convertis en ménage, rôle d’origine gardé, centre affiné conservé',
     async jouer(db) {
       const sql = migration('20261019000015');
@@ -1565,13 +1941,15 @@ export const PARCOURS = [
       if (!(await avec0014(db))) return;
       await comme(db, s.gerantA, (tx) => tx.query(`update public.entreprises set niu = 'M012345678901A', rccm = 'RC/YAO/2026/B/0001', adresse_fiscale = 'BP 100 Yaoundé' where id = $1`, [s.entA]));
       await comme(db, s.admin, (tx) => tx.query(`update public.parametres_plateforme set valeur = '0.1925' where cle = 'facturation_tva_taux'`));
+      const client = await clientNeufA(db, s, 'Foyer conforme');
+      const code = await valeur(db, `select code from public.clients where id = $1`, [client]);
       const f = await comme(db, s.gerantA, async (tx) => (await tx.query(
         `insert into public.factures (entreprise_id, client_id, periode_debut, periode_fin, montant_fcfa, echeance)
          values ($1, $2, current_date, current_date + 30, 3500, current_date + 7)
-         returning id, montant_ht_fcfa, montant_tva_fcfa, tva_taux, emetteur, destinataire`, [s.entA, s.clientA])).rows[0]);
+         returning id, montant_ht_fcfa, montant_tva_fcfa, tva_taux, emetteur, destinataire`, [s.entA, client])).rows[0]);
       await comme(db, s.admin, (tx) => tx.query(`update public.parametres_plateforme set valeur = '0' where cle = 'facturation_tva_taux'`));
       if (f.montant_ht_fcfa !== 2935 || f.montant_tva_fcfa !== 565 || Number(f.tva_taux) !== 0.1925) throw new Error(JSON.stringify(f));
-      if (f.emetteur.niu !== 'M012345678901A' || f.emetteur.mention_tva !== 'TVA non applicable' || f.destinataire.code !== s.codeA) {
+      if (f.emetteur.niu !== 'M012345678901A' || f.emetteur.mention_tva !== 'TVA non applicable' || f.destinataire.code !== code) {
         throw new Error(JSON.stringify({ emetteur: f.emetteur, destinataire: f.destinataire }));
       }
       // L'entreprise change de NIU : la facture déjà émise garde l'ancien.
@@ -1583,9 +1961,10 @@ export const PARCOURS = [
     titre: 'Annulation tracée : motif, date et auteur gardés',
     async jouer(db, s) {
       if (!(await avec0014(db))) return;
+      const client = await clientNeufA(db, s, 'Foyer annulation tracée');
       const id = await comme(db, s.gerantA, async (tx) => {
         const f = await valeur(tx, `insert into public.factures (entreprise_id, client_id, periode_debut, periode_fin, montant_fcfa, echeance)
-          values ($1, $2, current_date, current_date + 30, 3500, current_date + 7) returning id`, [s.entA, s.clientA]);
+          values ($1, $2, current_date, current_date + 30, 3500, current_date + 7) returning id`, [s.entA, client]);
         await tx.query(`update public.factures set statut = 'annulee', motif_annulation = '  Doublon de facture  ', annulee_par = $2 where id = $1`, [f, s.victime]);
         return f;
       });
@@ -1771,6 +2150,161 @@ export const PARCOURS = [
       if (avant !== apres) throw new Error(`avant ${avant}\naprès ${apres}`);
       const ko = resultats.at(-1).rows.filter((r) => r.resultat !== 'OK');
       if (ko.length) throw new Error(JSON.stringify(ko));
+    },
+  },
+  // Tout à la fin : reprend les formules du jeu de données en tarifs, et les demandes d'abonnement en attente.
+  {
+    titre: 'Migration 0018 rejouée : tarifs repris des formules à l’identique, demandes en attente reprises, rien ne bouge au second passage ; contrôle « OK »',
+    async jouer(db) {
+      const sql = migration('20261110000018');
+      if (!sql) return;
+      const enAttente = (await db.query(`select da.nom from public.demandes_abonnement da
+        where da.statut = 'en_attente'
+          and not exists (select 1 from public.clients c where c.user_id = da.user_id and c.statut <> 'resilie')
+        order by da.nom`)).rows.map((r) => r.nom);
+      const premier = await db.exec(sql);
+      const ecarts = await valeur(db, `select count(*)::int from public.clients c join public.plans_tarifaires p on p.id = c.plan_id
+                                        where c.tarif_fcfa is distinct from p.prix_fcfa or c.facturation_mois <> p.duree_mois`);
+      if (ecarts) throw new Error(`${ecarts} tarif(s) différent(s) de la formule`);
+      const reprises = (await db.query(`select nom from public.demandes_devis
+        where statut = 'en_attente' and categorie = 'residentiel' and nom = any($1) order by nom`, [enAttente])).rows.map((r) => r.nom);
+      if (reprises.join() !== enAttente.join()) throw new Error(`demandes reprises : ${reprises.join()} / attendues : ${enAttente.join()}`);
+      if ((await valeur(db, `select count(*)::int from public.demandes_abonnement where statut = 'en_attente'`)) !== 0) throw new Error('anciennes demandes encore en attente');
+      const photo = async () => JSON.stringify((await db.query(`select
+        (select string_agg(id || ':' || coalesce(tarif_fcfa::text, '-') || ':' || facturation_mois, ',' order by id) from public.clients) as clients,
+        (select string_agg(id || ':' || statut, ',' order by id) from public.demandes_devis) as demandes,
+        (select string_agg(id || ':' || statut, ',' order by id) from public.demandes_abonnement) as anciennes`)).rows[0]);
+      const avant = await photo();
+      const second = await db.exec(sql);
+      if ((await photo()) !== avant) throw new Error('le second passage a modifié les données');
+      for (const r of [premier, second]) {
+        const ko = r.at(-1).rows.filter((x) => x.resultat !== 'OK');
+        if (ko.length) throw new Error(JSON.stringify(ko));
+      }
+    },
+  },
+  // Le rejeu de 0018 vient de remettre ses versions des fonctions : 0019 les rétablit.
+  {
+    titre: 'Migration 0019 rejouée (après 0018) : routage des devis rétabli, contrôle « OK » sur les lignes 1 à 3, deux fois',
+    async jouer(db) {
+      const sql = migration('20261111000019');
+      if (!sql) return;
+      for (let passage = 0; passage < 2; passage++) {
+        const controle = (await db.exec(sql)).at(-1).rows;
+        const ko = controle.filter((r, i) => i < 3 && r.resultat !== 'OK');
+        if (ko.length) throw new Error(JSON.stringify(ko));
+      }
+    },
+  },
+  {
+    titre: 'Devis : une demande « Nsam » arrive au précollecteur de « Nsam Efoulan », comme le montre l’annuaire, même hors de ses communes ; « Mvog-Mbi » non',
+    async jouer(db, s) {
+      if (!(await avec0019(db))) return;
+      await db.query(`update public.entreprises set dossier_statut = 'valide', quartiers = '{"Nsam Efoulan"}' where id = $1`, [s.entA]);
+      // Douala I : aucune commune d'activité de A, seul le quartier compte.
+      const { d } = await abonneAvecDemande(db, s.dla1);
+      const loin = await abonneAvecDemande(db, s.dla1, { quartier: 'Mvog-Mbi' });
+      try {
+        const annuaire = await comme(db, 'anon', async (tx) => (await tx.query(`select id from public.annuaire_precollecteurs('Nsam')`)).rows.map((r) => r.id));
+        if (!annuaire.includes(s.entA)) throw new Error('annuaire : le précollecteur de « Nsam Efoulan » absent pour « Nsam »');
+        const recues = await comme(db, s.gerantA, async (tx) => (await tx.query(`select id from public.demandes_devis_ouvertes()`)).rows.map((r) => r.id));
+        if (!recues.includes(d)) throw new Error('demande « Nsam » non reçue par le précollecteur de « Nsam Efoulan »');
+        if (recues.includes(loin.d)) throw new Error('demande « Mvog-Mbi » reçue à tort');
+      } finally {
+        await effacerDemande(db, d);
+        await effacerDemande(db, loin.d);
+        await db.query(`update public.entreprises set dossier_statut = 'incomplet', quartiers = '{}' where id = $1`, [s.entA]);
+      }
+    },
+  },
+  {
+    titre: 'Devis sans destinataire : l’équipe MyKlinTown le voit et précise la commune ; le précollecteur vérifié qui y travaille le reçoit',
+    async jouer(db, s) {
+      if (!(await avec0019(db))) return;
+      const yde2 = await valeur(db, `select id from public.communes where code = 'YDE2'`);
+      const { d } = await abonneAvecDemande(db, yde2);
+      await secteurValide(db, s.entD, s.dla1);
+      try {
+        const liste = async () => comme(db, s.admin, async (tx) => (await tx.query(`select id, precollecteurs_secteur from public.demandes_devis_a_orienter()`)).rows);
+        if (!(await liste()).some((r) => r.id === d)) throw new Error('demande sans destinataire absente de la liste de l’équipe');
+        await comme(db, s.admin, (tx) => tx.query(`select public.orienter_demande_devis($1, p_commune => $2)`, [d, s.dla1]));
+        const recue = await comme(db, s.gerantD, (tx) => valeur(tx, `select count(*)::int from public.demandes_devis_ouvertes() where id = $1`, [d]));
+        if (recue !== 1) throw new Error('demande orientée vers Douala I non reçue par son précollecteur vérifié');
+        if ((await liste()).some((r) => r.id === d)) throw new Error('demande orientée encore dans la liste de l’équipe');
+      } finally {
+        await effacerDemande(db, d);
+        await secteurAnnule(db, [s.entD], s.dla1);
+      }
+    },
+  },
+  {
+    titre: 'Migration 0020 rejouée : contrôle « OK » sur les lignes 1 à 3, deux fois ; arrêt net s’il existe déjà deux factures émises',
+    async jouer(db, s) {
+      const sql = migration('20261112000020');
+      if (!sql) return;
+      for (let passage = 0; passage < 2; passage++) {
+        const controle = (await db.exec(sql)).at(-1).rows;
+        const ko = controle.filter((r, i) => i < 3 && r.resultat !== 'OK');
+        if (ko.length) throw new Error(JSON.stringify(ko));
+      }
+      // Base où deux factures émises coexistent déjà (avant l'index) : la migration s'arrête sans rien modifier.
+      const client = await clientNeufA(db, s, 'Foyer doublon ancien');
+      await db.exec(`drop index public.factures_une_emise_par_client`);
+      try {
+        for (let i = 0; i < 2; i++) {
+          await db.query(`insert into public.factures (entreprise_id, client_id, periode_debut, periode_fin, montant_fcfa, echeance)
+            values ($1, $2, current_date, current_date + 30, 3500, current_date + 7)`, [s.entA, client]);
+        }
+        let message = '';
+        await db.exec(sql).catch((e) => { message = e.message; });
+        // La migration s'est arrêtée dans sa transaction : on la referme, comme le SQL Editor.
+        await db.exec(`rollback`).catch(() => {});
+        if (!/plusieurs factures « émises »/.test(message)) throw new Error(`migration passée malgré les doublons : ${message || 'aucune erreur'}`);
+        if (await avec0020(db)) throw new Error('index créé malgré les doublons');
+      } finally {
+        await db.query(`update public.factures set statut = 'annulee', motif_annulation = 'Doublon du banc' where client_id = $1 and statut = 'emise'`, [client]);
+        await db.exec(sql);
+      }
+    },
+  },
+  {
+    titre: 'Encaissement : la clé de service (paiement en ligne confirmé) et les espèces de terrain gardent leurs propres règles',
+    async jouer(db, s) {
+      if (!(await avec0020(db))) return;
+      const client = await clientNeufA(db, s, 'Foyer paiement serveur');
+      const f = await comme(db, s.gerantA, (tx) => valeur(tx, `insert into public.factures (entreprise_id, client_id, periode_debut, periode_fin, montant_fcfa, echeance)
+        values ($1, $2, current_date, current_date + 30, 3500, current_date + 7) returning id`, [s.entA, client]));
+      // Espèces de terrain : `encaisser_especes` plafonne déjà au reste dû.
+      await comme(db, s.gerantA, (tx) => tx.query(`select public.encaisser_especes($1, 2000)`, [client]));
+      // Argent déjà reçu par Notch Pay : enregistré même au-delà du reste (écrit par le serveur).
+      await comme(db, 'service', (tx) => tx.query(`insert into public.paiements_clients (facture_id, entreprise_id, client_id, montant_fcfa, methode, reference)
+        values ($1, $2, $3, 3500, 'mtn_momo', 'NP-BANC')`, [f, s.entA, client]));
+      if ((await valeur(db, `select statut from public.factures where id = $1`, [f])) !== 'payee') throw new Error('facture non réglée');
+    },
+  },
+  {
+    titre: 'Migration 0021 rejouée : contrôle « OK » sur les lignes 1 à 3, deux fois',
+    async jouer(db) {
+      const sql = migration('20261113000021');
+      if (!sql) return;
+      for (let passage = 0; passage < 2; passage++) {
+        const controle = (await db.exec(sql)).at(-1).rows;
+        const ko = controle.filter((r, i) => i < 3 && r.resultat !== 'OK');
+        if (ko.length) throw new Error(JSON.stringify(ko));
+      }
+    },
+  },
+  {
+    titre: 'Rattachement : un essai refusé est tracé et vu par le gérant de la fiche ; le bon téléphone rattache ensuite',
+    async jouer(db, s) {
+      if (!(await avec0021(db))) return;
+      const fiche = await ficheARattacher(db, s, 'Foyer qui se trompe');
+      const abonne = await creerCompte(db, `abonne.rattache.${Date.now()}@test.cm`);
+      if ((await rattacher(db, abonne, fiche.code, '677000998')) !== null) throw new Error('essai faux : NULL attendu');
+      const vus = await comme(db, s.gerantA, (tx) => valeur(tx, `select count(*)::int from public.rattachements_essais where code = $1 and not reussi`, [fiche.code]));
+      if (vus !== 1) throw new Error(`le gérant voit ${vus} essai(s) refusé(s) au lieu de 1`);
+      if ((await rattacher(db, abonne, fiche.code.toLowerCase(), '+237 677 000 999')) !== fiche.id) throw new Error('bon téléphone refusé');
+      if ((await valeur(db, `select user_id from public.clients where id = $1`, [fiche.id])) !== abonne) throw new Error('fiche non rattachée');
     },
   },
 ];

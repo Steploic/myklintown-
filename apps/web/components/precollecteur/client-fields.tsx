@@ -1,44 +1,11 @@
 import { LocationPicker } from '@/components/map/location-picker';
-import { fcfa } from '@/lib/format';
-import type { ClientStatut, Plan, Zone } from '@/lib/types';
-
-/** Cartes de formule : on choisit DANS la grille, on ne saisit jamais un prix. */
-export function PlanPicker({ plans, defaut, name = 'plan_id' }: { plans: Plan[]; defaut?: string | null; name?: string }) {
-  return (
-    <fieldset>
-      <legend className="field-label">Formule (grille tarifaire MyKlinTown) *</legend>
-      <div className="grid gap-2 sm:grid-cols-3">
-        {plans.map((p, i) => (
-          <label
-            key={p.id}
-            className="relative flex cursor-pointer flex-col rounded-lg border border-input bg-surface p-3 transition-colors has-[:checked]:border-brand-green has-[:checked]:bg-brand-green/5 has-[:checked]:ring-1 has-[:checked]:ring-brand-green"
-          >
-            <input
-              type="radio"
-              name={name}
-              value={p.id}
-              required
-              defaultChecked={defaut ? defaut === p.id : i === 0}
-              className="peer sr-only"
-            />
-            <span className="text-body-sm font-semibold text-brand-ink">{p.nom}</span>
-            <span className="num text-h2-sm font-bold text-brand-green">{fcfa(p.prix_fcfa)}</span>
-            <span className="text-small text-muted-foreground">
-              {p.duree_mois === 1 ? 'par mois' : `pour ${p.duree_mois} mois`} · {p.passages_semaine} passages / sem.
-            </span>
-          </label>
-        ))}
-      </div>
-    </fieldset>
-  );
-}
+import { TarifFields } from '@/components/precollecteur/tarif-fields';
+import type { ClientStatut, Zone } from '@/lib/types';
 
 export function ClientFields({
-  plans,
   zones,
   client,
 }: {
-  plans: Plan[];
   zones: Zone[];
   client?: ClientStatut | null;
 }) {
@@ -64,7 +31,18 @@ export function ClientFields({
         </div>
       </div>
 
-      <PlanPicker plans={plans} defaut={client?.plan_id} />
+      <fieldset>
+        <legend className="field-label">Tarif convenu avec l’abonné</legend>
+        <TarifFields
+          defaut={{
+            tarif: client?.tarif_fcfa ?? client?.plan_prix ?? null,
+            mois: client?.facturation_mois ?? client?.plan_duree_mois ?? 1,
+            passages: client?.passages_semaine,
+            sacs: client?.sacs_inclus,
+            volume: client?.sacs_volume_litres,
+          }}
+        />
+      </fieldset>
 
       <div>
         <p className="field-label">Localisation du domicile</p>

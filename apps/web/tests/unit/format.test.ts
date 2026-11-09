@@ -5,6 +5,7 @@ import {
   dateFr,
   fcfa,
   isoJour,
+  jourDouala,
   joursEntre,
   messageEcheance,
   messageRelance,
@@ -58,7 +59,17 @@ describe('dates (AAAA-MM-JJ)', () => {
     expect(joursEntre('2026-10-24', '2026-10-26')).toBe(2);
   });
   it('isoJour renvoie le format attendu', () => {
-    expect(isoJour(new Date(2026, 8, 5))).toBe('2026-09-05');
+    expect(isoJour(new Date(Date.UTC(2026, 8, 5, 12)))).toBe('2026-09-05');
+  });
+  // Revue du 09/11/2026 : le serveur (UTC) donnait encore la veille entre 0 h et 1 h à Douala.
+  it('isoJour et jourDouala donnent le jour à Douala, pas celui du serveur', () => {
+    expect(isoJour(new Date('2026-09-04T23:30:00Z'))).toBe('2026-09-05');
+    expect(isoJour(new Date('2026-09-04T22:59:00Z'))).toBe('2026-09-04');
+    expect(jourDouala('2026-09-30T23:30:00Z')).toBe('2026-10-01');
+    expect(jourDouala('2026-12-31T23:00:00Z')).toBe('2027-01-01');
+  });
+  it('ajouterMois garde la règle des fins de mois (31 janvier + 1 mois → 3 mars)', () => {
+    expect(ajouterMois('2026-01-31', 1)).toBe('2026-03-03');
   });
   it('dateFr ne décale pas la date d’un jour (fuseau)', () => {
     expect(dateFr('2026-10-01')).toMatch(/^1 oct/);

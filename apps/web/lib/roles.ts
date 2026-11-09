@@ -74,11 +74,15 @@ export function isProtectedPath(pathname: string): boolean {
  * la RLS l'aurait empêché de lire quoi que ce soit, mais l'interface s'ouvrait.
  *
  * `/settings` est commun à tous : chacun y gère son propre compte.
+ *
+ * L'employé garde l'espace abonné (revue du 09/11/2026) : un abonné qui
+ * rejoignait l'équipe de son précollecteur perdait l'accès à ses factures et à
+ * ses passages. La base ne lui montre là que SA fiche, comme à tout abonné.
  */
 export const ROLE_ALLOWED_PREFIXES: Record<UserRole, readonly string[]> = {
   citoyen: ['/citoyen', '/settings'],
   precollecteur: ['/precollecteur', '/settings'],
-  employe: ['/employe', '/settings'],
+  employe: ['/employe', '/citoyen', '/settings'],
   collecteur: ['/settings'],
   mairie: ['/dashboard', '/settings'],
   enterprise: ['/settings'],
