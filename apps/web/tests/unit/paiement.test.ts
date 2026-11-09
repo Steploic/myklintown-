@@ -115,7 +115,17 @@ describe('choix du fournisseur', () => {
     expect(fournisseurActif()?.nom).toBe('notchpay');
     vi.stubEnv('NOTCHPAY_PUBLIC_KEY', 'pk.live_x');
     vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', BASE_PROD);
+    vi.stubEnv('VERCEL_ENV', 'production');
     expect(fournisseurActif()?.nom).toBe('notchpay');
+  });
+  // Revue du 09/11/2026 : une préversion vise la vraie base mais exécute du code non relu.
+  it('clé réelle : rien sur une préversion, ni sur un poste local branché sur la vraie base', () => {
+    vi.stubEnv('NOTCHPAY_PUBLIC_KEY', 'pk.live_x');
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', BASE_PROD);
+    for (const env of ['preview', 'development', '']) {
+      vi.stubEnv('VERCEL_ENV', env);
+      expect(fournisseurActif()).toBeNull();
+    }
   });
   it('aucun paiement si la clé ne va pas avec la base (test sur la vraie, réelle sur une autre)', () => {
     vi.stubEnv('NOTCHPAY_PUBLIC_KEY', 'pk_test.x');
@@ -133,10 +143,12 @@ describe('clé Notch Pay et base', () => {
     expect(cleCompatibleAvecBase('pk_test_abc', BASE_TEST)).toBe(true);
     expect(cleCompatibleAvecBase('pk_test.abc', BASE_PROD)).toBe(false);
   });
-  it('clé réelle : la production seulement', () => {
-    expect(cleCompatibleAvecBase('pk.abc', BASE_PROD)).toBe(true);
-    expect(cleCompatibleAvecBase('pk.abc', BASE_TEST)).toBe(false);
-    expect(cleCompatibleAvecBase('pk.abc', '')).toBe(false);
+  it('clé réelle : la vraie base, depuis le déploiement de production seulement', () => {
+    expect(cleCompatibleAvecBase('pk.abc', BASE_PROD, 'production')).toBe(true);
+    expect(cleCompatibleAvecBase('pk.abc', BASE_PROD, 'preview')).toBe(false);
+    expect(cleCompatibleAvecBase('pk.abc', BASE_PROD)).toBe(false);
+    expect(cleCompatibleAvecBase('pk.abc', BASE_TEST, 'production')).toBe(false);
+    expect(cleCompatibleAvecBase('pk.abc', '', 'production')).toBe(false);
   });
 });
 

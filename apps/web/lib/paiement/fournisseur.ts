@@ -98,20 +98,28 @@ export const simulation: Fournisseur = {
 const REF_BASE_PRODUCTION = 'xglomngvjsgbwobiwfqp';
 
 /**
- * Clé de TEST seulement hors de la vraie base, clé réelle seulement sur elle :
- * sinon un paiement de test « réussi » réglerait une vraie facture, ou de
- * l'argent réel serait enregistré dans une base de test.
+ * Clé de TEST seulement hors de la vraie base : sinon un paiement de test
+ * « réussi » réglerait une vraie facture.
+ *
+ * Clé RÉELLE seulement sur la vraie base, et seulement depuis le déploiement de
+ * PRODUCTION (`VERCEL_ENV`) : une préversion (chaque PR, Dependabot compris)
+ * vise la même base mais exécute du code non relu, comme un poste local dont le
+ * .env.local vise la production. Une clé posée par erreur sur l'environnement
+ * « Preview » de Vercel n'y ouvre donc rien (revue du 09/11/2026).
  */
-export function cleCompatibleAvecBase(cle: string, urlSupabase: string): boolean {
+export function cleCompatibleAvecBase(cle: string, urlSupabase: string, environnementVercel?: string): boolean {
   const cleDeTest = /^pk_test[._]/.test(cle);
   const vraieBase = urlSupabase.includes(REF_BASE_PRODUCTION);
-  return cleDeTest ? !vraieBase : vraieBase;
+  if (cleDeTest) return !vraieBase;
+  return vraieBase && environnementVercel === 'production';
 }
 
 /** Le fournisseur en service, ou null si le paiement en ligne n'est pas configuré. */
 export function fournisseurActif(): Fournisseur | null {
   const cle = process.env.NOTCHPAY_PUBLIC_KEY;
-  if (cle) return cleCompatibleAvecBase(cle, process.env.NEXT_PUBLIC_SUPABASE_URL ?? '') ? notchPay : null;
+  if (cle) {
+    return cleCompatibleAvecBase(cle, process.env.NEXT_PUBLIC_SUPABASE_URL ?? '', process.env.VERCEL_ENV) ? notchPay : null;
+  }
   // La simulation ne s'allume jamais sur Vercel, ni en production NI sur une
   // préversion : une préversion partage la vraie base, et de faux paiements y
   // régleraient de vraies factures (audit du 11/10/2026). Poste local seulement,

@@ -139,8 +139,17 @@ export async function demarrerPaiement(input: {
 /**
  * Où en est ce paiement ? Interroge le fournisseur tant qu'il n'est pas
  * terminé, et enregistre le paiement (une seule fois) dès qu'il est réussi.
+ *
+ * `reverifier` (notification de Notch Pay) : interroge le fournisseur même si
+ * le paiement est déjà noté expiré, échoué ou annulé ici. L'expiration est NOTRE
+ * décision (10 min sans réponse) : un abonné qui valide plus tard sur son
+ * téléphone est bel et bien débité, et son paiement doit être enregistré (revue
+ * du 09/11/2026 ; auparavant, il ne l'était jamais).
  */
-export async function actualiserPaiement(reference: string): Promise<{ statut: StatutPaiementEnLigne; message: string | null } | null> {
+export async function actualiserPaiement(
+  reference: string,
+  { reverifier = false }: { reverifier?: boolean } = {},
+): Promise<{ statut: StatutPaiementEnLigne; message: string | null } | null> {
   const admin = clientService();
   const fournisseur = fournisseurActif();
   if (!admin) return null;
@@ -154,7 +163,8 @@ export async function actualiserPaiement(reference: string): Promise<{ statut: S
     statut: StatutPaiementEnLigne; message: string | null; created_at: string;
   }>(data);
   if (!t) return null;
-  if (STATUTS_FINAUX.includes(t.statut) || !t.fournisseur_reference || !fournisseur || fournisseur.nom !== t.fournisseur) {
+  const termine = STATUTS_FINAUX.includes(t.statut);
+  if (t.statut === 'reussi' || (termine && !reverifier) || !t.fournisseur_reference || !fournisseur || fournisseur.nom !== t.fournisseur) {
     return { statut: t.statut, message: t.message };
   }
 
@@ -164,7 +174,10 @@ export async function actualiserPaiement(reference: string): Promise<{ statut: S
   } catch {
     return { statut: t.statut, message: t.message }; // réseau : on retentera
   }
-  if (suite.statut === 'en_attente' && Date.now() - new Date(t.created_at).getTime() > DELAI_EXPIRATION_MS) {
+  if (termine) {
+    // Déjà noté terminé ici : seul un succès chez le fournisseur change quelque chose.
+    if (suite.statut !== 'reussi') return { statut: t.statut, message: t.message };
+  } else if (suite.statut === 'en_attente' && Date.now() - new Date(t.created_at).getTime() > DELAI_EXPIRATION_MS) {
     suite = { statut: 'expire', message: 'Aucune validation sur le téléphone : la demande a expiré.' };
   }
   if (suite.statut === 'reussi') {
@@ -186,7 +199,10 @@ export async function actualiserPaiement(reference: string): Promise<{ statut: S
   return { statut: suite.statut, message: suite.message ?? null };
 }
 
-/** Notification Notch Pay déjà authentifiée (signature vérifiée) : on revérifie le statut à la source. */
+/**
+ * Notification Notch Pay déjà authentifiée (signature vérifiée) : on revérifie
+ * le statut à la source, y compris pour un paiement déjà noté expiré ici.
+ */
 export async function traiterNotification(evenement: { type?: string; data?: Record<string, unknown> }) {
   const admin = clientService();
   if (!admin || !evenement.type?.startsWith('payment.')) return;
@@ -198,5 +214,5 @@ export async function traiterNotification(evenement: { type?: string; data?: Rec
     const { data } = await admin.from('paiements_en_ligne').select('reference').eq('fournisseur_reference', leurRef).maybeSingle();
     reference = row<{ reference: string }>(data)?.reference ?? null;
   }
-  if (reference) await actualiserPaiement(reference);
+  if (reference) await actualiserPaiement(reference, { reverifier: true });
 }
