@@ -264,6 +264,28 @@ export interface DevisRecu {
   entreprise_logo: string | null;
 }
 
+/**
+ * Demande de devis qu'aucun précollecteur vérifié ne reçoit (`demandes_devis_a_orienter`,
+ * équipe MyKlinTown seulement) : identité comprise, pour rappeler l'abonné.
+ */
+export interface DemandeAOrienter {
+  id: string;
+  created_at: string;
+  categorie: string;
+  nom: string;
+  telephone: string;
+  whatsapp: string | null;
+  commune_id: string | null;
+  commune: string | null;
+  quartier: string;
+  repere: string;
+  passages_semaine: number;
+  /** Précollecteur choisi par l'abonné, dont le dossier n'est plus vérifié. */
+  cible: string | null;
+  /** Précollecteurs qui travaillent dans ce secteur sans être encore vérifiés. */
+  precollecteurs_secteur: number;
+}
+
 /** Demande ouverte vue par un précollecteur vérifié (`demandes_devis_ouvertes`) : identité masquée. */
 export interface DemandeOuverte {
   id: string;

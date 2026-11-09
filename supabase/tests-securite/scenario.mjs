@@ -56,6 +56,8 @@ const avecCodes = (db) => valeur(db, `select to_regclass('public.codes_agrement'
 const avec0017 = (db) => valeur(db, `select to_regclass('public.entreprise_communes') is not null`);
 /** Migration 0018 (demandes de devis, tarif par abonné) présente dans la base ? */
 const avec0018 = (db) => valeur(db, `select to_regclass('public.demandes_devis') is not null`);
+/** Migration 0019 (routage des demandes de devis, demandes à orienter) présente dans la base ? */
+const avec0019 = (db) => valeur(db, `select to_regprocedure('public.demandes_devis_a_orienter()') is not null`);
 
 /** Une demande de devis complète (commerce de Yaoundé III), modifiable par `extra`. */
 const demandeDevis = (commune, extra = {}) => JSON.stringify({
@@ -1035,6 +1037,45 @@ export const ATTAQUES = [
       return (await valeur(db, `select tarif_fcfa from public.clients where id = $1`, [s.clientA])) === 1;
     },
   },
+  {
+    id: 'devis-sans-commune',
+    titre: 'Une demande de devis sans commune est enregistrée (elle pourrait n’arriver à personne)',
+    async jouer(db) {
+      if (!(await avec0019(db))) return false;
+      const u = await creerCompte(db, `sans.commune.${Date.now()}@test.cm`);
+      const enregistree = await accepte(db, u, `select public.deposer_demande_devis($1::jsonb)`, [demandeDevis(null)]);
+      await db.query(`delete from public.demandes_devis where user_id = $1`, [u]);
+      return enregistree;
+    },
+  },
+  {
+    id: 'devis-orientation-reservee',
+    titre: 'Un précollecteur, un abonné, la Mairie ou un visiteur voit les demandes à orienter, ou oriente une demande vers lui',
+    async jouer(db, s) {
+      if (!(await avec0019(db))) return false;
+      await secteurValide(db, s.entA, s.dla1);
+      // Yaoundé III : aucun précollecteur vérifié n'y travaille, la demande est à orienter.
+      const { d } = await abonneAvecDemande(db, s.yde3);
+      try {
+        for (const qui of [s.gerantA, s.menage, s.mairie, 'anon']) {
+          let vues = 0;
+          try {
+            vues = await comme(db, qui, async (tx) => (await tx.query(`select id from public.demandes_devis_a_orienter()`)).rows.length);
+          } catch {
+            vues = 0;
+          }
+          if (vues > 0) return true;
+          if (await accepte(db, qui, `select public.orienter_demande_devis($1, p_entreprise => $2)`, [d, s.entA])) return true;
+          if (await accepte(db, qui, `select public.orienter_demande_devis($1, p_commune => $2)`, [d, s.dla1])) return true;
+        }
+        const apres = (await db.query(`select commune_id, entreprise_cible from public.demandes_devis where id = $1`, [d])).rows[0];
+        return apres.entreprise_cible !== null || apres.commune_id !== s.yde3;
+      } finally {
+        await effacerDemande(db, d);
+        await secteurAnnule(db, [s.entA], s.dla1);
+      }
+    },
+  },
 ];
 
 /** Migration 0014 (facture inaltérable, charte) présente dans la base ? */
@@ -1571,9 +1612,11 @@ export const PARCOURS = [
       if (!(await avec0018(db))) return;
       await secteurValide(db, s.entA, s.yde3);
       await devisOuverts(db, false);
-      const { u, d } = await abonneAvecDemande(db, s.yde3, { commune_id: null, quartier: 'Ekounou', lat: null, lng: null, position_sur_place: true });
+      // Commune obligatoire depuis 20261111000019 : Douala I, où A ne travaille pas.
+      const commune = (await avec0019(db)) ? s.dla1 : null;
+      const { u, d } = await abonneAvecDemande(db, s.yde3, { commune_id: commune, quartier: 'Ekounou', lat: null, lng: null, position_sur_place: true });
       try {
-        // Sans commune, le quartier desservi suffit.
+        // Hors de ses communes, le quartier desservi suffit.
         await comme(db, s.gerantA, (tx) => tx.query(`select public.mettre_a_jour_ma_vitrine(null, array['Ékounou'])`));
         const vue = (await comme(db, s.gerantA, async (tx) => (await tx.query(`select * from public.demandes_devis_ouvertes() where id = $1`, [d])).rows))[0];
         if (!vue || vue.categorie !== 'commerce' || vue.passages_semaine !== 3 || vue.details.type_commerce !== 'boulangerie') throw new Error(JSON.stringify(vue));
@@ -2026,6 +2069,60 @@ export const PARCOURS = [
       for (const r of [premier, second]) {
         const ko = r.at(-1).rows.filter((x) => x.resultat !== 'OK');
         if (ko.length) throw new Error(JSON.stringify(ko));
+      }
+    },
+  },
+  // Le rejeu de 0018 vient de remettre ses versions des fonctions : 0019 les rétablit.
+  {
+    titre: 'Migration 0019 rejouée (après 0018) : routage des devis rétabli, contrôle « OK » sur les lignes 1 à 3, deux fois',
+    async jouer(db) {
+      const sql = migration('20261111000019');
+      if (!sql) return;
+      for (let passage = 0; passage < 2; passage++) {
+        const controle = (await db.exec(sql)).at(-1).rows;
+        const ko = controle.filter((r, i) => i < 3 && r.resultat !== 'OK');
+        if (ko.length) throw new Error(JSON.stringify(ko));
+      }
+    },
+  },
+  {
+    titre: 'Devis : une demande « Nsam » arrive au précollecteur de « Nsam Efoulan », comme le montre l’annuaire, même hors de ses communes ; « Mvog-Mbi » non',
+    async jouer(db, s) {
+      if (!(await avec0019(db))) return;
+      await db.query(`update public.entreprises set dossier_statut = 'valide', quartiers = '{"Nsam Efoulan"}' where id = $1`, [s.entA]);
+      // Douala I : aucune commune d'activité de A, seul le quartier compte.
+      const { d } = await abonneAvecDemande(db, s.dla1);
+      const loin = await abonneAvecDemande(db, s.dla1, { quartier: 'Mvog-Mbi' });
+      try {
+        const annuaire = await comme(db, 'anon', async (tx) => (await tx.query(`select id from public.annuaire_precollecteurs('Nsam')`)).rows.map((r) => r.id));
+        if (!annuaire.includes(s.entA)) throw new Error('annuaire : le précollecteur de « Nsam Efoulan » absent pour « Nsam »');
+        const recues = await comme(db, s.gerantA, async (tx) => (await tx.query(`select id from public.demandes_devis_ouvertes()`)).rows.map((r) => r.id));
+        if (!recues.includes(d)) throw new Error('demande « Nsam » non reçue par le précollecteur de « Nsam Efoulan »');
+        if (recues.includes(loin.d)) throw new Error('demande « Mvog-Mbi » reçue à tort');
+      } finally {
+        await effacerDemande(db, d);
+        await effacerDemande(db, loin.d);
+        await db.query(`update public.entreprises set dossier_statut = 'incomplet', quartiers = '{}' where id = $1`, [s.entA]);
+      }
+    },
+  },
+  {
+    titre: 'Devis sans destinataire : l’équipe MyKlinTown le voit et précise la commune ; le précollecteur vérifié qui y travaille le reçoit',
+    async jouer(db, s) {
+      if (!(await avec0019(db))) return;
+      const yde2 = await valeur(db, `select id from public.communes where code = 'YDE2'`);
+      const { d } = await abonneAvecDemande(db, yde2);
+      await secteurValide(db, s.entD, s.dla1);
+      try {
+        const liste = async () => comme(db, s.admin, async (tx) => (await tx.query(`select id, precollecteurs_secteur from public.demandes_devis_a_orienter()`)).rows);
+        if (!(await liste()).some((r) => r.id === d)) throw new Error('demande sans destinataire absente de la liste de l’équipe');
+        await comme(db, s.admin, (tx) => tx.query(`select public.orienter_demande_devis($1, p_commune => $2)`, [d, s.dla1]));
+        const recue = await comme(db, s.gerantD, (tx) => valeur(tx, `select count(*)::int from public.demandes_devis_ouvertes() where id = $1`, [d]));
+        if (recue !== 1) throw new Error('demande orientée vers Douala I non reçue par son précollecteur vérifié');
+        if ((await liste()).some((r) => r.id === d)) throw new Error('demande orientée encore dans la liste de l’équipe');
+      } finally {
+        await effacerDemande(db, d);
+        await secteurAnnule(db, [s.entD], s.dla1);
       }
     },
   },

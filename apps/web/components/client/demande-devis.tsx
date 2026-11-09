@@ -75,6 +75,7 @@ export function DemandeDevis({
     if (etape === 0 && !categorie) return setErreur('Choisissez le lieu à collecter.');
     if (etape === 1) {
       if (!nom.trim() || !telephone.trim()) return setErreur('Nom et téléphone sont nécessaires pour que le précollecteur vous contacte.');
+      if (!communeId) return setErreur('Choisissez votre arrondissement (commune) : la demande part aux précollecteurs qui y travaillent.');
       if (!quartier.trim()) return setErreur('Indiquez votre quartier.');
       if (!repere.trim()) return setErreur('Indiquez un repère précis : carrefour, bâtiment, couleur du portail…');
     }
@@ -199,8 +200,8 @@ export function DemandeDevis({
                   <input aria-label="Numéro WhatsApp" type="tel" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} className="field mt-2" placeholder="Numéro WhatsApp" />
                 )}
               </div>
-              <Champ id="dv-commune" label="Arrondissement (commune)">
-                <select id="dv-commune" value={communeId} onChange={(e) => setCommuneId(e.target.value)} className="field">
+              <Champ id="dv-commune" label="Arrondissement (commune) *">
+                <select id="dv-commune" required value={communeId} onChange={(e) => setCommuneId(e.target.value)} className="field">
                   <option value="">— Choisir —</option>
                   {communes.map((c) => (
                     <option key={c.id} value={c.id}>{c.nom}</option>
@@ -315,7 +316,10 @@ export function DemandeDevis({
                 </label>
               ))}
               {fiches && fiches.length === 0 && (
-                <p className="text-small text-muted-foreground">Aucun précollecteur vérifié n’est encore inscrit pour « {quartier} » : votre demande attendra le premier.</p>
+                <p className="text-small text-muted-foreground">
+                  Aucun précollecteur vérifié n’est encore inscrit pour « {quartier} » : votre demande part à ceux de votre
+                  commune ; s’il n’y en a pas encore, l’équipe MyKlinTown vous met en relation.
+                </p>
               )}
             </fieldset>
             <CaseDocuments id="dv-documents" checked={accepte} onChange={setAccepte} />

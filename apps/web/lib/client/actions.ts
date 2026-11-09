@@ -126,6 +126,7 @@ export async function deposerDemandeDevisAction(input: DemandeDevisInput): Promi
   if (!estCategorie(input.categorie)) return { error: 'Choisissez le type de lieu à collecter.' };
   if (!input.nom.trim()) return { error: 'Indiquez votre nom ou celui de la structure.' };
   if (!input.telephone.trim()) return { error: 'Indiquez un numéro de téléphone : le précollecteur vous appellera.' };
+  if (!input.communeId) return { error: 'Choisissez votre arrondissement (commune) : la demande part aux précollecteurs qui y travaillent.' };
   if (!input.quartier.trim()) return { error: 'Indiquez votre quartier.' };
   if (!input.repere.trim()) return { error: 'Indiquez un repère précis : carrefour, bâtiment, couleur du portail…' };
   if (!input.documentsAcceptes) return { error: MESSAGE_DOCUMENTS };

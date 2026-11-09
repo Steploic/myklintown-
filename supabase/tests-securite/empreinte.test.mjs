@@ -63,16 +63,17 @@ test('retouche à la main (droit rendu au visiteur anonyme) : DIFFÉRENT, avec l
   }
 });
 
-test('migration non jouée : ses objets sont signalés et rattachés à elle', async () => {
-  const sans = await creerBase({ exclure: ['20261110000018'] });
+test('dernière migration non jouée : ses objets sont signalés (absents ou d’une autre version) et rattachés à elle', async () => {
+  // La dernière : chaque migration exige les précédentes, on ne peut pas en sauter une au milieu.
+  const derniere = attendu.derniere;
+  const sans = await creerBase({ exclure: [derniere.slice(0, 14)] });
   try {
     const lignes = await executer(sans);
     const e = ecarts(lignes);
     assert.ok(e.length > 0);
-    assert.ok(e.every((l) => l.migration === '20261110000018_devis_tarif_abonne'), JSON.stringify(e.filter((l) => l.migration !== '20261110000018_devis_tarif_abonne')));
-    assert.ok(e.some((l) => l.etat === 'ABSENT' && l.categorie === 'table' && l.objet === 'demandes_devis'));
-    assert.ok(e.some((l) => l.etat === 'DIFFÉRENT' && l.categorie === 'table' && l.objet === 'v_clients_statut'));
-    assert.ok(lignes.some((l) => l.etat === 'À VÉRIFIER' && l.migration === '20261110000018_devis_tarif_abonne'));
+    assert.ok(e.every((l) => l.migration === derniere), JSON.stringify(e.filter((l) => l.migration !== derniere)));
+    assert.ok(e.some((l) => l.etat === 'ABSENT') || e.some((l) => l.etat === 'DIFFÉRENT'));
+    assert.ok(lignes.some((l) => l.etat === 'À VÉRIFIER' && l.migration === derniere));
     assert.ok(!lignes.some((l) => l.etat === 'OK'));
   } finally {
     await sans.close();
