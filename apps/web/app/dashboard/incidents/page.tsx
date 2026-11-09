@@ -1,7 +1,7 @@
 import { ShieldCheck } from 'lucide-react';
 import { PortalShell } from '@/components/portal-shell';
 import { EmptyState, PageHeader } from '@/components/ui/blocks';
-import { SubmitButton } from '@/components/ui/action-form';
+import { ActionForm, SubmitButton } from '@/components/ui/action-form';
 import { Preuve } from '@/components/ui/preuve';
 import { statutIncidentMairieAction } from '@/lib/mairie/actions';
 import { getSupabase, rows } from '@/lib/server';
@@ -54,11 +54,11 @@ export default async function IncidentsMairiePage() {
                   </p>
                 </div>
                 {i.statut !== 'resolu' && (
-                  <form action={statutIncidentMairieAction} className="shrink-0">
+                  <ActionForm action={statutIncidentMairieAction} className="shrink-0">
                     <input type="hidden" name="incident_id" value={i.id} />
                     <input type="hidden" name="statut" value="resolu" />
                     <SubmitButton variant="outline" pendingLabel="…">Marquer résolu</SubmitButton>
-                  </form>
+                  </ActionForm>
                 )}
               </li>
             );

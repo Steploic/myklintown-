@@ -3,7 +3,7 @@ import { Camera, ShieldCheck } from 'lucide-react';
 import { cn } from '@myklintown/ui';
 import { PrecoShell } from '@/components/precollecteur/shell';
 import { EmptyState, PageHeader } from '@/components/ui/blocks';
-import { SubmitButton } from '@/components/ui/action-form';
+import { ActionForm, SubmitButton } from '@/components/ui/action-form';
 import { Preuve } from '@/components/ui/preuve';
 import { requireEntreprise } from '@/lib/precollecteur/context';
 import { statutIncidentAction } from '@/lib/precollecteur/actions';
@@ -94,17 +94,17 @@ export default async function IncidentsPage({ searchParams }: { searchParams: Pr
                 {i.statut !== 'resolu' && (
                   <div className="flex shrink-0 gap-2 sm:flex-col">
                     {i.statut === 'ouvert' && (
-                      <form action={statutIncidentAction}>
+                      <ActionForm action={statutIncidentAction}>
                         <input type="hidden" name="incident_id" value={i.id} />
                         <input type="hidden" name="statut" value="en_cours" />
                         <SubmitButton variant="outline" pendingLabel="…">Prendre en charge</SubmitButton>
-                      </form>
+                      </ActionForm>
                     )}
-                    <form action={statutIncidentAction}>
+                    <ActionForm action={statutIncidentAction}>
                       <input type="hidden" name="incident_id" value={i.id} />
                       <input type="hidden" name="statut" value="resolu" />
                       <SubmitButton pendingLabel="…">Résolu</SubmitButton>
-                    </form>
+                    </ActionForm>
                   </div>
                 )}
               </li>

@@ -130,16 +130,16 @@ export default async function FicheClientPage({
             Accepter ouvre son abonnement et émet sa première facture.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
-            <form action={changerStatutClientAction}>
+            <ActionForm action={changerStatutClientAction}>
               <input type="hidden" name="client_id" value={client.id} />
               <input type="hidden" name="statut" value="actif" />
               <SubmitButton pendingLabel="Validation…">Accepter le client</SubmitButton>
-            </form>
-            <form action={changerStatutClientAction}>
+            </ActionForm>
+            <ActionForm action={changerStatutClientAction}>
               <input type="hidden" name="client_id" value={client.id} />
               <input type="hidden" name="statut" value="resilie" />
               <SubmitButton variant="outline" pendingLabel="…">Refuser</SubmitButton>
-            </form>
+            </ActionForm>
           </div>
         </section>
       )}
@@ -198,25 +198,25 @@ export default async function FicheClientPage({
                 </ActionForm>
               )}
               {client.statut === 'actif' && (
-                <form action={changerStatutClientAction}>
+                <ActionForm action={changerStatutClientAction}>
                   <input type="hidden" name="client_id" value={client.id} />
                   <input type="hidden" name="statut" value="suspendu" />
                   <SubmitButton variant="outline" pendingLabel="…">Suspendre le service</SubmitButton>
-                </form>
+                </ActionForm>
               )}
               {(client.statut === 'suspendu' || client.statut === 'resilie') && (
-                <form action={changerStatutClientAction}>
+                <ActionForm action={changerStatutClientAction}>
                   <input type="hidden" name="client_id" value={client.id} />
                   <input type="hidden" name="statut" value="actif" />
                   <SubmitButton variant="outline" pendingLabel="…">Réactiver</SubmitButton>
-                </form>
+                </ActionForm>
               )}
               {client.statut !== 'resilie' && client.statut !== 'demande' && (
-                <form action={changerStatutClientAction}>
+                <ActionForm action={changerStatutClientAction}>
                   <input type="hidden" name="client_id" value={client.id} />
                   <input type="hidden" name="statut" value="resilie" />
                   <SubmitButton variant="ghost" pendingLabel="…">Résilier</SubmitButton>
-                </form>
+                </ActionForm>
               )}
             </div>
           </Section>

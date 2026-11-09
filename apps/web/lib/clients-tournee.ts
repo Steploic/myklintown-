@@ -13,11 +13,18 @@ const COLONNES_0013 = `${COLONNES}, consigne_terrain, couverture_fin, fin_grace,
  */
 export async function clientsDeTournee(supabase: Supa, ids: string[]): Promise<Passage['client'][]> {
   if (!ids.length) return [];
-  const lire = (colonnes: string) => supabase.from('v_clients_statut').select(colonnes).in('id', ids);
+  // Par lots de 100 : tous les identifiants d'une grande tournée dans une seule
+  // adresse dépassaient la longueur admise (revue du 09/11/2026).
+  const lots: string[][] = [];
+  for (let i = 0; i < ids.length; i += LOT) lots.push(ids.slice(i, i + LOT));
+  const lire = (colonnes: string) => Promise.all(lots.map((lot) => supabase.from('v_clients_statut').select(colonnes).in('id', lot)));
   let r = await lire(COLONNES_0013);
-  if (r.error && /42703|consigne_terrain|fin_grace/.test(`${r.error.code ?? ''} ${r.error.message}`)) r = await lire(COLONNES);
-  return rows<Passage['client']>(r.data);
+  const erreur = r.find((x) => x.error)?.error;
+  if (erreur && /42703|consigne_terrain|fin_grace/.test(`${erreur.code ?? ''} ${erreur.message}`)) r = await lire(COLONNES);
+  return r.flatMap((x) => rows<Passage['client']>(x.data));
 }
+
+const LOT = 100;
 
 /** Blocage au passage activé par l'administrateur (`terrain_blocage_actif`, éteint par défaut). */
 export async function blocageAuPassage(supabase: Supa): Promise<boolean> {

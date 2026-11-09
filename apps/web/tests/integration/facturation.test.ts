@@ -71,6 +71,8 @@ describe('factures', () => {
   it('numérotation par émetteur <préfixe>-<année>-NNNNN, unique, sans trou (migration 0014)', async () => {
     const c = await nouveauClient('Numérotation');
     const f1 = await facture(c.id, 0, 29, 7);
+    // Une seule facture « émise » à la fois par abonné (20261112000020) : la première est réglée.
+    await payer(f1.id, c.id, 3500);
     const f2 = await facture(c.id, 30, 59, 37);
     // Avant la migration 20261019000014 : F<AAMM>-NNNNN (séquence commune à tous).
     const ancien = /^F\d{4}-\d{5}$/.test(f1.numero);
@@ -111,10 +113,17 @@ describe('paiements → statut de facture (déclencheur)', () => {
     await payer(f.id, c.id, 1500, 'mtn_momo');
     expect(await statutFacture(f.id)).toBe('payee');
   });
-  it('trop-perçu : payée quand même', async () => {
+  // Revue du 09/11/2026 (migration 20261112000020) : un encaissement saisi ne
+  // dépasse plus le reste dû — 35 000 au lieu de 3 500 réglait la facture.
+  it('trop-perçu : refusé, la facture reste émise ; le solde exact passe', async () => {
     const c = await nouveauClient('Trop-perçu');
     const f = await facture(c.id, 0, 29, 7);
-    await payer(f.id, c.id, 5000);
+    const r = await payer(f.id, c.id, 5000);
+    expect(r.error?.message).toMatch(/reste dû/);
+    expect(await statutFacture(f.id)).toBe('emise');
+    await payer(f.id, c.id, 2000);
+    expect((await payer(f.id, c.id, 2000)).error?.message).toMatch(/il reste 1500 FCFA/);
+    await payer(f.id, c.id, 1500);
     expect(await statutFacture(f.id)).toBe('payee');
   });
   it('annuler un paiement fait repasser la facture en émise', async () => {

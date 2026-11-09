@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { getSupabase, parametre, row, rows, rpc, type Supa } from '@/lib/server';
+import { getSupabase, parametre, row, rows, rpc, toutesLesLignes, type Supa } from '@/lib/server';
 import { requireEntreprise } from './context';
 import { ajouterJours, ajouterMois, dateFr, estErreurReseau, fcfa, isoJour, MESSAGE_RESEAU, STATUTS_A_FACTURER } from '@/lib/format';
 import { cheminInterne, normaliserNom, periodeFacture } from '@/lib/metier';
@@ -265,6 +265,11 @@ async function emettreFacturePour(
     })
     .select('numero')
     .single();
+  // Deux émissions simultanées (deux onglets, « Générer » pendant une émission) :
+  // la base n'en garde qu'une (migration 20261112000020).
+  if (error && /factures_une_emise_par_client/.test(error.message)) {
+    return { error: 'Une facture est déjà en attente de paiement pour ce client.' };
+  }
   if (error) return { error: erreurLisible(error.message) };
   return { numero: row<{ numero: string }>(f)?.numero };
 }
@@ -280,11 +285,15 @@ export async function emettreFactureAction(_p: ActionState, fd: FormData): Promi
 /** Rappels d'échéance : facture la période suivante de tous les clients qui arrivent au bout. */
 export async function genererFacturesAction(_p: ActionState, _fd: FormData): Promise<ActionState> {
   const { supabase, entreprise } = await requireEntreprise();
-  const { data } = await supabase
-    .from('v_clients_statut')
-    .select('id, statut_abonnement, nb_impayees')
-    .eq('entreprise_id', entreprise.id)
-    .eq('statut', 'actif');
+  const { data } = await toutesLesLignes((de, a) =>
+    supabase
+      .from('v_clients_statut')
+      .select('id, statut_abonnement, nb_impayees')
+      .eq('entreprise_id', entreprise.id)
+      .eq('statut', 'actif')
+      .order('id')
+      .range(de, a),
+  );
   const cibles = rows<Pick<ClientStatut, 'id' | 'statut_abonnement' | 'nb_impayees'>>(data).filter(
     (c) =>
       Number(c.nb_impayees) === 0 &&
@@ -345,6 +354,23 @@ export async function enregistrerPaiementAction(_p: ActionState, fd: FormData): 
     return { error: 'Pour un paiement Mobile Money ou un virement, saisissez la référence de la transaction.' };
   }
 
+  // Jamais au-delà du reste dû (encaissements validés et espèces à valider
+  // déduits) : 35 000 au lieu de 3 500 réglait la facture et gonflait le chiffre
+  // du mois. La base refuse aussi (migration 20261112000020).
+  const { data: dp } = await supabase
+    .from('paiements_clients')
+    .select('montant_fcfa')
+    .eq('facture_id', facture.id)
+    .in('statut', ['valide', 'a_valider']);
+  const reste = facture.montant_fcfa - rows<{ montant_fcfa: number }>(dp).reduce((s, p) => s + p.montant_fcfa, 0);
+  if (Math.round(montant) > reste) {
+    return {
+      error: reste > 0
+        ? `Le reste dû sur cette facture est de ${fcfa(reste)} : un encaissement ne peut pas le dépasser.`
+        : 'Cette facture est déjà entièrement réglée (espèces à valider comprises).',
+    };
+  }
+
   const { error } = await supabase.from('paiements_clients').insert({
     facture_id: facture.id,
     entreprise_id: entreprise.id,
@@ -368,13 +394,15 @@ export async function enregistrerPaiementAction(_p: ActionState, fd: FormData): 
 }
 
 /** Espèces reçues par un employé : le gérant les valide (la facture se règle) ou les rejette. */
-export async function validerPaiementAction(fd: FormData) {
+export async function validerPaiementAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   const { supabase } = await requireEntreprise();
-  await rpc(supabase, 'valider_paiement', {
+  const { error } = await rpc(supabase, 'valider_paiement', {
     p_paiement: String(fd.get('paiement_id')),
     p_valider: fd.get('decision') === 'valider',
   });
+  if (error) return { error: erreurLisible(error.message) };
   rafraichir();
+  return {};
 }
 
 export async function enregistrerRelanceAction(input: {
@@ -491,20 +519,26 @@ export async function majClientAction(_p: ActionState, fd: FormData): Promise<Ac
   return { ok: 'Fiche client mise à jour.' };
 }
 
-export async function changerStatutClientAction(fd: FormData) {
+export async function changerStatutClientAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   const { supabase, entreprise } = await requireEntreprise();
   const id = String(fd.get('client_id'));
   const statut = String(fd.get('statut'));
-  if (!['actif', 'suspendu', 'resilie'].includes(statut)) return;
+  if (!['actif', 'suspendu', 'resilie'].includes(statut)) return { error: 'Statut inconnu.' };
 
-  const { data: avant } = await supabase.from('clients').select('statut').eq('id', id).single();
-  await supabase.from('clients').update({ statut }).eq('id', id).eq('entreprise_id', entreprise.id);
+  const { data: avant } = await supabase.from('clients').select('statut').eq('id', id).eq('entreprise_id', entreprise.id).maybeSingle();
+  const { data: maj, error } = await supabase.from('clients').update({ statut }).eq('id', id).eq('entreprise_id', entreprise.id).select('id');
+  if (error) return { error: erreurLisible(error.message) };
+  if (!rows(maj).length) return { error: 'Client introuvable : rechargez la page.' };
 
   // Accepter une demande en ligne = ouvrir l'abonnement : on émet la première facture.
   if (row<{ statut: string }>(avant)?.statut === 'demande' && statut === 'actif') {
-    await emettreFacturePour(supabase, entreprise.id, id);
+    const r = await emettreFacturePour(supabase, entreprise.id, id);
+    rafraichir();
+    if (r.error) return { error: `Client accepté, mais la première facture n’a pas pu être émise : ${r.error}` };
+    return {};
   }
   rafraichir();
+  return {};
 }
 
 // =============================================================================
@@ -526,14 +560,18 @@ export async function creerEmployeAction(_p: ActionState, fd: FormData): Promise
   return { ok: `${nom} a rejoint l’équipe.` };
 }
 
-export async function basculerEmployeAction(fd: FormData) {
+export async function basculerEmployeAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   const { supabase, entreprise } = await requireEntreprise();
-  await supabase
+  const { data, error } = await supabase
     .from('employes')
     .update({ actif: fd.get('actif') === 'true' })
     .eq('id', String(fd.get('employe_id')))
-    .eq('entreprise_id', entreprise.id);
+    .eq('entreprise_id', entreprise.id)
+    .select('id');
+  if (error) return { error: erreurLisible(error.message) };
+  if (!rows(data).length) return { error: 'Employé introuvable : rechargez la page.' };
   rafraichir();
+  return {};
 }
 
 /**
@@ -549,10 +587,12 @@ export async function inviterEmployeAction(fd: FormData) {
 }
 
 /** Départ d'un employé : son compte perd l'accès, sa fiche et son historique restent. */
-export async function retirerAccesEmployeAction(fd: FormData) {
+export async function retirerAccesEmployeAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   const { supabase } = await requireEntreprise();
-  await rpc(supabase, 'retirer_acces_employe', { p_employe: String(fd.get('employe_id')) });
+  const { error } = await rpc(supabase, 'retirer_acces_employe', { p_employe: String(fd.get('employe_id')) });
+  if (error) return { error: erreurLisible(error.message) };
   rafraichir();
+  return {};
 }
 
 export async function creerTricycleAction(_p: ActionState, fd: FormData): Promise<ActionState> {
@@ -570,23 +610,27 @@ export async function creerTricycleAction(_p: ActionState, fd: FormData): Promis
   return { ok: `${nom} ajouté à la flotte.` };
 }
 
-export async function statutTricycleAction(fd: FormData) {
+export async function statutTricycleAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   const { supabase, entreprise } = await requireEntreprise();
   const statut = String(fd.get('statut'));
-  if (!['actif', 'maintenance', 'hors_service'].includes(statut)) return;
-  await supabase
+  if (!['actif', 'maintenance', 'hors_service'].includes(statut)) return { error: 'État inconnu.' };
+  const { data, error } = await supabase
     .from('tricycles')
     .update({ statut })
     .eq('id', String(fd.get('tricycle_id')))
-    .eq('entreprise_id', entreprise.id);
+    .eq('entreprise_id', entreprise.id)
+    .select('id');
+  if (error) return { error: erreurLisible(error.message) };
+  if (!rows(data).length) return { error: 'Tricycle introuvable : rechargez la page.' };
   rafraichir();
+  return {};
 }
 
-export async function affecterEmployeAction(fd: FormData) {
+export async function affecterEmployeAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   const { supabase, entreprise } = await requireEntreprise();
   const tricycle_id = String(fd.get('tricycle_id'));
   const employe_id = String(fd.get('employe_id') ?? '');
-  if (!employe_id) return;
+  if (!employe_id) return { error: 'Choisissez l’employé à affecter.' };
   // La RLS vérifie le tricycle ; l'employé doit lui aussi être de la maison.
   const { data: e } = await supabase
     .from('employes')
@@ -594,19 +638,23 @@ export async function affecterEmployeAction(fd: FormData) {
     .eq('id', employe_id)
     .eq('entreprise_id', entreprise.id)
     .maybeSingle();
-  if (!e) return;
-  await supabase.from('tricycle_employes').upsert({ tricycle_id, employe_id });
+  if (!e) return { error: 'Employé introuvable : rechargez la page.' };
+  const { error } = await supabase.from('tricycle_employes').upsert({ tricycle_id, employe_id });
+  if (error) return { error: erreurLisible(error.message) };
   rafraichir();
+  return {};
 }
 
-export async function retirerEmployeAction(fd: FormData) {
+export async function retirerEmployeAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   const { supabase } = await requireEntreprise();
-  await supabase
+  const { error } = await supabase
     .from('tricycle_employes')
     .delete()
     .eq('tricycle_id', String(fd.get('tricycle_id')))
     .eq('employe_id', String(fd.get('employe_id')));
+  if (error) return { error: erreurLisible(error.message) };
   rafraichir();
+  return {};
 }
 
 // =============================================================================
@@ -640,21 +688,31 @@ export async function planifierTourneeAction(_p: ActionState, fd: FormData): Pro
     .single();
   if (error) return { error: erreurLisible(error.message) };
   const tourneeId = row<{ id: string }>(t)!.id;
+  // Une tournée sans son équipe ou sans ses passages ne sert à rien : on la
+  // retire et on dit pourquoi (auparavant, les passages manquaient en silence).
+  const abandonner = async (message: string): Promise<ActionState> => {
+    await supabase.from('tournees_precollecte').delete().eq('id', tourneeId).eq('entreprise_id', entreprise.id);
+    rafraichir();
+    return { error: `Tournée non créée : ${erreurLisible(message)}` };
+  };
   if (equipe.length) {
     const { error: e2 } = await supabase
       .from('tournee_equipe')
       .insert(equipe.map((id) => ({ tournee_id: tourneeId, employe_id: id, entreprise_id: entreprise.id })));
-    if (e2) return { error: erreurLisible(e2.message) };
+    if (e2) return abandonner(e2.message);
   }
 
-  // Les passages prévus = tous les clients actifs de la zone (ou de l'entreprise).
-  let q = supabase.from('clients').select('id').eq('entreprise_id', entreprise.id).eq('statut', 'actif');
-  if (zoneId) q = q.eq('zone_id', zoneId);
-  const { data: cl } = await q;
+  // Les passages prévus = tous les clients actifs de la zone (ou de l'entreprise), au-delà de 1 000.
+  const { data: cl, error: e3 } = await toutesLesLignes((de, a) => {
+    let q = supabase.from('clients').select('id').eq('entreprise_id', entreprise.id).eq('statut', 'actif');
+    if (zoneId) q = q.eq('zone_id', zoneId);
+    return q.order('id').range(de, a);
+  });
+  if (e3) return abandonner(e3.message);
   const clients = rows<{ id: string }>(cl);
-  if (clients.length) {
-    await supabase.from('collectes').insert(
-      clients.map((c) => ({
+  for (let i = 0; i < clients.length; i += 500) {
+    const { error: e4 } = await supabase.from('collectes').insert(
+      clients.slice(i, i + 500).map((c) => ({
         entreprise_id: entreprise.id,
         tournee_id: tourneeId,
         client_id: c.id,
@@ -662,6 +720,7 @@ export async function planifierTourneeAction(_p: ActionState, fd: FormData): Pro
         employe_id: employeId,
       })),
     );
+    if (e4) return abandonner(e4.message);
   }
   rafraichir();
   redirect(`/precollecteur/tournees/${tourneeId}`);
@@ -752,14 +811,18 @@ export async function creerIncidentAction(input: {
   return { ok: 'Incident enregistré avec sa preuve.' };
 }
 
-export async function statutIncidentAction(fd: FormData) {
+export async function statutIncidentAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   const { supabase, entreprise } = await requireEntreprise();
-  await supabase
+  const { data, error } = await supabase
     .from('incidents_precollecte')
     .update({ statut: String(fd.get('statut')) })
     .eq('id', String(fd.get('incident_id')))
-    .eq('entreprise_id', entreprise.id);
+    .eq('entreprise_id', entreprise.id)
+    .select('id');
+  if (error) return { error: erreurLisible(error.message) };
+  if (!rows(data).length) return { error: 'Incident introuvable : rechargez la page.' };
   rafraichir();
+  return {};
 }
 
 // =============================================================================
@@ -924,11 +987,21 @@ export async function chargerDemoAction(_p: ActionState, _fd: FormData): Promise
 
 export async function supprimerDemoAction(_p: ActionState, _fd: FormData): Promise<ActionState> {
   const { supabase, entreprise } = await requireEntreprise();
-  await supabase.from('clients').delete().eq('entreprise_id', entreprise.id).eq('est_demo', true);
-  await supabase.from('tournees_precollecte').delete().eq('entreprise_id', entreprise.id).eq('notes', 'démo');
-  await supabase.from('employes').delete().eq('entreprise_id', entreprise.id).like('nom', '%(démo)');
-  await supabase.from('incidents_precollecte').delete().eq('entreprise_id', entreprise.id).like('description', '%(démo%');
-  await supabase.from('tricycles').delete().eq('entreprise_id', entreprise.id).like('nom', '%(démo)');
+  // Dans l'ordre des dépendances ; arrêt à la première erreur, sans annoncer un succès.
+  const etapes = [
+    () => supabase.from('clients').delete().eq('entreprise_id', entreprise.id).eq('est_demo', true),
+    () => supabase.from('tournees_precollecte').delete().eq('entreprise_id', entreprise.id).eq('notes', 'démo'),
+    () => supabase.from('employes').delete().eq('entreprise_id', entreprise.id).like('nom', '%(démo)'),
+    () => supabase.from('incidents_precollecte').delete().eq('entreprise_id', entreprise.id).like('description', '%(démo%'),
+    () => supabase.from('tricycles').delete().eq('entreprise_id', entreprise.id).like('nom', '%(démo)'),
+  ];
+  for (const etape of etapes) {
+    const { error } = await etape();
+    if (error) {
+      rafraichir();
+      return { error: `Suppression interrompue : ${erreurLisible(error.message)}` };
+    }
+  }
   rafraichir();
   return { ok: 'Données de démonstration supprimées.' };
 }

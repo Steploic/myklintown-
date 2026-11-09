@@ -175,8 +175,10 @@ export async function refuserDevisAction(fd: FormData) {
   if (error) redirect(`/citoyen?erreur=${encodeURIComponent(error.message)}`);
 }
 
-export async function annulerDemandeDevisAction() {
+export async function annulerDemandeDevisAction(_p: ActionState, _fd: FormData): Promise<ActionState> {
   const supabase = await getSupabase();
-  await rpc(supabase, 'annuler_demande_devis');
+  const { error } = await rpc(supabase, 'annuler_demande_devis');
+  if (error) return { error: error.message };
   revalidatePath('/citoyen', 'layout');
+  return {};
 }

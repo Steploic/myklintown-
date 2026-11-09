@@ -4,7 +4,7 @@ import { cn } from '@myklintown/ui';
 import { PrecoShell } from '@/components/precollecteur/shell';
 import { EmptyState, PageHeader } from '@/components/ui/blocks';
 import { requireEntreprise } from '@/lib/precollecteur/context';
-import { rows } from '@/lib/server';
+import { rows, toutesLesLignes } from '@/lib/server';
 import { dateFr, fcfa, statutAbonnement, STATUTS_A_FACTURER, telLisible } from '@/lib/format';
 import { libelleTarif } from '@/lib/devis';
 import type { ClientStatut } from '@/lib/types';
@@ -44,11 +44,10 @@ export default async function ClientsPage({
 }) {
   const { filtre = 'tous', q = '' } = await searchParams;
   const { supabase, entreprise } = await requireEntreprise();
-  const { data } = await supabase
-    .from('v_clients_statut')
-    .select('*')
-    .eq('entreprise_id', entreprise.id)
-    .order('nom');
+  // Tous les clients, au-delà des 1 000 lignes que l'API renvoie en une fois.
+  const { data } = await toutesLesLignes((de, a) =>
+    supabase.from('v_clients_statut').select('*').eq('entreprise_id', entreprise.id).order('nom').order('id').range(de, a),
+  );
   const tous = rows<ClientStatut>(data);
   const recherche = q.trim().toLowerCase();
   const liste = tous

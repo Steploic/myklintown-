@@ -50,6 +50,33 @@ export function row<T>(data: unknown): T | null {
   return (data ?? null) as T | null;
 }
 
+/** Taille d'une tranche : la limite par défaut de l'API de Supabase (« Max rows »). */
+const TRANCHE = 1000;
+
+/**
+ * TOUTES les lignes d'une lecture. L'API de Supabase en renvoie au plus 1 000
+ * par requête, sans prévenir : au-delà, une liste, un export ou un total
+ * étaient faux en silence (revue du 09/11/2026). On lit par tranches de 1 000
+ * jusqu'à une tranche incomplète.
+ *
+ * `tranche(de, a)` construit la requête et finit par `.range(de, a)` ; son tri
+ * doit être stable (terminer par l'identifiant), sinon les tranches se
+ * chevauchent. Hypothèse : « Max rows » (Supabase → Settings → API) vaut au
+ * moins 1 000, la valeur par défaut.
+ */
+export async function toutesLesLignes<T>(
+  tranche: (de: number, a: number) => PromiseLike<{ data: unknown; error: { message: string } | null }>,
+): Promise<{ data: T[]; error: { message: string } | null }> {
+  const lignes: T[] = [];
+  for (let de = 0; ; de += TRANCHE) {
+    const { data, error } = await tranche(de, de + TRANCHE - 1);
+    if (error) return { data: lignes, error };
+    const lot = rows<T>(data);
+    lignes.push(...lot);
+    if (lot.length < TRANCHE) return { data: lignes, error: null };
+  }
+}
+
 /** Paramètre plateforme numérique (lu en base, jamais codé en dur). */
 export async function parametre(supabase: Supa, cle: string, defaut: number): Promise<number> {
   const { data } = await supabase

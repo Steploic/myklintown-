@@ -74,9 +74,9 @@ export default async function AccesMairiePage({ searchParams }: { searchParams: 
                   Envoyée le {dateFr(demande.created_at, { day: 'numeric', month: 'long' })} ({demande.fonction}). Dès
                   qu’elle est validée, reconnectez-vous : vous arriverez directement sur l’espace Mairie.
                 </p>
-                <form action={annulerDemandeAccesAction} className="mt-3">
+                <ActionForm action={annulerDemandeAccesAction} className="mt-3">
                   <SubmitButton variant="outline" pendingLabel="Retrait…">Retirer ma demande</SubmitButton>
-                </form>
+                </ActionForm>
               </div>
             </section>
           )}

@@ -58,6 +58,8 @@ const avec0017 = (db) => valeur(db, `select to_regclass('public.entreprise_commu
 const avec0018 = (db) => valeur(db, `select to_regclass('public.demandes_devis') is not null`);
 /** Migration 0019 (routage des demandes de devis, demandes à orienter) présente dans la base ? */
 const avec0019 = (db) => valeur(db, `select to_regprocedure('public.demandes_devis_a_orienter()') is not null`);
+/** Migration 0020 (encaissement plafonné, une facture émise par abonné) présente dans la base ? */
+const avec0020 = (db) => valeur(db, `select to_regclass('public.factures_une_emise_par_client') is not null`);
 
 /** Une demande de devis complète (commerce de Yaoundé III), modifiable par `extra`. */
 const demandeDevis = (commune, extra = {}) => JSON.stringify({
@@ -93,6 +95,15 @@ async function effacerDemande(db, demande) {
   const client = await valeur(db, `select client_id from public.demandes_devis where id = $1`, [demande]);
   await db.query(`delete from public.demandes_devis where id = $1`, [demande]);
   if (client) await db.query(`delete from public.clients where id = $1`, [client]);
+}
+
+/**
+ * Un abonné de plus pour A, sans facture. Depuis 20261112000020, un abonné n'a
+ * qu'une facture « émise » à la fois : un scénario qui émet la sienne part
+ * d'une fiche neuve plutôt que de celle du client A (déjà facturée).
+ */
+async function clientNeufA(db, s, nom) {
+  return valeur(db, `insert into public.clients (entreprise_id, nom, plan_id, telephone) values ($1, $2, $3, '677000999') returning id`, [s.entA, nom, s.plan]);
 }
 
 /**
@@ -564,9 +575,10 @@ export const ATTAQUES = [
     titre: 'Le gérant émet une facture antidatée d’un an',
     async jouer(db, s) {
       if (!(await avec0014(db))) return false;
+      const client = await clientNeufA(db, s, 'Foyer antidaté');
       const id = await comme(db, s.gerantA, (tx) => valeur(tx,
         `insert into public.factures (entreprise_id, client_id, periode_debut, periode_fin, montant_fcfa, echeance, created_at)
-         values ($1, $2, current_date, current_date + 30, 3500, current_date + 7, now() - interval '1 year') returning id`, [s.entA, s.clientA]));
+         values ($1, $2, current_date, current_date + 30, 3500, current_date + 7, now() - interval '1 year') returning id`, [s.entA, client]));
       return (await valeur(db, `select created_at < now() - interval '1 day' from public.factures where id = $1`, [id])) === true;
     },
   },
@@ -575,9 +587,10 @@ export const ATTAQUES = [
     titre: 'Une facture annulée est remise « émise » (même par un administrateur)',
     async jouer(db, s) {
       if (!(await avec0014(db))) return false;
+      const client = await clientNeufA(db, s, 'Foyer facture rouverte');
       const f = await comme(db, s.gerantA, async (tx) => {
         const id = await valeur(tx, `insert into public.factures (entreprise_id, client_id, periode_debut, periode_fin, montant_fcfa, echeance)
-          values ($1, $2, current_date, current_date + 30, 3500, current_date + 7) returning id`, [s.entA, s.clientA]);
+          values ($1, $2, current_date, current_date + 30, 3500, current_date + 7) returning id`, [s.entA, client]);
         await tx.query(`update public.factures set statut = 'annulee', motif_annulation = 'Erreur de formule' where id = $1`, [id]);
         return id;
       });
@@ -1076,6 +1089,34 @@ export const ATTAQUES = [
       }
     },
   },
+  {
+    id: 'encaissement-trop-percu',
+    titre: 'Le gérant encaisse plus que le reste dû d’une facture (35 000 au lieu de 3 500, ou un solde déjà réglé)',
+    async jouer(db, s) {
+      if (!(await avec0020(db))) return false;
+      const client = await clientNeufA(db, s, 'Foyer trop-perçu');
+      const f = await comme(db, s.gerantA, (tx) => valeur(tx, `insert into public.factures (entreprise_id, client_id, periode_debut, periode_fin, montant_fcfa, echeance)
+        values ($1, $2, current_date, current_date + 30, 3500, current_date + 7) returning id`, [s.entA, client]));
+      const payer = (montant) => accepte(db, s.gerantA, `insert into public.paiements_clients (facture_id, entreprise_id, client_id, montant_fcfa, methode) values ($1, $2, $3, $4, 'especes')`, [f, s.entA, client, montant]);
+      if (await payer(35000)) return true;
+      if (!(await payer(2000))) throw new Error('acompte de 2 000 refusé à tort');
+      if (await payer(2000)) return true;
+      if (!(await payer(1500))) throw new Error('solde exact de 1 500 refusé à tort');
+      return payer(1);
+    },
+  },
+  {
+    id: 'facture-emise-en-double',
+    titre: 'Le gérant émet une seconde facture « émise » pour un abonné qui en a déjà une en attente',
+    async jouer(db, s) {
+      if (!(await avec0020(db))) return false;
+      const client = await clientNeufA(db, s, 'Foyer deux factures');
+      const emettre = () => accepte(db, s.gerantA, `insert into public.factures (entreprise_id, client_id, periode_debut, periode_fin, montant_fcfa, echeance)
+        values ($1, $2, current_date, current_date + 30, 3500, current_date + 7)`, [s.entA, client]);
+      if (!(await emettre())) throw new Error('première facture refusée à tort');
+      return emettre();
+    },
+  },
 ];
 
 /** Migration 0014 (facture inaltérable, charte) présente dans la base ? */
@@ -1195,9 +1236,10 @@ export const PARCOURS = [
   {
     titre: 'Le gérant annule une facture émise, change le statut d’un incident, modifie une fiche',
     async jouer(db, s) {
+      const client = await clientNeufA(db, s, 'Foyer facture annulée');
       await comme(db, s.gerantA, async (tx) => {
         const f = await valeur(tx, `insert into public.factures (entreprise_id, client_id, periode_debut, periode_fin, montant_fcfa, echeance)
-          values ($1, $2, current_date, current_date + 30, 3500, current_date + 7) returning id`, [s.entA, s.clientA]);
+          values ($1, $2, current_date, current_date + 30, 3500, current_date + 7) returning id`, [s.entA, client]);
         await tx.query(`update public.factures set statut = 'annulee' where id = $1`, [f]);
         await tx.query(`update public.incidents_precollecte set statut = 'resolu' where id = $1`, [s.incidentA]);
         await tx.query(`update public.clients set nom = 'Foyer A modifié', telephone = '677112233' where id = $1`, [s.clientA]);
@@ -1833,13 +1875,15 @@ export const PARCOURS = [
       if (!(await avec0014(db))) return;
       await comme(db, s.gerantA, (tx) => tx.query(`update public.entreprises set niu = 'M012345678901A', rccm = 'RC/YAO/2026/B/0001', adresse_fiscale = 'BP 100 Yaoundé' where id = $1`, [s.entA]));
       await comme(db, s.admin, (tx) => tx.query(`update public.parametres_plateforme set valeur = '0.1925' where cle = 'facturation_tva_taux'`));
+      const client = await clientNeufA(db, s, 'Foyer conforme');
+      const code = await valeur(db, `select code from public.clients where id = $1`, [client]);
       const f = await comme(db, s.gerantA, async (tx) => (await tx.query(
         `insert into public.factures (entreprise_id, client_id, periode_debut, periode_fin, montant_fcfa, echeance)
          values ($1, $2, current_date, current_date + 30, 3500, current_date + 7)
-         returning id, montant_ht_fcfa, montant_tva_fcfa, tva_taux, emetteur, destinataire`, [s.entA, s.clientA])).rows[0]);
+         returning id, montant_ht_fcfa, montant_tva_fcfa, tva_taux, emetteur, destinataire`, [s.entA, client])).rows[0]);
       await comme(db, s.admin, (tx) => tx.query(`update public.parametres_plateforme set valeur = '0' where cle = 'facturation_tva_taux'`));
       if (f.montant_ht_fcfa !== 2935 || f.montant_tva_fcfa !== 565 || Number(f.tva_taux) !== 0.1925) throw new Error(JSON.stringify(f));
-      if (f.emetteur.niu !== 'M012345678901A' || f.emetteur.mention_tva !== 'TVA non applicable' || f.destinataire.code !== s.codeA) {
+      if (f.emetteur.niu !== 'M012345678901A' || f.emetteur.mention_tva !== 'TVA non applicable' || f.destinataire.code !== code) {
         throw new Error(JSON.stringify({ emetteur: f.emetteur, destinataire: f.destinataire }));
       }
       // L'entreprise change de NIU : la facture déjà émise garde l'ancien.
@@ -1851,9 +1895,10 @@ export const PARCOURS = [
     titre: 'Annulation tracée : motif, date et auteur gardés',
     async jouer(db, s) {
       if (!(await avec0014(db))) return;
+      const client = await clientNeufA(db, s, 'Foyer annulation tracée');
       const id = await comme(db, s.gerantA, async (tx) => {
         const f = await valeur(tx, `insert into public.factures (entreprise_id, client_id, periode_debut, periode_fin, montant_fcfa, echeance)
-          values ($1, $2, current_date, current_date + 30, 3500, current_date + 7) returning id`, [s.entA, s.clientA]);
+          values ($1, $2, current_date, current_date + 30, 3500, current_date + 7) returning id`, [s.entA, client]);
         await tx.query(`update public.factures set statut = 'annulee', motif_annulation = '  Doublon de facture  ', annulee_par = $2 where id = $1`, [f, s.victime]);
         return f;
       });
@@ -2124,6 +2169,51 @@ export const PARCOURS = [
         await effacerDemande(db, d);
         await secteurAnnule(db, [s.entD], s.dla1);
       }
+    },
+  },
+  {
+    titre: 'Migration 0020 rejouée : contrôle « OK » sur les lignes 1 à 3, deux fois ; arrêt net s’il existe déjà deux factures émises',
+    async jouer(db, s) {
+      const sql = migration('20261112000020');
+      if (!sql) return;
+      for (let passage = 0; passage < 2; passage++) {
+        const controle = (await db.exec(sql)).at(-1).rows;
+        const ko = controle.filter((r, i) => i < 3 && r.resultat !== 'OK');
+        if (ko.length) throw new Error(JSON.stringify(ko));
+      }
+      // Base où deux factures émises coexistent déjà (avant l'index) : la migration s'arrête sans rien modifier.
+      const client = await clientNeufA(db, s, 'Foyer doublon ancien');
+      await db.exec(`drop index public.factures_une_emise_par_client`);
+      try {
+        for (let i = 0; i < 2; i++) {
+          await db.query(`insert into public.factures (entreprise_id, client_id, periode_debut, periode_fin, montant_fcfa, echeance)
+            values ($1, $2, current_date, current_date + 30, 3500, current_date + 7)`, [s.entA, client]);
+        }
+        let message = '';
+        await db.exec(sql).catch((e) => { message = e.message; });
+        // La migration s'est arrêtée dans sa transaction : on la referme, comme le SQL Editor.
+        await db.exec(`rollback`).catch(() => {});
+        if (!/plusieurs factures « émises »/.test(message)) throw new Error(`migration passée malgré les doublons : ${message || 'aucune erreur'}`);
+        if (await avec0020(db)) throw new Error('index créé malgré les doublons');
+      } finally {
+        await db.query(`update public.factures set statut = 'annulee', motif_annulation = 'Doublon du banc' where client_id = $1 and statut = 'emise'`, [client]);
+        await db.exec(sql);
+      }
+    },
+  },
+  {
+    titre: 'Encaissement : la clé de service (paiement en ligne confirmé) et les espèces de terrain gardent leurs propres règles',
+    async jouer(db, s) {
+      if (!(await avec0020(db))) return;
+      const client = await clientNeufA(db, s, 'Foyer paiement serveur');
+      const f = await comme(db, s.gerantA, (tx) => valeur(tx, `insert into public.factures (entreprise_id, client_id, periode_debut, periode_fin, montant_fcfa, echeance)
+        values ($1, $2, current_date, current_date + 30, 3500, current_date + 7) returning id`, [s.entA, client]));
+      // Espèces de terrain : `encaisser_especes` plafonne déjà au reste dû.
+      await comme(db, s.gerantA, (tx) => tx.query(`select public.encaisser_especes($1, 2000)`, [client]));
+      // Argent déjà reçu par Notch Pay : enregistré même au-delà du reste (écrit par le serveur).
+      await comme(db, 'service', (tx) => tx.query(`insert into public.paiements_clients (facture_id, entreprise_id, client_id, montant_fcfa, methode, reference)
+        values ($1, $2, $3, 3500, 'mtn_momo', 'NP-BANC')`, [f, s.entA, client]));
+      if ((await valeur(db, `select statut from public.factures where id = $1`, [f])) !== 'payee') throw new Error('facture non réglée');
     },
   },
 ];
