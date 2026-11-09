@@ -50,7 +50,7 @@ export async function rattacherCompteAction(_p: ActionState, fd: FormData): Prom
   if (!/^MKT-[A-Z0-9]{4,}$/.test(code)) return { error: 'Le code figure sur votre étiquette : il commence par « MKT- ».' };
   if (!telephone) return { error: 'Indiquez le téléphone donné à votre précollecteur.' };
   const supabase = await getSupabase();
-  const { error } = await rpc(supabase, 'rattacher_mon_compte', { p_code: code, p_telephone: telephone });
+  const { data, error } = await rpc(supabase, 'rattacher_mon_compte', { p_code: code, p_telephone: telephone });
   if (error) {
     return {
       error: /function|schema cache/i.test(error.message)
@@ -58,6 +58,9 @@ export async function rattacherCompteAction(_p: ActionState, fd: FormData): Prom
         : error.message,
     };
   }
+  // Depuis 20261113000021, un essai refusé ne lève plus d'erreur (sa trace doit
+  // rester, pour limiter les essais) : la base renvoie NULL.
+  if (!data) return { error: 'Code ou téléphone incorrect. Vérifiez votre étiquette, ou demandez à votre précollecteur.' };
   revalidatePath('/citoyen', 'layout');
   redirect('/citoyen?rattache=1');
 }

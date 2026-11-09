@@ -162,6 +162,10 @@ test.describe('espace employé : de l’invitation à la validation des espèces
     await expect(ligne.getByText('Validé')).toBeVisible();
     await page.goto('/employe');
     await expect(page.getByText('Espèces validées')).toBeVisible();
+    // Un employé garde son espace abonné (revue du 09/11/2026) : « Changer d’espace ».
+    await page.getByText('Changer d’espace').click();
+    await page.getByRole('link', { name: 'Mon abonnement' }).click();
+    await expect(page).toHaveURL(/\/citoyen/);
   });
 
   test('le gérant retire l’accès : l’employé redevient un compte ménage', async ({ browser, page }) => {

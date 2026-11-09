@@ -67,7 +67,7 @@ export default async function FicheClientPage({
   const enLigne = paiementEnLigneDisponible() && entreprise.paiement_statut === 'actif';
   const urlLien = lien ? `${await origineDemande()}/payer/${lien}` : null;
 
-  const [fa, pa, co, inc, re, em, za, ch] = await Promise.all([
+  const [fa, pa, co, inc, re, em, za, ch, ra] = await Promise.all([
     supabase.from('factures').select('*').eq('client_id', id).order('periode_debut', { ascending: false }),
     supabase.from('paiements_clients').select('*').eq('client_id', id).order('created_at', { ascending: false }),
     supabase.from('collectes').select('*').eq('client_id', id).order('date_prevue', { ascending: false }).limit(30),
@@ -76,7 +76,17 @@ export default async function FicheClientPage({
     supabase.from('employes').select('id, nom').eq('entreprise_id', entreprise.id).eq('actif', true),
     supabase.from('zone_affectations').select('zones(*)').eq('entreprise_id', entreprise.id),
     rpc(supabase, 'charte_du_client', { p_client: id }),
+    // Essais refusés de rattachement à ce code (migration 20261113000021) : alerte au gérant.
+    supabase
+      .from('rattachements_essais')
+      .select('created_at')
+      .eq('code', client.code)
+      .eq('reussi', false)
+      .gte('created_at', new Date(Date.now() - 30 * 86_400_000).toISOString())
+      .order('created_at', { ascending: false })
+      .limit(50),
   ]);
+  const essaisRefuses = ra.error ? [] : rows<{ created_at: string }>(ra.data);
   // Charte et contrat (migration 20261019000014) : absents si la base ne les connaît pas encore.
   const charte = ch.error ? null : rows<EtatDocumentClient>(ch.data);
   const aFaireAccepter = (charte ?? []).filter((d) => !d.acceptee);
@@ -422,6 +432,13 @@ export default async function FicheClientPage({
             <div className="mx-auto w-44 rounded-lg border border-border p-2" dangerouslySetInnerHTML={{ __html: qr }} />
             <p className="num mt-2 text-center font-semibold tracking-wider text-brand-ink">{client.code}</p>
             <p className="mt-1 text-center text-small text-muted-foreground">Scanné à chaque passage pour prouver le service.</p>
+            {essaisRefuses.length > 0 && (
+              <p role="status" className="mt-3 rounded-md border border-terrain-relance/30 bg-terrain-relance/5 px-3 py-2 text-small text-terrain-relance">
+                {essaisRefuses.length} essai{essaisRefuses.length > 1 ? 's' : ''} refusé{essaisRefuses.length > 1 ? 's' : ''} de
+                rattachement d’un compte à ce code en 30 jours (dernier le {dateHeureFr(essaisRefuses[0]!.created_at)}). Si
+                l’abonné n’a rien tenté, prévenez MyKlinTown.
+              </p>
+            )}
             <Link href={`/precollecteur/clients/${client.id}/etiquette`} className="btn-outline mt-3 w-full">
               <Printer size={16} /> Imprimer l’étiquette
             </Link>
