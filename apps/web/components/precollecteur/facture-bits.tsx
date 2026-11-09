@@ -25,7 +25,7 @@ export function PaiementForm({
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label className="field-label" htmlFor={`montant-${factureId}`}>Montant reçu (FCFA)</label>
-            <input id={`montant-${factureId}`} name="montant" type="number" inputMode="numeric" min={1} defaultValue={resteDu} className="field num" required />
+            <input id={`montant-${factureId}`} name="montant" type="number" inputMode="numeric" min={1} max={resteDu > 0 ? resteDu : undefined} defaultValue={resteDu} className="field num" required />
           </div>
           <div>
             <label className="field-label" htmlFor={`methode-${factureId}`}>Moyen de paiement</label>

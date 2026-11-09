@@ -4,7 +4,7 @@ import { PrecoShell } from '@/components/precollecteur/shell';
 import { PageHeader, Section } from '@/components/ui/blocks';
 import { CartePoints, type PointCarte, type Ton } from '@/components/map/carte-points';
 import { requireEntreprise } from '@/lib/precollecteur/context';
-import { rows, rpc } from '@/lib/server';
+import { rows, rpc, toutesLesLignes } from '@/lib/server';
 import { fcfa, heureFr, statutAbonnement, telLisible } from '@/lib/format';
 import { libelleTarif } from '@/lib/devis';
 import { RafraichissementAuto } from '@/components/ui/rafraichissement-auto';
@@ -20,11 +20,15 @@ export const metadata = { title: 'Carte des clients' };
 export default async function CarteClientsPage() {
   const { supabase, entreprise } = await requireEntreprise();
   const [cl, za, dem, live] = await Promise.all([
-    supabase
-      .from('v_clients_statut')
-      .select('id, nom, quartier, telephone, lat, lng, statut, statut_abonnement, plan_prix, plan_duree_mois, montant_impaye')
-      .eq('entreprise_id', entreprise.id)
-      .neq('statut', 'resilie'),
+    toutesLesLignes((de, a) =>
+      supabase
+        .from('v_clients_statut')
+        .select('id, nom, quartier, telephone, lat, lng, statut, statut_abonnement, plan_prix, plan_duree_mois, montant_impaye')
+        .eq('entreprise_id', entreprise.id)
+        .neq('statut', 'resilie')
+        .order('id')
+        .range(de, a),
+    ),
     supabase.from('zone_affectations').select('zones(*)').eq('entreprise_id', entreprise.id),
     rpc(supabase, 'demandes_devis_ouvertes'),
     rpc(supabase, 'positions_en_direct'),

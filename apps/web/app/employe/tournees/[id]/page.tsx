@@ -12,7 +12,7 @@ import { paiementEnLigneDisponible } from '@/lib/paiement/service';
 import { requireEmploye } from '@/lib/employe/context';
 import { blocageAuPassage, clientsDeTournee } from '@/lib/clients-tournee';
 import { BoutonStatutTournee } from '@/components/precollecteur/bouton-statut-tournee';
-import { row, rows } from '@/lib/server';
+import { row, rows, toutesLesLignes } from '@/lib/server';
 import { dateFr, dateHeureFr, fcfa, STATUT_TOURNEE, statutAbonnement } from '@/lib/format';
 
 export const metadata = { title: 'Tournée' };
@@ -47,8 +47,8 @@ export default async function TourneeEmploye({
 
   const [eq, co, att] = await Promise.all([
     supabase.from('tournee_equipe').select('employes(nom)').eq('tournee_id', id),
-    supabase.from('collectes').select('id, statut, motif, client_id').eq('tournee_id', id),
-    supabase.from('paiements_clients').select('client_id, montant_fcfa').eq('statut', 'a_valider'),
+    toutesLesLignes((de, a) => supabase.from('collectes').select('id, statut, motif, client_id').eq('tournee_id', id).order('id').range(de, a)),
+    toutesLesLignes((de, a) => supabase.from('paiements_clients').select('id, client_id, montant_fcfa').eq('statut', 'a_valider').order('id').range(de, a)),
   ]);
   const equipe = rows<{ employes: { nom: string } | null }>(eq.data).map((e) => e.employes?.nom).filter(Boolean).sort();
   const collectes = rows<{ id: string; statut: Passage['statut']; motif: string | null; client_id: string }>(co.data);

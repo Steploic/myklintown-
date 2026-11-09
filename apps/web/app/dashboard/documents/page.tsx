@@ -25,13 +25,20 @@ export default async function DocumentsPage() {
   const { data: p } = await supabase.from('profiles').select('role').eq('id', user?.id ?? '').maybeSingle();
   if (row<{ role: string }>(p)?.role !== 'admin') redirect('/dashboard');
 
-  const [{ data: d }, { data: a }] = await Promise.all([
-    supabase.from('documents_legaux').select('*').order('version', { ascending: false }),
-    supabase.from('acceptations_documents').select('document_id'),
-  ]);
+  const { data: d } = await supabase.from('documents_legaux').select('*').order('version', { ascending: false });
   const documents = rows<DocumentLegal>(d);
-  const acceptations = new Map<string, number>();
-  for (const x of rows<{ document_id: string }>(a)) acceptations.set(x.document_id, (acceptations.get(x.document_id) ?? 0) + 1);
+  // Un compte exact par version publiée : lire chaque acceptation plafonnait à
+  // 1 000 (limite de l'API), soit 500 abonnés pour la charte et le contrat.
+  const acceptations = new Map<string, number>(
+    await Promise.all(
+      documents
+        .filter((x) => x.publie_at)
+        .map(async (x) => {
+          const { count } = await supabase.from('acceptations_documents').select('*', { count: 'exact', head: true }).eq('document_id', x.id);
+          return [x.id, count ?? 0] as const;
+        }),
+    ),
+  );
 
   return (
     <PortalShell portalKey="mairie" currentPath="/dashboard/documents">

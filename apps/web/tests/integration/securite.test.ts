@@ -191,14 +191,18 @@ describe('inscription : rôle forgé', () => {
 // (supabase/tests-securite) les couvre aussi, avec le « avant / après ».
 // -----------------------------------------------------------------------------
 describe('audit du 11/10/2026', () => {
-  const nouvelleFacture = async (clientId: string) => {
+  // Une facture sur une fiche neuve de A : un abonné n'a qu'une facture « émise »
+  // à la fois (migration 20261112000020), et `clientA` a déjà la sienne.
+  const nouvelleFacture = async () => {
+    const c = await A.sb.from('clients').insert({ entreprise_id: A.entrepriseId, nom: 'Secret A bis', telephone: '677000112' }).select('id').single();
+    if (c.error) throw c.error;
     const f = await A.sb
       .from('factures')
-      .insert({ entreprise_id: A.entrepriseId, client_id: clientId, periode_debut: '2026-10-01', periode_fin: '2026-10-31', montant_fcfa: 3500, echeance: '2026-10-08' })
+      .insert({ entreprise_id: A.entrepriseId, client_id: c.data.id, periode_debut: '2026-10-01', periode_fin: '2026-10-31', montant_fcfa: 3500, echeance: '2026-10-08' })
       .select('id')
       .single();
     if (f.error) throw f.error;
-    return f.data.id as string;
+    return { facture: f.data.id as string, client: c.data.id as string };
   };
 
   it('spatial_ref_sys (PostGIS) est en lecture seule pour le visiteur anonyme', async () => {
@@ -210,8 +214,8 @@ describe('audit du 11/10/2026', () => {
     expect((await clientAnonyme().rpc('mon_entreprise')).error).toBeTruthy();
   });
   it('B ne rattache pas SON paiement à la facture de A (elle resterait « payée »)', async () => {
-    const f = await nouvelleFacture(clientA.id);
-    const r = await B.sb.from('paiements_clients').insert({ facture_id: f, entreprise_id: B.entrepriseId, client_id: clientA.id, montant_fcfa: 3500 });
+    const { facture: f, client } = await nouvelleFacture();
+    const r = await B.sb.from('paiements_clients').insert({ facture_id: f, entreprise_id: B.entrepriseId, client_id: client, montant_fcfa: 3500 });
     expect(r.error?.message).toMatch(/Référence refusée/);
     const { data } = await A.sb.from('factures').select('statut').eq('id', f).single();
     expect(data?.statut).toBe('emise');
@@ -225,7 +229,7 @@ describe('audit du 11/10/2026', () => {
     expect(r.error?.message).toMatch(/Référence refusée/);
   });
   it('A ne marque pas une facture « payée » à la main, mais peut l’annuler', async () => {
-    const f = await nouvelleFacture(clientA.id);
+    const { facture: f } = await nouvelleFacture();
     expect((await A.sb.from('factures').update({ statut: 'payee' }).eq('id', f)).error?.message).toMatch(/se déduit des encaissements/);
     expect((await A.sb.from('factures').update({ statut: 'annulee' }).eq('id', f)).error).toBeNull();
   });

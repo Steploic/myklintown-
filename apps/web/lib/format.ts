@@ -52,24 +52,42 @@ export function heureFr(d: string | Date | null | undefined): string {
   return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: FUSEAU });
 }
 
-/** AAAA-MM-JJ en heure locale (le serveur Vercel est en UTC, Yaoundé en UTC+1 : l'écart ne change pas la date en journée). */
+const JOUR_A_DOUALA = new Intl.DateTimeFormat('fr-FR', { timeZone: FUSEAU, year: 'numeric', month: '2-digit', day: '2-digit' });
+
+/**
+ * Le jour À DOUALA (AAAA-MM-JJ) d'un instant, maintenant par défaut, quel que
+ * soit le fuseau de la machine. Les serveurs de Vercel sont en UTC : entre
+ * minuit et 1 h à Douala, leur date était encore celle de la veille (période et
+ * échéance d'une facture, tournée du jour décalées d'un jour). La base compte
+ * de même (`jour_douala()`).
+ */
 export function isoJour(d: Date = new Date()): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const j = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${j}`;
+  const p = Object.fromEntries(JOUR_A_DOUALA.formatToParts(d).map((x) => [x.type, x.value]));
+  return `${p.year}-${p.month}-${p.day}`;
 }
 
+/** Jour à Douala d'un horodatage enregistré (« 2026-09-30T23:30:00Z » → « 2026-10-01 »). */
+export function jourDouala(horodatage: string): string {
+  return isoJour(new Date(horodatage));
+}
+
+// Dates du calendrier (AAAA-MM-JJ) : calculées en UTC, sans heure ni fuseau.
+const versDate = (iso: string) => {
+  const [a, m, j] = iso.split('-').map(Number);
+  return new Date(Date.UTC(a!, m! - 1, j!));
+};
+const versIso = (d: Date) => d.toISOString().slice(0, 10);
+
 export function ajouterJours(iso: string, n: number): string {
-  const d = new Date(iso + 'T12:00:00');
-  d.setDate(d.getDate() + n);
-  return isoJour(d);
+  const d = versDate(iso);
+  d.setUTCDate(d.getUTCDate() + n);
+  return versIso(d);
 }
 
 export function ajouterMois(iso: string, n: number): string {
-  const d = new Date(iso + 'T12:00:00');
-  d.setMonth(d.getMonth() + n);
-  return isoJour(d);
+  const d = versDate(iso);
+  d.setUTCMonth(d.getUTCMonth() + n);
+  return versIso(d);
 }
 
 export function joursEntre(a: string, b: string): number {

@@ -6,7 +6,7 @@ import { PageHeader, Section } from '@/components/ui/blocks';
 import { ActionForm, SubmitButton } from '@/components/ui/action-form';
 import { requireEntreprise } from '@/lib/precollecteur/context';
 import { enregistrerChargesAction } from '@/lib/precollecteur/actions';
-import { parametre, rows } from '@/lib/server';
+import { parametre, rows, toutesLesLignes } from '@/lib/server';
 import { dateFr, fcfa, nombre } from '@/lib/format';
 import { CATEGORIES_CHARGES, derniersMois, finDeMois, moisCourant, moisValide } from '@/lib/charges';
 
@@ -41,14 +41,18 @@ export default async function ChargesPage({ searchParams }: { searchParams: Prom
       .eq('collectes.statut', 'realisee')
       .gte('collectes.date_prevue', debut)
       .lte('collectes.date_prevue', fin),
-    supabase
-      .from('paiements_clients')
-      .select('montant_fcfa, clients!inner(est_demo)')
-      .eq('entreprise_id', entreprise.id)
-      .eq('statut', 'valide')
-      .eq('clients.est_demo', false)
-      .gte('created_at', debutJourDouala(debut))
-      .lt('created_at', debutJourDouala(lendemain)),
+    toutesLesLignes((de, a) =>
+      supabase
+        .from('paiements_clients')
+        .select('id, montant_fcfa, clients!inner(est_demo)')
+        .eq('entreprise_id', entreprise.id)
+        .eq('statut', 'valide')
+        .eq('clients.est_demo', false)
+        .gte('created_at', debutJourDouala(debut))
+        .lt('created_at', debutJourDouala(lendemain))
+        .order('id')
+        .range(de, a),
+    ),
     parametre(supabase, 'commission_taux', 0.1),
   ]);
 

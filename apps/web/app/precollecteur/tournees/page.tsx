@@ -5,7 +5,7 @@ import { EmptyState, PageHeader, Section } from '@/components/ui/blocks';
 import { ActionForm, SubmitButton } from '@/components/ui/action-form';
 import { requireEntreprise } from '@/lib/precollecteur/context';
 import { planifierTourneeAction } from '@/lib/precollecteur/actions';
-import { rows } from '@/lib/server';
+import { rows, toutesLesLignes } from '@/lib/server';
 import { dateFr, isoJour, pct, STATUT_TOURNEE } from '@/lib/format';
 import type { Employe, Tournee, Tricycle, Zone } from '@/lib/types';
 
@@ -13,16 +13,24 @@ export const metadata = { title: 'Tournées' };
 
 export default async function TourneesPage() {
   const { supabase, entreprise } = await requireEntreprise();
-  const [to, em, tr, za, co, eqp] = await Promise.all([
+  const [to, em, tr, za] = await Promise.all([
     supabase.from('tournees_precollecte').select('*').eq('entreprise_id', entreprise.id).order('date', { ascending: false }).order('created_at', { ascending: false }).limit(60),
     supabase.from('employes').select('*').eq('entreprise_id', entreprise.id).eq('actif', true).order('nom'),
     supabase.from('tricycles').select('*').eq('entreprise_id', entreprise.id).order('nom'),
     supabase.from('zone_affectations').select('zones(id, nom)').eq('entreprise_id', entreprise.id),
-    supabase.from('collectes').select('tournee_id, statut').eq('entreprise_id', entreprise.id).not('tournee_id', 'is', null).limit(5000),
-    supabase.from('tournee_equipe').select('tournee_id, employe_id').eq('entreprise_id', entreprise.id),
   ]);
-  const equipes = rows<{ tournee_id: string; employe_id: string }>(eqp.data);
   const tournees = rows<Tournee>(to.data);
+  // Passages et équipes des 60 tournées affichées seulement, lus en entier : le
+  // `.limit(5000)` d'avant était plafonné à 1 000 lignes par l'API, prises sans
+  // ordre parmi TOUTES les tournées (avancement faux dès quelques mois).
+  const ids = tournees.map((t) => t.id);
+  const [co, eqp] = ids.length
+    ? await Promise.all([
+        toutesLesLignes((de, a) => supabase.from('collectes').select('id, tournee_id, statut').in('tournee_id', ids).order('id').range(de, a)),
+        toutesLesLignes((de, a) => supabase.from('tournee_equipe').select('tournee_id, employe_id').in('tournee_id', ids).order('tournee_id').order('employe_id').range(de, a)),
+      ])
+    : [{ data: [] }, { data: [] }];
+  const equipes = rows<{ tournee_id: string; employe_id: string }>(eqp.data);
   const employes = rows<Employe>(em.data);
   const tricycles = rows<Tricycle>(tr.data);
   const zones = rows<{ zones: Pick<Zone, 'id' | 'nom'> | null }>(za.data).map((a) => a.zones).filter((z): z is Pick<Zone, 'id' | 'nom'> => !!z);

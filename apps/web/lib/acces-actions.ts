@@ -60,21 +60,24 @@ export async function demanderAccesMairieAction(_p: ActionState, fd: FormData): 
 }
 
 /** L'auteur retire sa demande tant qu'elle n'est pas traitée. */
-export async function annulerDemandeAccesAction() {
+export async function annulerDemandeAccesAction(_p: ActionState, _fd: FormData): Promise<ActionState> {
   const supabase = await getSupabase();
-  await rpc(supabase, 'annuler_demande_acces');
+  const { error } = await rpc(supabase, 'annuler_demande_acces');
+  if (error) return { error: estErreurReseau(error) ? MESSAGE_RESEAU : error.message };
   revalidatePath('/acces-mairie');
   redirect('/acces-mairie');
 }
 
 /** Validation par un administrateur MyKlinTown (l'acceptation rattache le compte à sa commune). */
-export async function traiterDemandeAccesAction(fd: FormData) {
+export async function traiterDemandeAccesAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   const supabase = await getSupabase();
-  await rpc(supabase, 'traiter_demande_acces', {
+  const { error } = await rpc(supabase, 'traiter_demande_acces', {
     p_demande: String(fd.get('demande_id')),
     p_accepter: fd.get('decision') === 'accepter',
   });
+  if (error) return { error: estErreurReseau(error) ? MESSAGE_RESEAU : error.message };
   revalidatePath('/dashboard/acces');
+  return {};
 }
 
 /**
@@ -91,8 +94,10 @@ export async function accorderCommuneMairieAction(_p: ActionState, fd: FormData)
   return { ok: 'Commune rattachée : le compte la supervise dès maintenant.' };
 }
 
-export async function retirerCommuneMairieAction(fd: FormData) {
+export async function retirerCommuneMairieAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   const supabase = await getSupabase();
-  await rpc(supabase, 'retirer_commune_mairie', { p_user: txt(fd, 'user_id'), p_commune: txt(fd, 'commune_id') });
+  const { error } = await rpc(supabase, 'retirer_commune_mairie', { p_user: txt(fd, 'user_id'), p_commune: txt(fd, 'commune_id') });
+  if (error) return { error: estErreurReseau(error) ? MESSAGE_RESEAU : error.message };
   revalidatePath('/dashboard/acces');
+  return {};
 }

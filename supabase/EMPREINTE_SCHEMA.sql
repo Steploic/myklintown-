@@ -17,9 +17,9 @@
 --     des écarts : elles servent à l'analyse.
 --
 -- Fichier GÉNÉRÉ par supabase/tests-securite/empreinte.mjs à partir des
--- migrations du dépôt (dernière : 20261111000019_devis_routage). Ne pas le modifier à la main :
+-- migrations du dépôt (dernière : 20261112000020_facturation_plafond_unicite). Ne pas le modifier à la main :
 -- après toute nouvelle migration, `npm run empreinte` dans supabase/tests-securite.
--- Empreinte attendue : 123 fonctions, 54 tables, 105 politiques, 53 déclencheurs, 128 index, 277 contraintes, 23 types, 3 stockages.
+-- Empreinte attendue : 124 fonctions, 54 tables, 105 politiques, 54 déclencheurs, 129 index, 277 contraintes, 23 types, 3 stockages.
 -- =============================================================================
 with attendu (categorie, objet, valeur, migration) as (
   values
@@ -337,6 +337,7 @@ with attendu (categorie, objet, valeur, migration) as (
     ('déclencheur', 'public.menages · menages_updated_at', 'set_updated_at|type=19|etat=O|colonnes=-|args=d41d8cd9', '20260526000001_init'),
     ('déclencheur', 'public.paiements_clients · paiements_clients_coherence_entreprise', 'verifier_coherence_entreprise|type=23|etat=O|colonnes=-|args=d41d8cd9', '20261011000009_audit_securite'),
     ('déclencheur', 'public.paiements_clients · paiements_clients_colonnes_systeme', 'garde_colonnes_systeme|type=19|etat=O|colonnes=-|args=422e0429', '20261011000009_audit_securite'),
+    ('déclencheur', 'public.paiements_clients · paiements_clients_plafond', 'paiements_clients_plafond|type=7|etat=O|colonnes=-|args=d41d8cd9', '20261112000020_facturation_plafond_unicite'),
     ('déclencheur', 'public.paiements_clients · paiements_clients_statut', 'maj_statut_facture|type=29|etat=O|colonnes=-|args=d41d8cd9', '20260928000004_pivot_precollecteurs'),
     ('déclencheur', 'public.paiements_en_ligne · paiements_en_ligne_coherence_entreprise', 'verifier_coherence_entreprise|type=23|etat=O|colonnes=-|args=d41d8cd9', '20261011000009_audit_securite'),
     ('déclencheur', 'public.plans_tarifaires · plans_tarifaires_updated_at', 'set_updated_at|type=19|etat=O|colonnes=-|args=d41d8cd9', '20260928000004_pivot_precollecteurs'),
@@ -434,6 +435,7 @@ with attendu (categorie, objet, valeur, migration) as (
     ('fonction', 'normaliser_nom(p text)', '474d1a3e1831|invoker|search_path=public|anon=non|connecte=oui', '20261011000009_audit_securite'),
     ('fonction', 'nouveau_code_invitation()', '987441a43226|invoker|search_path=public|anon=non|connecte=non', '20261011000009_audit_securite'),
     ('fonction', 'orienter_demande_devis(p_demande uuid, p_commune uuid, p_entreprise uuid)', 'ae9e085f2f11|definer|search_path=public|anon=non|connecte=oui', '20261111000019_devis_routage'),
+    ('fonction', 'paiements_clients_plafond()', 'ebedba7f2dbf|invoker|search_path=public|anon=non|connecte=non', '20261112000020_facturation_plafond_unicite'),
     ('fonction', 'parametre_entier(p_cle text, p_defaut integer)', '97df44e4c98d|invoker|search_path=public|anon=non|connecte=oui', '20261019000013_delai_grace_blocage'),
     ('fonction', 'peut_agir_sur_tournee(p_tournee uuid)', 'ef20f4e1c52f|definer|search_path=public|anon=non|connecte=oui', '20261005000007_espace_employe'),
     ('fonction', 'pieces_manquantes(p_entreprise uuid)', '2dd51ea69041|invoker|search_path=public|anon=non|connecte=oui', '20261109000017_dossier_precollecteur_annuaire'),
@@ -537,6 +539,7 @@ with attendu (categorie, objet, valeur, migration) as (
     ('index', 'factures_numero_key', 'ac33ea21fe49', '20260928000004_pivot_precollecteurs'),
     ('index', 'factures_numerotation_emetteur', '455a6479bccf', '20261019000014_charte_facture_conforme'),
     ('index', 'factures_pkey', '92f919cd275f', '20260928000004_pivot_precollecteurs'),
+    ('index', 'factures_une_emise_par_client', '7331912cebf5', '20261112000020_facturation_plafond_unicite'),
     ('index', 'incidents_pc_entreprise_idx', 'c6e700a48441', '20260928000004_pivot_precollecteurs'),
     ('index', 'incidents_pc_resolu_idx', 'baa74d929dc0', '20261013000011_indicateurs_pilote'),
     ('index', 'incidents_precollecte_pkey', '9613586af27b', '20260928000004_pivot_precollecteurs'),
@@ -917,7 +920,7 @@ infos (categorie, objet, detail) as (
 select etat, categorie, objet, migration, detail
 from (
   select 0 as rang, 'OK' as etat, 'synthèse' as categorie, 'aucun écart' as objet,
-         '20261111000019_devis_routage' as migration,
+         '20261112000020_facturation_plafond_unicite' as migration,
          (select count(*) from attendu)::text || ' objets conformes aux migrations' as detail
    where not exists (select 1 from ecarts)
   union all

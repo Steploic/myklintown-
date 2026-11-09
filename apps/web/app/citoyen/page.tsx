@@ -106,9 +106,9 @@ export default async function CitoyenAccueil({
           </div>
         )}
         <div className="mt-4 flex flex-wrap gap-2">
-          <form action={annulerDemandeDevisAction}>
+          <ActionForm action={annulerDemandeDevisAction}>
             <SubmitButton variant="outline" pendingLabel="Retrait…">Retirer ma demande</SubmitButton>
-          </form>
+          </ActionForm>
         </div>
       </PortalShell>
     );

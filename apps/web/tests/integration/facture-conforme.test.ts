@@ -65,7 +65,8 @@ describe('numérotation par émetteur, sans trou', () => {
     const cB = await client(B, 'Numéro B');
     const a1 = await facture(A, cA.id, { numero: 'F-CHOISI' });
     const b1 = await facture(B, cB.id);
-    const a2 = await facture(A, cA.id);
+    // Une seule facture « émise » à la fois par abonné (20261112000020) : la suivante, à un autre.
+    const a2 = await facture(A, (await client(A, 'Numéro A bis')).id);
     expect(a1.numero).toBe(`${pA}-${annee}-00001`);
     expect(b1.numero).toBe(`${pB}-${annee}-00001`);
     expect(a2.numero).toBe(`${pA}-${annee}-00002`);
@@ -79,7 +80,7 @@ describe('numérotation par émetteur, sans trou', () => {
     // Refusée : période qui finit avant de commencer.
     const r = await A.sb.from('factures').insert({ entreprise_id: A.entrepriseId, client_id: c.id, montant_fcfa: 3500, periode_debut: iso(10), periode_fin: iso(0), echeance: iso(10) });
     expect(r.error).toBeTruthy();
-    const apres = await facture(A, c.id);
+    const apres = await facture(A, (await client(A, 'Émission refusée bis')).id);
     expect(apres.sequence).toBe(avant.sequence + 1);
   });
 
@@ -92,7 +93,7 @@ describe('numérotation par émetteur, sans trou', () => {
     expect(fd.numero).toMatch(new RegExp(`^DEMO-${await prefixe(A)}-${annee}-\\d{5,}$`));
     expect(fd.est_demo).toBe(true);
     expect(fd.sequence).toBeNull();
-    const r2 = await facture(A, reel.id);
+    const r2 = await facture(A, (await client(A, 'Après démo')).id);
     expect(r2.sequence).toBe(r1.sequence + 1);
     expect((await A.sb.from('clients').delete().eq('id', d.id)).error).toBeNull();
     expect((await A.sb.from('factures').select('id').eq('id', fd.id)).data).toEqual([]);

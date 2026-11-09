@@ -11,7 +11,7 @@ import { paiementEnLigneDisponible } from '@/lib/paiement/service';
 import { requireEntreprise } from '@/lib/precollecteur/context';
 import { blocageAuPassage, clientsDeTournee } from '@/lib/clients-tournee';
 import { BoutonStatutTournee } from '@/components/precollecteur/bouton-statut-tournee';
-import { row, rows } from '@/lib/server';
+import { row, rows, toutesLesLignes } from '@/lib/server';
 import { dateFr, dateHeureFr, heureFr, STATUT_TOURNEE, statutAbonnement } from '@/lib/format';
 import type { Tournee } from '@/lib/types';
 
@@ -31,17 +31,18 @@ export default async function TourneePage({ params }: { params: Promise<{ id: st
   const t = row<Tournee & { employes: { nom: string } | null; tricycles: { nom: string } | null; zones: { nom: string } | null }>(data);
   if (!t) notFound();
 
-  const { data: co } = await supabase
-    .from('collectes')
-    .select('id, statut, motif, client_id')
-    .eq('tournee_id', id);
+  const { data: co } = await toutesLesLignes((de, a) =>
+    supabase.from('collectes').select('id, statut, motif, client_id').eq('tournee_id', id).order('id').range(de, a),
+  );
   const collectes = rows<{ id: string; statut: Passage['statut']; motif: string | null; client_id: string }>(co);
   const ids = collectes.map((c) => c.client_id);
   const [cl, blocage, eq, att, pos] = await Promise.all([
     clientsDeTournee(supabase, ids),
     blocageAuPassage(supabase),
     supabase.from('tournee_equipe').select('employe_id, employes(nom)').eq('tournee_id', id),
-    supabase.from('paiements_clients').select('client_id, montant_fcfa').eq('entreprise_id', entreprise.id).eq('statut', 'a_valider'),
+    toutesLesLignes((de, a) =>
+      supabase.from('paiements_clients').select('id, client_id, montant_fcfa').eq('entreprise_id', entreprise.id).eq('statut', 'a_valider').order('id').range(de, a),
+    ),
     supabase
       .from('positions_tournee')
       .select('user_id, lat, lng, created_at, employes(nom)')
