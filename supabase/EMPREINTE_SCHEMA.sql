@@ -17,9 +17,9 @@
 --     des écarts : elles servent à l'analyse.
 --
 -- Fichier GÉNÉRÉ par supabase/tests-securite/empreinte.mjs à partir des
--- migrations du dépôt (dernière : 20261112000020_facturation_plafond_unicite). Ne pas le modifier à la main :
+-- migrations du dépôt (dernière : 20261113000021_rattachement_essais). Ne pas le modifier à la main :
 -- après toute nouvelle migration, `npm run empreinte` dans supabase/tests-securite.
--- Empreinte attendue : 124 fonctions, 54 tables, 105 politiques, 54 déclencheurs, 129 index, 277 contraintes, 23 types, 3 stockages.
+-- Empreinte attendue : 124 fonctions, 55 tables, 106 politiques, 54 déclencheurs, 132 index, 280 contraintes, 23 types, 3 stockages.
 -- =============================================================================
 with attendu (categorie, objet, valeur, migration) as (
   values
@@ -254,6 +254,9 @@ with attendu (categorie, objet, valeur, migration) as (
     ('contrainte', 'rapports_qhse · rapports_qhse_collecteur_user_id_fkey', 'f|1b5402a446aa', '20260526000001_init'),
     ('contrainte', 'rapports_qhse · rapports_qhse_pkey', 'p|90276e02fff4', '20260526000001_init'),
     ('contrainte', 'rapports_qhse · rapports_qhse_tournee_id_fkey', 'f|e84ba1cdbe9f', '20260526000001_init'),
+    ('contrainte', 'rattachements_essais · rattachements_essais_code_check', 'c|309631337f8e', '20261113000021_rattachement_essais'),
+    ('contrainte', 'rattachements_essais · rattachements_essais_pkey', 'p|90276e02fff4', '20261113000021_rattachement_essais'),
+    ('contrainte', 'rattachements_essais · rattachements_essais_user_id_fkey', 'f|2b5aabff7099', '20261113000021_rattachement_essais'),
     ('contrainte', 'recycleurs · recycleurs_pkey', 'p|90276e02fff4', '20260526000001_init'),
     ('contrainte', 'recycleurs · recycleurs_user_id_fkey', 'f|2b5aabff7099', '20260526000001_init'),
     ('contrainte', 'recycleurs · recycleurs_user_id_key', 'u|6d27b1b12f8c', '20260526000001_init'),
@@ -448,7 +451,7 @@ with attendu (categorie, objet, valeur, migration) as (
     ('fonction', 'purger_donnees_de_test(p_entreprise uuid, p_clients uuid[])', '9a09c0fd96f1|definer|search_path=public|anon=non|connecte=non', '20261019000014_charte_facture_conforme'),
     ('fonction', 'quartier_correspond(p_a text, p_b text)', '322a154c0061|invoker|search_path=public|anon=non|connecte=non', '20261111000019_devis_routage'),
     ('fonction', 'quartiers_normalises(p text[])', 'da5b91e307ea|invoker|search_path=public|anon=non|connecte=oui', '20261109000017_dossier_precollecteur_annuaire'),
-    ('fonction', 'rattacher_mon_compte(p_code text, p_telephone text)', 'c66f49fb571e|definer|search_path=public|anon=non|connecte=oui', '20260928000005_rattachement_client'),
+    ('fonction', 'rattacher_mon_compte(p_code text, p_telephone text)', 'e0255702b4ed|definer|search_path=public|anon=non|connecte=oui', '20261113000021_rattachement_essais'),
     ('fonction', 'refuser_devis(p_devis uuid)', '8b624081aba6|definer|search_path=public|anon=non|connecte=oui', '20261110000018_devis_tarif_abonne'),
     ('fonction', 'rejoindre_entreprise(p_code text)', 'cc5460680de2|definer|search_path=public|anon=non|connecte=oui', '20261005000007_espace_employe'),
     ('fonction', 'retirer_acces_employe(p_employe uuid)', 'aca8fedb8ede|definer|search_path=public|anon=non|connecte=oui', '20261005000007_espace_employe'),
@@ -582,6 +585,9 @@ with attendu (categorie, objet, valeur, migration) as (
     ('index', 'profiles_pkey', 'f345e0a8f08d', '20260526000001_init'),
     ('index', 'profils_gamification_pkey', '97bce7a9c5f5', '20260526000001_init'),
     ('index', 'rapports_qhse_pkey', 'f4dfe93efee4', '20260526000001_init'),
+    ('index', 'rattachements_essais_code_idx', '394e59a61ba2', '20261113000021_rattachement_essais'),
+    ('index', 'rattachements_essais_compte_idx', '70934d67a215', '20261113000021_rattachement_essais'),
+    ('index', 'rattachements_essais_pkey', 'ed7393919683', '20261113000021_rattachement_essais'),
     ('index', 'recycleurs_pkey', '57df7fdc96a7', '20260526000001_init'),
     ('index', 'recycleurs_user_id_key', '3e146fda7a93', '20260526000001_init'),
     ('index', 'relances_entreprise_idx', '2f37819ec689', '20260928000004_pivot_precollecteurs'),
@@ -680,6 +686,7 @@ with attendu (categorie, objet, valeur, migration) as (
     ('politique', 'public.profils_gamification · gamification_write_own', 'all|permissive|authenticated|using=ed5856cc|check=ed5856cc', '20260831000003_securite_rls_et_roles'),
     ('politique', 'public.rapports_qhse · qhse_insert_collecteur', 'insert|permissive|authenticated|using=d41d8cd9|check=db68872d', '20260831000003_securite_rls_et_roles'),
     ('politique', 'public.rapports_qhse · qhse_read', 'select|permissive|authenticated|using=b8ae9b46|check=d41d8cd9', '20260831000003_securite_rls_et_roles'),
+    ('politique', 'public.rattachements_essais · rattachements_essais_lecture', 'select|permissive|authenticated|using=4a11bfab|check=d41d8cd9', '20261113000021_rattachement_essais'),
     ('politique', 'public.recycleurs · recycleurs_read', 'select|permissive|authenticated|using=b326b506|check=d41d8cd9', '20260831000003_securite_rls_et_roles'),
     ('politique', 'public.recycleurs · recycleurs_write_own', 'all|permissive|authenticated|using=ed5856cc|check=ed5856cc', '20260831000003_securite_rls_et_roles'),
     ('politique', 'public.relances · relances_membres', 'all|permissive|authenticated|using=628660a3|check=628660a3', '20261005000007_espace_employe'),
@@ -755,6 +762,7 @@ with attendu (categorie, objet, valeur, migration) as (
     ('table', 'profiles', 'table|rls=oui|colonnes=2a4a682795cf|anon=siud', '20260526000001_init'),
     ('table', 'profils_gamification', 'table|rls=oui|colonnes=ba4e68e3eee4|anon=siud', '20260526000001_init'),
     ('table', 'rapports_qhse', 'table|rls=oui|colonnes=8d5b50b2d491|anon=siud', '20260526000001_init'),
+    ('table', 'rattachements_essais', 'table|rls=oui|colonnes=421958ade718|anon=-', '20261113000021_rattachement_essais'),
     ('table', 'recycleurs', 'table|rls=oui|colonnes=cd78b48bdd04|anon=siud', '20260526000001_init'),
     ('table', 'relances', 'table|rls=oui|colonnes=c4aeb01ff4e7|anon=siud', '20260928000004_pivot_precollecteurs'),
     ('table', 'scans', 'table|rls=oui|colonnes=625161456d3e|anon=siud', '20260526000001_init'),
@@ -920,7 +928,7 @@ infos (categorie, objet, detail) as (
 select etat, categorie, objet, migration, detail
 from (
   select 0 as rang, 'OK' as etat, 'synthèse' as categorie, 'aucun écart' as objet,
-         '20261112000020_facturation_plafond_unicite' as migration,
+         '20261113000021_rattachement_essais' as migration,
          (select count(*) from attendu)::text || ' objets conformes aux migrations' as detail
    where not exists (select 1 from ecarts)
   union all

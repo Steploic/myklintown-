@@ -73,6 +73,11 @@ describe('matrice d’accès aux espaces', () => {
     ['mairie', '/dashboard/zones', true],
     ['mairie', '/precollecteur', false],
     ['mairie', '/citoyen', false],
+    // Un employé peut aussi être abonné (revue du 09/11/2026) : il garde l'espace abonné.
+    ['employe', '/employe/tournees/abc', true],
+    ['employe', '/citoyen/factures', true],
+    ['employe', '/precollecteur', false],
+    ['employe', '/dashboard', false],
     ['admin', '/precollecteur', true],
     ['admin', '/dashboard', true],
     ['citoyen', '/settings', true],

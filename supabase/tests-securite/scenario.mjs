@@ -60,6 +60,22 @@ const avec0018 = (db) => valeur(db, `select to_regclass('public.demandes_devis')
 const avec0019 = (db) => valeur(db, `select to_regprocedure('public.demandes_devis_a_orienter()') is not null`);
 /** Migration 0020 (encaissement plafonné, une facture émise par abonné) présente dans la base ? */
 const avec0020 = (db) => valeur(db, `select to_regclass('public.factures_une_emise_par_client') is not null`);
+/** Migration 0021 (rattachement : essais limités et tracés) présente dans la base ? */
+const avec0021 = (db) => valeur(db, `select to_regclass('public.rattachements_essais') is not null`);
+
+/** Fiche de A, sans compte, au téléphone connu ; renvoie son id et son code. */
+async function ficheARattacher(db, s, nom) {
+  const id = await clientNeufA(db, s, nom);
+  return { id, code: await valeur(db, `select code from public.clients where id = $1`, [id]) };
+}
+/** Essai de rattachement : l'id de la fiche si rattachée, null si refusé, 'erreur' si la base lève. */
+async function rattacher(db, compte, code, telephone) {
+  try {
+    return await comme(db, compte, (tx) => valeur(tx, `select public.rattacher_mon_compte($1, $2)`, [code, telephone]));
+  } catch {
+    return 'erreur';
+  }
+}
 
 /** Une demande de devis complète (commerce de Yaoundé III), modifiable par `extra`. */
 const demandeDevis = (commune, extra = {}) => JSON.stringify({
@@ -1115,6 +1131,56 @@ export const ATTAQUES = [
         values ($1, $2, current_date, current_date + 30, 3500, current_date + 7)`, [s.entA, client]);
       if (!(await emettre())) throw new Error('première facture refusée à tort');
       return emettre();
+    },
+  },
+  {
+    id: 'rattachement-force-brute-compte',
+    titre: 'Un compte essaie les téléphones un à un pour s’approprier la fiche d’un abonné (code lu sur l’étiquette)',
+    async jouer(db, s) {
+      if (!(await avec0021(db))) return false;
+      const fiche = await ficheARattacher(db, s, 'Foyer convoité');
+      const pirate = await creerCompte(db, `pirate.${Date.now()}@test.cm`);
+      for (let i = 0; i < 5; i++) {
+        if ((await rattacher(db, pirate, fiche.code, `6990000${10 + i}`)) === fiche.id) return true;
+      }
+      // Sixième essai, cette fois avec le bon téléphone : il doit être bloqué.
+      return (await rattacher(db, pirate, fiche.code, '677000999')) === fiche.id;
+    },
+  },
+  {
+    id: 'rattachement-force-brute-comptes',
+    titre: 'Plusieurs comptes se relaient sur le même code pour contourner la limite par compte',
+    async jouer(db, s) {
+      if (!(await avec0021(db))) return false;
+      const fiche = await ficheARattacher(db, s, 'Foyer convoité bis');
+      for (let c = 0; c < 2; c++) {
+        const pirate = await creerCompte(db, `pirate.${c}.${Date.now()}@test.cm`);
+        for (let i = 0; i < 5; i++) {
+          if ((await rattacher(db, pirate, fiche.code, `6980000${10 + i}`)) === fiche.id) return true;
+        }
+      }
+      const troisieme = await creerCompte(db, `pirate.3.${Date.now()}@test.cm`);
+      return (await rattacher(db, troisieme, fiche.code, '677000999')) === fiche.id;
+    },
+  },
+  {
+    id: 'rattachement-essais-autrui',
+    titre: 'Un autre précollecteur, un abonné ou un visiteur lit la trace des essais de rattachement',
+    async jouer(db, s) {
+      if (!(await avec0021(db))) return false;
+      const fiche = await ficheARattacher(db, s, 'Foyer tracé');
+      const curieux = await creerCompte(db, `curieux.${Date.now()}@test.cm`);
+      await rattacher(db, curieux, fiche.code, '600000000');
+      for (const qui of [s.gerantB, s.menage, 'anon']) {
+        let n = 0;
+        try {
+          n = await comme(db, qui, (tx) => valeur(tx, `select count(*)::int from public.rattachements_essais where code = $1`, [fiche.code]));
+        } catch {
+          n = 0;
+        }
+        if (n > 0) return true;
+      }
+      return accepte(db, s.gerantA, `insert into public.rattachements_essais (user_id, code) values ($1, 'MKT-FAUX')`, [s.gerantA]);
     },
   },
 ];
@@ -2214,6 +2280,31 @@ export const PARCOURS = [
       await comme(db, 'service', (tx) => tx.query(`insert into public.paiements_clients (facture_id, entreprise_id, client_id, montant_fcfa, methode, reference)
         values ($1, $2, $3, 3500, 'mtn_momo', 'NP-BANC')`, [f, s.entA, client]));
       if ((await valeur(db, `select statut from public.factures where id = $1`, [f])) !== 'payee') throw new Error('facture non réglée');
+    },
+  },
+  {
+    titre: 'Migration 0021 rejouée : contrôle « OK » sur les lignes 1 à 3, deux fois',
+    async jouer(db) {
+      const sql = migration('20261113000021');
+      if (!sql) return;
+      for (let passage = 0; passage < 2; passage++) {
+        const controle = (await db.exec(sql)).at(-1).rows;
+        const ko = controle.filter((r, i) => i < 3 && r.resultat !== 'OK');
+        if (ko.length) throw new Error(JSON.stringify(ko));
+      }
+    },
+  },
+  {
+    titre: 'Rattachement : un essai refusé est tracé et vu par le gérant de la fiche ; le bon téléphone rattache ensuite',
+    async jouer(db, s) {
+      if (!(await avec0021(db))) return;
+      const fiche = await ficheARattacher(db, s, 'Foyer qui se trompe');
+      const abonne = await creerCompte(db, `abonne.rattache.${Date.now()}@test.cm`);
+      if ((await rattacher(db, abonne, fiche.code, '677000998')) !== null) throw new Error('essai faux : NULL attendu');
+      const vus = await comme(db, s.gerantA, (tx) => valeur(tx, `select count(*)::int from public.rattachements_essais where code = $1 and not reussi`, [fiche.code]));
+      if (vus !== 1) throw new Error(`le gérant voit ${vus} essai(s) refusé(s) au lieu de 1`);
+      if ((await rattacher(db, abonne, fiche.code.toLowerCase(), '+237 677 000 999')) !== fiche.id) throw new Error('bon téléphone refusé');
+      if ((await valeur(db, `select user_id from public.clients where id = $1`, [fiche.id])) !== abonne) throw new Error('fiche non rattachée');
     },
   },
 ];
