@@ -5,8 +5,10 @@
  *   - communes (R2), mise en forme des noms (R8).
  * Ignorés, avec la consigne, tant que la migration n'est pas exécutée.
  */
-import { beforeAll, describe, expect, it } from 'vitest';
-import { clientAnonyme, compte, plans, POINT_EN_MER, precollecteur, type Compte, type Precollecteur } from '../support/fixtures';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import {
+  CLE_SERVICE, clientAnonyme, clientServiceTest, compte, plans, POINT_EN_MER, precollecteur, type Compte, type Precollecteur,
+} from '../support/fixtures';
 
 let A: Precollecteur;
 let S: Compte;
@@ -14,6 +16,11 @@ let autre: Compte;
 let acces: Compte;
 let planId: string;
 let migration = false;
+// Depuis 20261114000022, la liste d'attente est réservée aux précollecteurs
+// vérifiés : le dossier de A est validé le temps de ces tests (clé de service
+// de la base de test). Sans cette clé, les tests de prise en charge sont ignorés.
+let dossierValideIci = false;
+let listeFermee = false;
 
 beforeAll(async () => {
   A = await precollecteur('precoA', 'Test Propreté A');
@@ -29,9 +36,24 @@ beforeAll(async () => {
   // Rien ne reste d'un essai précédent.
   await S.sb.from('demandes_abonnement').update({ statut: 'annulee' }).eq('statut', 'en_attente');
   await acces.sb.rpc('annuler_demande_acces');
+  const verifie = await A.sb.rpc('precollecteur_verifie', { p_entreprise: A.entrepriseId });
+  if (!verifie.error && verifie.data !== true) {
+    if (CLE_SERVICE) {
+      await clientServiceTest().from('entreprises').update({ dossier_statut: 'valide' }).eq('id', A.entrepriseId);
+      dossierValideIci = true;
+    } else {
+      listeFermee = true;
+    }
+  }
 });
 
-const point = { lat: POINT_EN_MER.lat + 0.3, lng: POINT_EN_MER.lng + 0.3 };
+afterAll(async () => {
+  if (dossierValideIci) {
+    await clientServiceTest().from('entreprises').update({ dossier_statut: 'incomplet' }).eq('id', A.entrepriseId);
+  }
+});
+
+const point ={ lat: POINT_EN_MER.lat + 0.3, lng: POINT_EN_MER.lng + 0.3 };
 
 describe('R2 / R8 — communes et noms', () => {
   it('les 13 communes de Yaoundé et Douala existent, lisibles sans compte', async ({ skip }) => {
@@ -91,7 +113,7 @@ describe('R3 — liste d’attente des ménages hors zone', () => {
   });
 
   it('le précollecteur la voit SANS nom ni téléphone', async ({ skip }) => {
-    if (!migration) skip();
+    if (!migration || listeFermee) skip();
     const { data } = await A.sb.rpc('demandes_ouvertes');
     const d = (data as Record<string, unknown>[]).find((x) => x.id === demandeId);
     expect(d).toBeTruthy();
@@ -110,7 +132,7 @@ describe('R3 — liste d’attente des ménages hors zone', () => {
   });
 
   it('prise en charge : le ménage devient client actif du précollecteur', async ({ skip }) => {
-    if (!migration) skip();
+    if (!migration || listeFermee) skip();
     const { data: clientId, error } = await A.sb.rpc('prendre_demande', { p_demande: demandeId });
     expect(error).toBeNull();
     const { data: c } = await A.sb.from('clients').select('nom, telephone, statut, user_id, quartier').eq('id', clientId as string).single();
@@ -120,7 +142,7 @@ describe('R3 — liste d’attente des ménages hors zone', () => {
   });
 
   it('une demande déjà prise ne peut pas l’être deux fois', async ({ skip }) => {
-    if (!migration) skip();
+    if (!migration || listeFermee) skip();
     const { error } = await A.sb.rpc('prendre_demande', { p_demande: demandeId });
     expect(error?.message).toMatch(/déjà été prise/);
   });
