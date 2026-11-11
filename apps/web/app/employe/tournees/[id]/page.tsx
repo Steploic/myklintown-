@@ -9,6 +9,7 @@ import { TourneeRunner, type Passage } from '@/components/precollecteur/tournee-
 import { PositionLive } from '@/components/employe/position-live';
 import { RafraichissementAuto } from '@/components/ui/rafraichissement-auto';
 import { paiementEnLigneDisponible } from '@/lib/paiement/service';
+import { encaissementEnLigneOuvert, type EntreprisePaiement } from '@/lib/paiement/regles';
 import { requireEmploye } from '@/lib/employe/context';
 import { blocageAuPassage, clientsDeTournee } from '@/lib/clients-tournee';
 import { BoutonStatutTournee } from '@/components/precollecteur/bouton-statut-tournee';
@@ -71,11 +72,15 @@ export default async function TourneeEmploye({
     .map((c) => ({ id: c.id, statut: c.statut, motif: c.motif, client: clients.get(c.client_id)! }));
   const totalAttente = [...enAttente.entries()].filter(([cid]) => clients.has(cid)).reduce((s, [, m]) => s + m, 0);
 
-  // Mobile Money sur le téléphone du ménage : précollecteur vérifié chez Notch Pay.
+  // Mobile Money sur le téléphone du ménage : paiement ouvert, précollecteur vérifié par MyKlinTown.
   let enLigne = false;
   if (paiementEnLigneDisponible()) {
-    const { data: e } = await supabase.from('entreprises').select('paiement_statut').eq('id', entreprise.id).maybeSingle();
-    enLigne = row<{ paiement_statut: string }>(e)?.paiement_statut === 'actif';
+    const { data: e } = await supabase
+      .from('entreprises')
+      .select('paiement_statut, dossier_statut, statut')
+      .eq('id', entreprise.id)
+      .maybeSingle();
+    enLigne = encaissementEnLigneOuvert(row<EntreprisePaiement>(e));
   }
   const s = STATUT_TOURNEE[t.statut] ?? STATUT_TOURNEE.planifiee!;
   const modifiable = t.statut === 'planifiee' || t.statut === 'en_cours';

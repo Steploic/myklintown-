@@ -20,6 +20,7 @@ import { origineDemande, row, rows, rpc } from '@/lib/server';
 import { DOCUMENTS, type EtatDocumentClient } from '@/lib/documents';
 import { creerLienPaiementAction } from '@/lib/paiement/actions';
 import { paiementEnLigneDisponible } from '@/lib/paiement/service';
+import { encaissementEnLigneOuvert } from '@/lib/paiement/regles';
 import { qrSvg } from '@/lib/qr';
 import { urlsPreuves } from '@/lib/preuves';
 import {
@@ -63,8 +64,8 @@ export default async function FicheClientPage({
     .maybeSingle();
   const client = row<ClientStatut>(c);
   if (!client) notFound();
-  // Lien de paiement Mobile Money : plateforme configurée ET précollecteur vérifié chez Notch Pay.
-  const enLigne = paiementEnLigneDisponible() && entreprise.paiement_statut === 'actif';
+  // Lien de paiement Mobile Money : plateforme configurée, paiement ouvert, précollecteur vérifié par MyKlinTown.
+  const enLigne = paiementEnLigneDisponible() && encaissementEnLigneOuvert(entreprise);
   const urlLien = lien ? `${await origineDemande()}/payer/${lien}` : null;
 
   const [fa, pa, co, inc, re, em, za, ch, ra] = await Promise.all([

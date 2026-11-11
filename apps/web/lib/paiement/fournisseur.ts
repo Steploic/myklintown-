@@ -138,4 +138,15 @@ export function signatureValide(corpsBrut: string, signature: string | null, cle
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+/**
+ * Appel d'une tâche planifiée de Vercel : en-tête « Authorization: Bearer
+ * <CRON_SECRET> ». Fermé tant que CRON_SECRET n'est pas posée.
+ */
+export function appelPlanifieValide(autorisation: string | null, secret: string | undefined): boolean {
+  if (!autorisation || !secret) return false;
+  const a = Buffer.from(autorisation);
+  const b = Buffer.from(`Bearer ${secret}`);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 export { ErreurFournisseur };

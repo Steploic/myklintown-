@@ -6,7 +6,7 @@ import { getSupabase, row, rpc, utilisateurCourant } from '@/lib/server';
 import { clientService } from '@/lib/supabase-service';
 import { estErreurReseau, MESSAGE_RESEAU } from '@/lib/format';
 import { actualiserPaiement, demarrerPaiement, PAIEMENT_INDISPONIBLE, paiementEnLigneDisponible } from './service';
-import type { Canal, StatutPaiementEnLigne } from './regles';
+import { DOSSIER_A_VALIDER, precollecteurVerifie, type Canal, type StatutPaiementEnLigne } from './regles';
 
 export interface ResultatDemande {
   reference?: string;
@@ -71,8 +71,9 @@ export async function demanderPaiementTourneeAction(clientId: string, canal: Can
  * jour passe par `rafraichirApresPaiementAction`, une fois la confirmation lue.
  */
 export async function statutPaiementAction(reference: string): Promise<{ statut: StatutPaiementEnLigne; message: string | null }> {
-  const r = await actualiserPaiement(reference);
-  return r ?? { statut: 'echoue', message: 'Paiement introuvable.' };
+  // Action publique : le fournisseur n'est interrogé que toutes les 2 s au plus pour un même paiement.
+  const r = await actualiserPaiement(reference, { limiter: true });
+  return r ? { statut: r.statut, message: r.message } : { statut: 'echoue', message: 'Paiement introuvable.' };
 }
 
 /** Après un paiement réussi : espaces du ménage, du précollecteur et de l'employé à jour (page courante comprise). */
@@ -105,11 +106,11 @@ async function gerantConnecte() {
   if (!user) redirect(`/login?next=${PAGE_PAIEMENT}`);
   const { data } = await supabase
     .from('entreprise_membres')
-    .select('entreprise_id, role_membre, entreprises(id)')
+    .select('entreprise_id, role_membre, entreprises(id, dossier_statut, statut)')
     .eq('user_id', user.id)
     .limit(1)
     .maybeSingle();
-  const m = row<{ role_membre: string; entreprises: { id: string } | null }>(data);
+  const m = row<{ role_membre: string; entreprises: { id: string; dossier_statut: string; statut: string } | null }>(data);
   if (!m?.entreprises || m.role_membre !== 'gerant') redirect('/precollecteur');
   return m.entreprises;
 }
@@ -117,6 +118,9 @@ async function gerantConnecte() {
 /** Statut modifiable par le serveur seulement (déclencheur de la migration 0008) : passe par le client service. */
 async function changerStatutPaiement(statut: 'actif' | 'inactif') {
   const ent = await gerantConnecte();
+  // Fermer reste toujours possible ; ouvrir exige un dossier validé par MyKlinTown
+  // et une entreprise non suspendue (revue du 10/11/2026 : un clic suffisait).
+  if (statut === 'actif' && !precollecteurVerifie(ent)) redirect(`${PAGE_PAIEMENT}?erreur=${encodeURIComponent(DOSSIER_A_VALIDER)}`);
   const admin = clientService();
   if (!admin || !paiementEnLigneDisponible()) redirect(`${PAGE_PAIEMENT}?erreur=${encodeURIComponent(PAIEMENT_INDISPONIBLE)}`);
   const { error } = await admin

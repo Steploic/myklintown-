@@ -96,6 +96,8 @@ export function PaiementMobile({
       if (fini) return;
       if (s?.statut === 'reussi') {
         fini = true;
+        // Facture annulée ou réglée entre-temps : la somme en trop est « à rembourser » (message de la base).
+        setMessage(s.message ?? '');
         setEtape('reussi');
       } else if (s && (s.statut === 'echoue' || s.statut === 'annule' || s.statut === 'expire')) {
         fini = true;
@@ -124,9 +126,12 @@ export function PaiementMobile({
 
   if (etape === 'reussi') {
     return (
-      <p role="status" className="flex items-center gap-2 rounded-lg border border-terrain-ok/25 bg-terrain-ok/5 px-4 py-3 font-semibold text-terrain-ok">
-        <CheckCircle2 size={20} /> Paiement de {fcfa(montant)} reçu. Merci !
-      </p>
+      <div role="status" className="rounded-lg border border-terrain-ok/25 bg-terrain-ok/5 px-4 py-3">
+        <p className="flex items-center gap-2 font-semibold text-terrain-ok">
+          <CheckCircle2 size={20} /> Paiement de {fcfa(montant)} reçu. Merci !
+        </p>
+        {message && <p className="mt-1 text-body-sm text-brand-ink">{message}</p>}
+      </div>
     );
   }
 

@@ -75,3 +75,39 @@ export function statutSimule(telephone: string, ecouleMs: number): { statut: Sta
 
 /** Délai au-delà duquel une demande restée sans réponse est considérée comme expirée. */
 export const DELAI_EXPIRATION_MS = 10 * 60_000;
+
+export const MESSAGE_EXPIRE = 'Aucune validation sur le téléphone : la demande a expiré.';
+
+/** Ce qui décide si un précollecteur encaisse en ligne (colonnes de `entreprises`). */
+export interface EntreprisePaiement {
+  paiement_statut?: string | null;
+  dossier_statut?: string | null;
+  statut?: string | null;
+}
+
+/**
+ * Dossier validé par MyKlinTown et entreprise non suspendue : la condition pour
+ * ouvrir le paiement en ligne (revue du 10/11/2026 ; même règle que
+ * `precollecteur_verifie` en base). Les deux colonnes doivent avoir été lues.
+ */
+export function precollecteurVerifie(e: EntreprisePaiement | null | undefined): boolean {
+  return !!e && e.dossier_statut === 'valide' && !!e.statut && e.statut !== 'suspendu';
+}
+
+/**
+ * Le précollecteur encaisse-t-il en ligne en ce moment ? Ouvert par le gérant
+ * ET toujours vérifié : un dossier repassé en vérification ou une entreprise
+ * suspendue cesse d'encaisser sans que le gérant ait à refermer.
+ */
+export function encaissementEnLigneOuvert(e: EntreprisePaiement | null | undefined): boolean {
+  return !!e && e.paiement_statut === 'actif' && precollecteurVerifie(e);
+}
+
+export const DOSSIER_A_VALIDER =
+  'Le paiement en ligne s’ouvre une fois votre dossier validé par MyKlinTown, et tant que votre entreprise n’est pas suspendue.';
+
+/** Lien de paiement (public, sans compte) : demandes par facture et par numéro, sur une heure glissante. */
+export const LIMITE_LIEN = { parFacture: 5, parNumero: 5, fenetreMs: 60 * 60_000 };
+
+/** Écran de suivi : une interrogation du fournisseur toutes les 2 secondes au plus par paiement. */
+export const INTERVALLE_SUIVI_MS = 2_000;

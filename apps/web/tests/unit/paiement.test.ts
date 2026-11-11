@@ -2,12 +2,14 @@ import { createHmac } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   commissionSur,
+  encaissementEnLigneOuvert,
   operateurProbable,
+  precollecteurVerifie,
   statutDepuisNotchPay,
   statutSimule,
   telephoneMobileMoney,
 } from '@/lib/paiement/regles';
-import { cleCompatibleAvecBase, fournisseurActif, notchPay, signatureValide } from '@/lib/paiement/fournisseur';
+import { appelPlanifieValide, cleCompatibleAvecBase, fournisseurActif, notchPay, signatureValide } from '@/lib/paiement/fournisseur';
 
 const BASE_PROD = 'https://xglomngvjsgbwobiwfqp.supabase.co';
 const BASE_TEST = 'https://projet-de-test.supabase.co';
@@ -79,6 +81,42 @@ describe('notifications Notch Pay', () => {
     expect(signatureValide(corps, null, cle)).toBe(false);
     expect(signatureValide(corps, signature, undefined)).toBe(false);
     expect(signatureValide(corps, 'abc', cle)).toBe(false);
+  });
+});
+
+describe('qui encaisse en ligne (revue du 10/11/2026)', () => {
+  const verifie = { dossier_statut: 'valide', statut: 'actif' };
+  it('ouvrir : dossier validé par MyKlinTown et entreprise non suspendue', () => {
+    expect(precollecteurVerifie(verifie)).toBe(true);
+    expect(precollecteurVerifie({ dossier_statut: 'valide', statut: 'essai' })).toBe(true);
+    for (const e of [
+      { dossier_statut: 'soumis', statut: 'actif' },
+      { dossier_statut: 'incomplet', statut: 'actif' },
+      { dossier_statut: 'refuse', statut: 'actif' },
+      { dossier_statut: 'valide', statut: 'suspendu' },
+      // Colonne non lue : refusé, plutôt que supposé non suspendu.
+      { dossier_statut: 'valide' },
+      null,
+    ]) {
+      expect(precollecteurVerifie(e)).toBe(false);
+    }
+  });
+  it('encaisser : ouvert par le gérant ET toujours vérifié', () => {
+    expect(encaissementEnLigneOuvert({ ...verifie, paiement_statut: 'actif' })).toBe(true);
+    expect(encaissementEnLigneOuvert({ ...verifie, paiement_statut: 'inactif' })).toBe(false);
+    expect(encaissementEnLigneOuvert({ dossier_statut: 'soumis', statut: 'actif', paiement_statut: 'actif' })).toBe(false);
+    expect(encaissementEnLigneOuvert({ dossier_statut: 'valide', statut: 'suspendu', paiement_statut: 'actif' })).toBe(false);
+  });
+});
+
+describe('tâche planifiée de Vercel (rapprochement)', () => {
+  it('seulement « Bearer <CRON_SECRET> », et jamais sans secret', () => {
+    expect(appelPlanifieValide('Bearer s3cret', 's3cret')).toBe(true);
+    expect(appelPlanifieValide('Bearer autre', 's3cret')).toBe(false);
+    expect(appelPlanifieValide('s3cret', 's3cret')).toBe(false);
+    expect(appelPlanifieValide(null, 's3cret')).toBe(false);
+    expect(appelPlanifieValide('Bearer ', '')).toBe(false);
+    expect(appelPlanifieValide('Bearer undefined', undefined)).toBe(false);
   });
 });
 

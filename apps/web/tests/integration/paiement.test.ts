@@ -113,3 +113,47 @@ describe('paiement confirmé (clé service)', () => {
     expect((await menage.sb.from('paiements_en_ligne').select('id').eq('reference', reference)).data).toEqual([]);
   });
 });
+
+// Migration 20261115000023 (revue du 10/11/2026) : une seule demande en cours
+// par facture ; un paiement confirmé n'est imputé que dans la limite du reste dû.
+describe('garde-fous du paiement en ligne (clé service)', () => {
+  const demande = (reference: string, facture: string, client: string) => ({
+    entreprise_id: A.entrepriseId, client_id: client, facture_id: facture, reference, fournisseur: 'simulation',
+    fournisseur_reference: `sim_${reference}`, canal: 'cm.mtn', telephone: '+237677000334',
+    montant_fcfa: 3500, origine: 'menage', statut: 'en_attente',
+  });
+
+  it('une seule demande en cours par facture', async ({ skip }) => {
+    if (!migration || !service) skip();
+    const planId = (await plans(A.sb))[0]!.id;
+    const c = await A.sb.from('clients').insert({ entreprise_id: A.entrepriseId, nom: 'Foyer Double Demande', telephone: '677000334', plan_id: planId }).select('id').single();
+    const client = (c.data as { id: string }).id;
+    const f = await A.sb
+      .from('factures')
+      .insert({ entreprise_id: A.entrepriseId, client_id: client, montant_fcfa: 3500, periode_debut: iso(0), periode_fin: iso(29), echeance: iso(7) })
+      .select('id')
+      .single();
+    const facture = (f.data as { id: string }).id;
+    const t = Date.now();
+    expect((await service!.from('paiements_en_ligne').insert(demande(`MKTDBL1${t}`, facture, client))).error).toBeNull();
+    const seconde = await service!.from('paiements_en_ligne').insert(demande(`MKTDBL2${t}`, facture, client));
+    expect(seconde.error?.code).toBe('23505');
+    // Terminée, elle laisse partir la suivante.
+    await service!.from('paiements_en_ligne').update({ statut: 'expire' }).eq('reference', `MKTDBL1${t}`);
+    expect((await service!.from('paiements_en_ligne').insert(demande(`MKTDBL3${t}`, facture, client))).error).toBeNull();
+  });
+
+  it('facture déjà réglée : le paiement confirmé est « à rembourser », rien n’est compté deux fois', async ({ skip }) => {
+    if (!migration || !service) skip();
+    // La facture du test précédent est réglée (3 500 en ligne) ; une seconde demande aboutit quand même.
+    const reference = `MKTTARD${Date.now()}`;
+    expect((await service!.from('paiements_en_ligne').insert(demande(reference, factureId, clientId))).error).toBeNull();
+    const r = await service!.rpc('enregistrer_paiement_en_ligne', { p_reference: reference });
+    expect(r.error).toBeNull();
+    expect(r.data).toBeNull();
+    const { data: paiements } = await A.sb.from('paiements_clients').select('montant_fcfa').eq('facture_id', factureId);
+    expect(paiements).toEqual([{ montant_fcfa: 3500 }]);
+    const { data: t } = await A.sb.from('paiements_en_ligne').select('statut, a_rembourser_fcfa, message').eq('reference', reference).single();
+    expect(t).toEqual({ statut: 'reussi', a_rembourser_fcfa: 3500, message: 'Facture déjà réglée : paiement à rembourser.' });
+  });
+});

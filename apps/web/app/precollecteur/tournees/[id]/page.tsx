@@ -8,6 +8,7 @@ import { EmptyState, PageHeader } from '@/components/ui/blocks';
 import { TourneeRunner, type Passage } from '@/components/precollecteur/tournee-runner';
 import { RafraichissementAuto } from '@/components/ui/rafraichissement-auto';
 import { paiementEnLigneDisponible } from '@/lib/paiement/service';
+import { encaissementEnLigneOuvert } from '@/lib/paiement/regles';
 import { requireEntreprise } from '@/lib/precollecteur/context';
 import { blocageAuPassage, clientsDeTournee } from '@/lib/clients-tournee';
 import { BoutonStatutTournee } from '@/components/precollecteur/bouton-statut-tournee';
@@ -136,7 +137,7 @@ export default async function TourneePage({ params }: { params: Promise<{ id: st
         passages={passages}
         modifiable={modifiable}
         encaissement={modifiable}
-        paiementEnLigne={modifiable && paiementEnLigneDisponible() && entreprise.paiement_statut === 'actif'}
+        paiementEnLigne={modifiable && paiementEnLigneDisponible() && encaissementEnLigneOuvert(entreprise)}
         blocage={blocage}
       />
 

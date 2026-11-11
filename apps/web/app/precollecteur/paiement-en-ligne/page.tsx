@@ -1,11 +1,12 @@
-import { CheckCircle2, Link2, ShieldCheck, Smartphone, Wallet } from 'lucide-react';
+import Link from 'next/link';
+import { AlertTriangle, CheckCircle2, FileCheck2, Link2, ShieldCheck, Smartphone, Wallet } from 'lucide-react';
 import { PrecoShell } from '@/components/precollecteur/shell';
 import { EmptyState, PageHeader, Section } from '@/components/ui/blocks';
 import { SubmitButton } from '@/components/ui/action-form';
 import { requireEntreprise } from '@/lib/precollecteur/context';
 import { activerPaiementEnLigneAction, desactiverPaiementEnLigneAction } from '@/lib/paiement/actions';
 import { paiementEnLigneDisponible } from '@/lib/paiement/service';
-import { CANAUX, type Canal } from '@/lib/paiement/regles';
+import { CANAUX, DOSSIER_A_VALIDER, precollecteurVerifie, type Canal } from '@/lib/paiement/regles';
 import { parametre, rows } from '@/lib/server';
 import { dateHeureFr, fcfa } from '@/lib/format';
 
@@ -24,26 +25,34 @@ const ORIGINE: Record<string, string> = { menage: 'Espace de l’abonné', lien:
 /**
  * Ouverture du paiement en ligne pour le précollecteur : MyKlinTown encaisse
  * sur son compte Notch Pay, puis lui reverse les paiements, commission déduite.
+ * Réservée aux précollecteurs dont MyKlinTown a validé le dossier (revue du
+ * 10/11/2026).
  */
 export default async function PaiementEnLignePage({ searchParams }: { searchParams: Promise<{ erreur?: string }> }) {
   const { erreur } = await searchParams;
   const { supabase, entreprise } = await requireEntreprise();
   const disponible = paiementEnLigneDisponible();
   const statut = entreprise.paiement_statut ?? 'inactif';
+  const verifie = precollecteurVerifie(entreprise);
   const [taux, tx] = await Promise.all([
     parametre(supabase, 'commission_taux', 0.1),
     supabase
       .from('paiements_en_ligne')
-      .select('id, created_at, montant_fcfa, commission_fcfa, canal, origine, statut, message, clients(nom)')
+      .select('id, created_at, montant_fcfa, commission_fcfa, a_rembourser_fcfa, canal, origine, statut, message, clients(nom)')
       .eq('entreprise_id', entreprise.id)
       .order('created_at', { ascending: false })
       .limit(30),
   ]);
   const transactions = rows<{
-    id: string; created_at: string; montant_fcfa: number; commission_fcfa: number; canal: Canal;
-    origine: string; statut: string; message: string | null; clients: { nom: string } | null;
+    id: string; created_at: string; montant_fcfa: number; commission_fcfa: number; a_rembourser_fcfa: number | null;
+    canal: Canal; origine: string; statut: string; message: string | null; clients: { nom: string } | null;
   }>(tx.data);
   const pct = `${Math.round(taux * 100)} %`;
+  const lienDossier = (
+    <Link href="/precollecteur/dossier" className="btn-outline mt-4">
+      <FileCheck2 size={16} /> Voir mon dossier
+    </Link>
+  );
 
   return (
     <PrecoShell path="/precollecteur/facturation">
@@ -65,6 +74,20 @@ export default async function PaiementEnLignePage({ searchParams }: { searchPara
             texte="Le paiement en ligne n’est pas encore ouvert sur MyKlinTown. En attendant, encaissez en espèces ou notez les paiements Mobile Money avec leur référence."
           />
         </div>
+      ) : statut === 'actif' && !verifie ? (
+        <section className="mb-6 rounded-2xl border border-terrain-relance/30 bg-terrain-relance/5 p-5">
+          <p className="flex items-center gap-2 text-h2-sm font-semibold text-brand-ink"><AlertTriangle size={20} /> Paiement en ligne suspendu</p>
+          <p className="mt-2 text-body-sm text-muted-foreground">
+            Vos clients ne peuvent plus payer en ligne : votre dossier est en cours de vérification par MyKlinTown, ou votre
+            entreprise est suspendue. Le paiement reprendra dès que votre dossier sera validé.
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            {lienDossier}
+            <form action={desactiverPaiementEnLigneAction} className="mt-4">
+              <SubmitButton variant="outline" pendingLabel="Fermeture…">Désactiver le paiement en ligne</SubmitButton>
+            </form>
+          </div>
+        </section>
       ) : statut === 'actif' ? (
         <section className="mb-6 rounded-2xl border border-terrain-ok/25 bg-terrain-ok/5 p-5">
           <p className="flex items-center gap-2 text-h2-sm font-semibold text-terrain-ok"><CheckCircle2 size={20} /> Paiement en ligne actif</p>
@@ -88,11 +111,18 @@ export default async function PaiementEnLignePage({ searchParams }: { searchPara
             <li>MyKlinTown encaisse le paiement : la facture passe aussitôt à « Payée ».</li>
             <li>MyKlinTown vous reverse ces paiements, moins sa commission ({pct}).</li>
           </ol>
-          <form action={activerPaiementEnLigneAction} className="mt-4">
-            <SubmitButton pendingLabel="Ouverture…">
-              <ShieldCheck size={16} /> Activer le paiement en ligne
-            </SubmitButton>
-          </form>
+          {verifie ? (
+            <form action={activerPaiementEnLigneAction} className="mt-4">
+              <SubmitButton pendingLabel="Ouverture…">
+                <ShieldCheck size={16} /> Activer le paiement en ligne
+              </SubmitButton>
+            </form>
+          ) : (
+            <>
+              <p className="mt-4 rounded-md border border-border bg-muted/60 px-3 py-2 text-body-sm text-brand-ink">{DOSSIER_A_VALIDER}</p>
+              {lienDossier}
+            </>
+          )}
         </section>
       )}
 
@@ -116,6 +146,9 @@ export default async function PaiementEnLignePage({ searchParams }: { searchPara
                     <span className="num font-semibold">{fcfa(t.montant_fcfa)}</span>
                     <span className="text-small text-muted-foreground">dont commission {fcfa(t.commission_fcfa)}</span>
                     <span className={st.chip}>{st.label}</span>
+                    {(t.a_rembourser_fcfa ?? 0) > 0 && (
+                      <span className="chip-stop">À rembourser : {fcfa(t.a_rembourser_fcfa ?? 0)}</span>
+                    )}
                   </span>
                 </li>
               );

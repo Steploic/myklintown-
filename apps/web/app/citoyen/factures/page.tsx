@@ -7,6 +7,7 @@ import { PaiementMobile } from '@/components/paiement/paiement-mobile';
 import { getMonAbonnement } from '@/lib/client/context';
 import { payerFactureAction } from '@/lib/paiement/actions';
 import { paiementEnLigneDisponible } from '@/lib/paiement/service';
+import { encaissementEnLigneOuvert, type EntreprisePaiement } from '@/lib/paiement/regles';
 import { row, rows } from '@/lib/server';
 import { dateFr, dateHeureFr, fcfa, isoJour, METHODES_PAIEMENT } from '@/lib/format';
 import type { Facture, Paiement } from '@/lib/types';
@@ -27,8 +28,12 @@ export default async function MesFacturesPage() {
   // Paiement en ligne : seulement si la plateforme est configurée ET le précollecteur vérifié.
   let enLigne = false;
   if (client && paiementEnLigneDisponible()) {
-    const { data: e } = await supabase.from('entreprises').select('paiement_statut').eq('id', client.entreprise_id).maybeSingle();
-    enLigne = row<{ paiement_statut: string }>(e)?.paiement_statut === 'actif';
+    const { data: e } = await supabase
+      .from('entreprises')
+      .select('paiement_statut, dossier_statut, statut')
+      .eq('id', client.entreprise_id)
+      .maybeSingle();
+    enLigne = encaissementEnLigneOuvert(row<EntreprisePaiement>(e));
   }
 
   return (

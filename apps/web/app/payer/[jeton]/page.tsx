@@ -4,6 +4,7 @@ import { Logo } from '@myklintown/ui';
 import { PaiementMobile } from '@/components/paiement/paiement-mobile';
 import { payerParLienAction } from '@/lib/paiement/actions';
 import { paiementEnLigneDisponible, resteAPayer } from '@/lib/paiement/service';
+import { encaissementEnLigneOuvert } from '@/lib/paiement/regles';
 import { clientService } from '@/lib/supabase-service';
 import { row } from '@/lib/server';
 import { dateFr, fcfa } from '@/lib/format';
@@ -36,7 +37,7 @@ export default async function PayerParLien({ params }: { params: Promise<{ jeton
           <p className="mt-1 text-body text-muted-foreground">La facture {r.facture.numero} est payée. Merci !</p>
         </div>
       );
-    } else if (r.facture.entreprises?.paiement_statut !== 'actif') {
+    } else if (!r.facture.entreprises || !encaissementEnLigneOuvert(r.facture.entreprises)) {
       contenu = <Message titre="Paiement en ligne indisponible" texte={`${r.facture.entreprises?.nom ?? 'Votre précollecteur'} n’accepte pas encore le paiement en ligne.`} />;
     } else {
       contenu = (
@@ -53,8 +54,8 @@ export default async function PayerParLien({ params }: { params: Promise<{ jeton
             <PaiementMobile montant={r.reste} demander={payerParLienAction.bind(null, jeton)} />
           </div>
           <p className="mt-4 text-small text-muted-foreground">
-            Paiement sécurisé par Notch Pay. L’argent est versé à {r.facture.entreprises.nom} ; vous validez avec le code
-            secret de votre compte Mobile Money.
+            Paiement sécurisé par Notch Pay. MyKlinTown reçoit votre paiement et le reverse à {r.facture.entreprises.nom} ;
+            vous validez avec le code secret de votre compte Mobile Money.
           </p>
         </>
       );

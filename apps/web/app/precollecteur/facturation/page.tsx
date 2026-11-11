@@ -7,6 +7,7 @@ import { ActionForm, SubmitButton } from '@/components/ui/action-form';
 import { RelanceButtons } from '@/components/precollecteur/relance-buttons';
 import { PaiementForm } from '@/components/precollecteur/facture-bits';
 import { requireEntreprise } from '@/lib/precollecteur/context';
+import { encaissementEnLigneOuvert } from '@/lib/paiement/regles';
 import { genererFacturesAction, validerPaiementAction } from '@/lib/precollecteur/actions';
 import { parametre, rows, toutesLesLignes } from '@/lib/server';
 import {
@@ -158,7 +159,7 @@ export default async function FacturationPage({
           <>
             <Link href="/precollecteur/paiement-en-ligne" className="btn-outline">
               <Smartphone size={16} /> Paiement en ligne
-              {entreprise.paiement_statut === 'actif' && <span className="chip-ok ml-1">actif</span>}
+              {encaissementEnLigneOuvert(entreprise) && <span className="chip-ok ml-1">actif</span>}
             </Link>
             <ActionForm action={genererFacturesAction}>
               <SubmitButton variant="secondary" pendingLabel="Facturation…">
