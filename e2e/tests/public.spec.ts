@@ -31,7 +31,7 @@ test.describe('pages publiques', () => {
     const pied = page.locator('footer');
     await expect(pied.getByText('Appels uniquement')).toBeVisible();
     await expect(pied.getByRole('link', { name: '+237 6 40 12 90 41' })).toHaveAttribute('href', 'https://wa.me/237640129041');
-    await expect(pied.getByRole('link', { name: 'projet.myklintown@gmail.com' })).toHaveAttribute('href', 'mailto:projet.myklintown@gmail.com');
+    await expect(pied.getByRole('link', { name: 'myklintown@gmail.com' })).toHaveAttribute('href', 'mailto:myklintown@gmail.com');
   });
 
   test('connexion, inscription, charte, mentions légales', async ({ page }) => {

@@ -62,6 +62,27 @@ const avec0019 = (db) => valeur(db, `select to_regprocedure('public.demandes_dev
 const avec0020 = (db) => valeur(db, `select to_regclass('public.factures_une_emise_par_client') is not null`);
 /** Migration 0021 (rattachement : essais limités et tracés) présente dans la base ? */
 const avec0021 = (db) => valeur(db, `select to_regclass('public.rattachements_essais') is not null`);
+/** Migration 0022 (liste d'attente réservée, colonnes système gardées à la création) présente dans la base ? */
+const avec0022 = (db) => valeur(db, `select to_regprocedure('public.precollecteur_verifie(uuid)') is not null`);
+
+/** La demande en attente du banc (déposée par `preparer`). */
+async function demandeEnAttente(db) {
+  const id = await valeur(db, `select id from public.demandes_abonnement where statut = 'en_attente' order by created_at limit 1`);
+  if (!id) throw new Error('aucune demande en attente dans le banc');
+  return id;
+}
+
+/** Dans la transaction du gérant de A : une fiche neuve et sa facture de 3 500 FCFA. */
+async function factureNeuveA(tx, s, nom) {
+  const client = await valeur(tx,
+    `insert into public.clients (entreprise_id, nom, plan_id, telephone) values ($1, $2, $3, '677000998') returning id`,
+    [s.entA, nom, s.plan]);
+  const facture = await valeur(tx,
+    `insert into public.factures (entreprise_id, client_id, plan_id, periode_debut, periode_fin, montant_fcfa, echeance)
+     values ($1, $2, $3, current_date, current_date + 30, 3500, current_date + 7) returning id`,
+    [s.entA, client, s.plan]);
+  return { client, facture };
+}
 
 /** Fiche de A, sans compte, au téléphone connu ; renvoie son id et son code. */
 async function ficheARattacher(db, s, nom) {
@@ -1183,6 +1204,136 @@ export const ATTAQUES = [
       return accepte(db, s.gerantA, `insert into public.rattachements_essais (user_id, code) values ($1, 'MKT-FAUX')`, [s.gerantA]);
     },
   },
+  // ---- Revue du 10/11/2026 (migration 20261114000022) ----
+  {
+    id: 'liste-attente-non-verifie',
+    titre: 'Un précollecteur au dossier non vérifié voit la liste d’attente ou prend un ménage en charge',
+    async jouer(db, s) {
+      if (!(await avec0022(db))) return false;
+      const vue = await comme(db, s.intrus, (tx) => tx.query(`select id from public.demandes_ouvertes()`));
+      if (vue.rows.length) return true;
+      const demande = await demandeEnAttente(db);
+      return essaiAnnule(db, s.intrus, async (tx) => !!(await valeur(tx, `select public.prendre_demande($1)`, [demande])));
+    },
+  },
+  {
+    id: 'liste-attente-suspendu',
+    titre: 'Un précollecteur suspendu prend encore un ménage en charge',
+    async jouer(db, s) {
+      if (!(await avec0022(db))) return false;
+      const demande = await demandeEnAttente(db);
+      const avant = (await db.query(`select dossier_statut, statut from public.entreprises where id = $1`, [s.entIntrus])).rows[0];
+      await db.query(`update public.entreprises set dossier_statut = 'valide', statut = 'suspendu' where id = $1`, [s.entIntrus]);
+      try {
+        return await essaiAnnule(db, s.intrus, async (tx) => !!(await valeur(tx, `select public.prendre_demande($1)`, [demande])));
+      } finally {
+        await db.query(`update public.entreprises set dossier_statut = $2, statut = $3 where id = $1`, [s.entIntrus, avant.dossier_statut, avant.statut]);
+      }
+    },
+  },
+  {
+    id: 'creation-compte-tiers',
+    titre: 'Un gérant crée une fiche employé ou client rattachée au compte d’un tiers',
+    async jouer(db, s) {
+      if (!(await avec0022(db))) return false;
+      const employe = await essaiAnnule(db, s.intrus, async (tx) =>
+        !!(await valeur(tx, `insert into public.employes (entreprise_id, nom, user_id) values ($1, 'Fantôme', $2) returning id`, [s.entIntrus, s.gerantB])));
+      const client = await essaiAnnule(db, s.intrus, async (tx) =>
+        !!(await valeur(tx,
+          `insert into public.clients (entreprise_id, nom, telephone, plan_id, user_id) values ($1, 'Fiche piège', '677000001', $2, $3) returning id`,
+          [s.entIntrus, s.plan, s.victime])));
+      return employe || client;
+    },
+  },
+  {
+    id: 'fiche-employe-hors-equipe',
+    titre: 'Une fiche employé d’une autre entreprise, rattachée à son compte, détourne un gérant de sa propre équipe',
+    async jouer(db, s) {
+      if (!(await avec0022(db))) return false;
+      // Fiche posée avec les droits du propriétaire, comme si elle datait d'avant la garde.
+      const piege = await valeur(db, `insert into public.employes (entreprise_id, nom, user_id) values ($1, 'Fantôme', $2) returning id`, [s.entIntrus, s.gerantB]);
+      try {
+        return (await comme(db, s.gerantB, (tx) => valeur(tx, `select public.mon_employe()`))) === piege;
+      } finally {
+        await db.query(`delete from public.employes where id = $1`, [piege]);
+      }
+    },
+  },
+  {
+    id: 'creation-confirmation-validation',
+    titre: 'Un gérant crée un passage déjà « confirmé par l’abonné » ou un encaissement « validé par » un tiers',
+    async jouer(db, s) {
+      if (!(await avec0022(db))) return false;
+      const passage = await essaiAnnule(db, s.gerantA, async (tx) =>
+        !!(await valeur(tx,
+          `insert into public.collectes (entreprise_id, tournee_id, client_id, date_prevue, confirmation_client, confirmation_at)
+           values ($1, $2, $3, current_date + 1, 'confirmee', now()) returning id`,
+          [s.entA, s.tourneeA, s.clientA])));
+      const paiement = await essaiAnnule(db, s.gerantA, async (tx) => {
+        const { client, facture } = await factureNeuveA(tx, s, 'Foyer validation');
+        return !!(await valeur(tx,
+          `insert into public.paiements_clients (facture_id, entreprise_id, client_id, montant_fcfa, valide_par, valide_at)
+           values ($1, $2, $3, 500, $4, now()) returning id`,
+          [facture, s.entA, client, s.gerantB]));
+      });
+      return passage || paiement;
+    },
+  },
+  {
+    id: 'encaissement-supprime',
+    titre: 'Un gérant supprime un encaissement enregistré : la facture redevient impayée',
+    async jouer(db, s) {
+      if (!(await avec0022(db))) return false;
+      return essaiAnnule(db, s.gerantA, async (tx) => {
+        const { client, facture } = await factureNeuveA(tx, s, 'Foyer suppression');
+        const paiement = await valeur(tx,
+          `insert into public.paiements_clients (facture_id, entreprise_id, client_id, montant_fcfa) values ($1, $2, $3, 3500) returning id`,
+          [facture, s.entA, client]);
+        const r = await tx.query(`delete from public.paiements_clients where id = $1 returning id`, [paiement]);
+        return r.rows.length === 1;
+      });
+    },
+  },
+  {
+    id: 'employe-desactive-membre',
+    titre: 'Un employé désactivé reste membre de l’entreprise',
+    async jouer(db, s) {
+      if (!(await avec0022(db))) return false;
+      await db.query(`update public.employes set actif = false where id = $1`, [s.employeA]);
+      try {
+        return await comme(db, s.employe, (tx) => valeur(tx, `select public.est_membre($1)`, [s.entA]));
+      } finally {
+        await db.query(`update public.employes set actif = true where id = $1`, [s.employeA]);
+      }
+    },
+  },
+  {
+    id: 'tables-premiere-version',
+    titre: 'Un compte lit encore les tables de la première version, que l’application n’utilise plus',
+    async jouer(db, s) {
+      if (!(await avec0022(db))) return false;
+      for (const table of ['signalements', 'menages', 'recycleurs', 'articles_marketplace', 'secteurs']) {
+        for (const qui of [s.menage, s.mairieDouala]) {
+          if (await accepte(db, qui, `select 1 from public.${table} limit 1`)) return true;
+        }
+      }
+      return false;
+    },
+  },
+  {
+    id: 'prefixe-facture-tronque',
+    titre: 'Au-delà de 999 entreprises, le préfixe de facture se tronque (deux entreprises, un même préfixe)',
+    async jouer(db) {
+      if (!(await avec0022(db))) return false;
+      const seq = (await db.query(`select last_value::text as valeur, is_called from public.entreprises_prefixe_seq`)).rows[0];
+      await db.query(`select setval('public.entreprises_prefixe_seq', 999)`);
+      try {
+        return (await valeur(db, `select public.prefixe_facture_suivant()`)) !== 'F1000';
+      } finally {
+        await db.query(`select setval('public.entreprises_prefixe_seq', $1::bigint, $2::boolean)`, [seq.valeur, seq.is_called]);
+      }
+    },
+  },
 ];
 
 /** Migration 0014 (facture inaltérable, charte) présente dans la base ? */
@@ -1259,11 +1410,19 @@ export const PARCOURS = [
   {
     titre: 'Liste d’attente : le gérant voit la demande (position approchée) et la prend',
     async jouer(db, s) {
-      const r = await comme(db, s.gerantA, (tx) => tx.query(`select id, lat from public.demandes_ouvertes()`));
-      if (!r.rows.length) throw new Error('liste vide');
-      const client = await comme(db, s.gerantA, (tx) => valeur(tx, `select public.prendre_demande($1)`, [r.rows[0].id]));
-      const adresse = await comme(db, s.gerantA, (tx) => valeur(tx, `select adresse from public.clients where id = $1`, [client]));
-      if (!adresse?.includes('Porte bleue')) throw new Error('adresse non transmise à la prise en charge');
+      // Depuis 20261114000022, la liste est réservée aux précollecteurs vérifiés :
+      // le dossier de A est validé le temps du parcours.
+      const reservee = await avec0022(db);
+      if (reservee) await db.query(`update public.entreprises set dossier_statut = 'valide' where id = $1`, [s.entA]);
+      try {
+        const r = await comme(db, s.gerantA, (tx) => tx.query(`select id, lat from public.demandes_ouvertes()`));
+        if (!r.rows.length) throw new Error('liste vide');
+        const client = await comme(db, s.gerantA, (tx) => valeur(tx, `select public.prendre_demande($1)`, [r.rows[0].id]));
+        const adresse = await comme(db, s.gerantA, (tx) => valeur(tx, `select adresse from public.clients where id = $1`, [client]));
+        if (!adresse?.includes('Porte bleue')) throw new Error('adresse non transmise à la prise en charge');
+      } finally {
+        if (reservee) await db.query(`update public.entreprises set dossier_statut = 'incomplet' where id = $1`, [s.entA]);
+      }
     },
   },
   {

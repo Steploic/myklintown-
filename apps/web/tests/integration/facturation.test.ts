@@ -126,13 +126,22 @@ describe('paiements → statut de facture (déclencheur)', () => {
     await payer(f.id, c.id, 1500);
     expect(await statutFacture(f.id)).toBe('payee');
   });
-  it('annuler un paiement fait repasser la facture en émise', async () => {
+  // Revue du 10/11/2026 (migration 20261114000022) : un encaissement enregistré
+  // ne se supprime plus depuis l'application ; la facture reste payée.
+  it('un encaissement enregistré ne se supprime pas : la facture reste payée', async () => {
     const c = await nouveauClient('Remboursé');
     const f = await facture(c.id, 0, 29, 7);
     const p = await payer(f.id, c.id, 3500);
     expect(await statutFacture(f.id)).toBe('payee');
-    await A.sb.from('paiements_clients').delete().eq('id', p.data!.id);
-    expect(await statutFacture(f.id)).toBe('emise');
+    const garde = !(await A.sb.rpc('precollecteur_verifie', { p_entreprise: A.entrepriseId })).error;
+    const { error } = await A.sb.from('paiements_clients').delete().eq('id', p.data!.id);
+    if (garde) {
+      expect(error?.message).toMatch(/ne se supprime pas/);
+      expect(await statutFacture(f.id)).toBe('payee');
+    } else {
+      // Base sans la migration 20261114000022 : l'ancien comportement.
+      expect(await statutFacture(f.id)).toBe('emise');
+    }
   });
   it('une facture annulée le reste, même payée ensuite', async () => {
     const c = await nouveauClient('Annulée');
