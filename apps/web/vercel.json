@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "pnpm install --ignore-scripts",
-  "regions": ["dub1"]
+  "regions": ["dub1"],
+  "crons": [{ "path": "/api/paiements/rapprochement", "schedule": "0 5 * * *" }]
 }

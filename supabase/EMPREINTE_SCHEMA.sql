@@ -17,9 +17,9 @@
 --     des écarts : elles servent à l'analyse.
 --
 -- Fichier GÉNÉRÉ par supabase/tests-securite/empreinte.mjs à partir des
--- migrations du dépôt (dernière : 20261114000022_liste_attente_gardes_creation). Ne pas le modifier à la main :
+-- migrations du dépôt (dernière : 20261115000023_paiement_en_ligne_garde_fous). Ne pas le modifier à la main :
 -- après toute nouvelle migration, `npm run empreinte` dans supabase/tests-securite.
--- Empreinte attendue : 128 fonctions, 55 tables, 106 politiques, 59 déclencheurs, 132 index, 280 contraintes, 23 types, 3 stockages.
+-- Empreinte attendue : 128 fonctions, 55 tables, 106 politiques, 59 déclencheurs, 134 index, 281 contraintes, 23 types, 3 stockages.
 -- =============================================================================
 with attendu (categorie, objet, valeur, migration) as (
   values
@@ -222,6 +222,7 @@ with attendu (categorie, objet, valeur, migration) as (
     ('contrainte', 'paiements_clients · paiements_clients_pkey', 'p|90276e02fff4', '20260928000004_pivot_precollecteurs'),
     ('contrainte', 'paiements_clients · paiements_clients_statut_check', 'c|24a04841a688', '20261005000007_espace_employe'),
     ('contrainte', 'paiements_clients · paiements_clients_valide_par_fkey', 'f|15e949f77cc3', '20261005000007_espace_employe'),
+    ('contrainte', 'paiements_en_ligne · paiements_en_ligne_a_rembourser_check', 'c|40fe308fffca', '20261115000023_paiement_en_ligne_garde_fous'),
     ('contrainte', 'paiements_en_ligne · paiements_en_ligne_canal_check', 'c|be09ff33bd5e', '20261006000008_paiement_en_ligne'),
     ('contrainte', 'paiements_en_ligne · paiements_en_ligne_client_id_fkey', 'f|1f8ba1ce50d0', '20261006000008_paiement_en_ligne'),
     ('contrainte', 'paiements_en_ligne · paiements_en_ligne_commission_fcfa_check', 'c|1020590ba175', '20261006000008_paiement_en_ligne'),
@@ -397,8 +398,8 @@ with attendu (categorie, objet, valeur, migration) as (
     ('fonction', 'dossier_entreprise(p_nom text)', '789dbfbe62c5|invoker|search_path=public|anon=non|connecte=oui', '20261011000009_audit_securite'),
     ('fonction', 'dossier_revalidation()', '764b23e509ed|invoker|search_path=public|anon=non|connecte=non', '20261109000017_dossier_precollecteur_annuaire'),
     ('fonction', 'employe_avant_suppression()', 'adb789296259|definer|search_path=public|anon=non|connecte=oui', '20261011000009_audit_securite'),
-    ('fonction', 'encaisser_especes(p_client uuid, p_montant integer)', 'd1d1002732c7|definer|search_path=public|anon=non|connecte=oui', '20261005000007_espace_employe'),
-    ('fonction', 'enregistrer_paiement_en_ligne(p_reference text)', '2acd62580ba1|definer|search_path=public|anon=non|connecte=non', '20261006000008_paiement_en_ligne'),
+    ('fonction', 'encaisser_especes(p_client uuid, p_montant integer)', 'd9d5a73d072a|definer|search_path=public|anon=non|connecte=oui', '20261115000023_paiement_en_ligne_garde_fous'),
+    ('fonction', 'enregistrer_paiement_en_ligne(p_reference text)', 'c330bcadc6fb|definer|search_path=public|anon=non|connecte=non', '20261115000023_paiement_en_ligne_garde_fous'),
     ('fonction', 'enregistrer_piece_dossier(p_piece text, p_chemin text, p_commune uuid)', '740ab46ed4db|definer|search_path=public|anon=non|connecte=oui', '20261109000017_dossier_precollecteur_annuaire'),
     ('fonction', 'envoyer_position(p_tournee uuid, p_lat double precision, p_lng double precision, p_precision real)', '77f8b8b68597|definer|search_path=public|anon=non|connecte=oui', '20261005000007_espace_employe'),
     ('fonction', 'est_admin()', '6c1d534a0312|definer|search_path=public|anon=oui|connecte=oui', '20260928000004_pivot_precollecteurs'),
@@ -583,6 +584,8 @@ with attendu (categorie, objet, valeur, migration) as (
     ('index', 'paiements_en_ligne_fournisseur_reference_key', '129a2ba3cae7', '20261006000008_paiement_en_ligne'),
     ('index', 'paiements_en_ligne_pkey', 'c856f8f26061', '20261006000008_paiement_en_ligne'),
     ('index', 'paiements_en_ligne_reference_key', '8813e549a9c7', '20261006000008_paiement_en_ligne'),
+    ('index', 'paiements_en_ligne_telephone_idx', '8f0cbb2e0567', '20261115000023_paiement_en_ligne_garde_fous'),
+    ('index', 'paiements_en_ligne_un_en_cours', 'e4ad598a4add', '20261115000023_paiement_en_ligne_garde_fous'),
     ('index', 'paiements_menage_idx', 'bbd287fead13', '20260526000001_init'),
     ('index', 'paiements_pkey', '2f62d9d60208', '20260526000001_init'),
     ('index', 'paiements_statut_idx', '3f06d196ebda', '20260526000001_init'),
@@ -764,7 +767,7 @@ with attendu (categorie, objet, valeur, migration) as (
     ('table', 'mouvements_stock', 'table|rls=oui|colonnes=d054c092c39f|anon=-', '20261114000022_liste_attente_gardes_creation'),
     ('table', 'paiements', 'table|rls=oui|colonnes=45508180bf3b|anon=-', '20261114000022_liste_attente_gardes_creation'),
     ('table', 'paiements_clients', 'table|rls=oui|colonnes=89c77116035b|anon=siud', '20261005000007_espace_employe'),
-    ('table', 'paiements_en_ligne', 'table|rls=oui|colonnes=7e15ca4a0cb8|anon=siud', '20261006000008_paiement_en_ligne'),
+    ('table', 'paiements_en_ligne', 'table|rls=oui|colonnes=b5f0b167f23e|anon=siud', '20261115000023_paiement_en_ligne_garde_fous'),
     ('table', 'parametres_plateforme', 'table|rls=oui|colonnes=34b03b67a251|anon=siud', '20260928000004_pivot_precollecteurs'),
     ('table', 'plans_tarifaires', 'table|rls=oui|colonnes=fd1dd48f4249|anon=siud', '20260928000004_pivot_precollecteurs'),
     ('table', 'positions_tournee', 'table|rls=oui|colonnes=be3277e07232|anon=siud', '20261005000007_espace_employe'),
@@ -937,7 +940,7 @@ infos (categorie, objet, detail) as (
 select etat, categorie, objet, migration, detail
 from (
   select 0 as rang, 'OK' as etat, 'synthèse' as categorie, 'aucun écart' as objet,
-         '20261114000022_liste_attente_gardes_creation' as migration,
+         '20261115000023_paiement_en_ligne_garde_fous' as migration,
          (select count(*) from attendu)::text || ' objets conformes aux migrations' as detail
    where not exists (select 1 from ecarts)
   union all

@@ -25,8 +25,8 @@ test.describe('paiement en ligne (simulation)', () => {
     if (!pret()) return;
     const A = await compte('precoA', 'precollecteur');
     const e = etat().precoA;
-    // Point de départ : paiement en ligne fermé.
-    await service().from('entreprises').update({ paiement_statut: 'inactif', paiement_compte_id: null }).eq('id', e);
+    // Point de départ : paiement en ligne fermé, dossier pas encore validé par MyKlinTown.
+    await service().from('entreprises').update({ paiement_statut: 'inactif', paiement_compte_id: null, dossier_statut: 'incomplet' }).eq('id', e);
     // Le ménage de test est relié à sa fiche (« Foyer Lien ») : le test ne dépend pas de menage.spec.
     const M = await compte('menage', 'citoyen');
     await service().from('clients').update({ user_id: M.id }).eq('code', CODE_LIEN);
@@ -46,19 +46,29 @@ test.describe('paiement en ligne (simulation)', () => {
     const A = await compte('precoA', 'precollecteur');
     const e = etat().precoA;
     await supprimerClientsDeTest(A.sb, e, { noms: [FOYER_LIEN, FOYER_TOURNEE] });
-    await service().from('entreprises').update({ paiement_statut: 'inactif', paiement_compte_id: null }).eq('id', e);
+    await service().from('entreprises').update({ paiement_statut: 'inactif', paiement_compte_id: null, dossier_statut: 'incomplet' }).eq('id', e);
   });
 
   test.describe('gérant', () => {
     test.use({ storageState: session('precoA') });
-    test('ouvre le paiement en ligne (vérification simulée)', async ({ page }) => {
+    test('sans dossier validé par MyKlinTown, le paiement en ligne ne s’ouvre pas', async ({ page }) => {
       test.skip(!pret(), RAISON);
+      await page.goto('/precollecteur/paiement-en-ligne');
+      await expect(page.getByText(/s’ouvre une fois votre dossier validé par MyKlinTown/)).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Activer le paiement en ligne' })).toHaveCount(0);
+      await expect(page.getByRole('link', { name: 'Voir mon dossier' })).toBeVisible();
+    });
+
+    test('dossier validé : ouvre le paiement en ligne (MyKlinTown encaisse, sans compte connecté)', async ({ page }) => {
+      test.skip(!pret(), RAISON);
+      await service().from('entreprises').update({ dossier_statut: 'valide' }).eq('id', etat().precoA);
       await page.goto('/precollecteur/facturation');
       await page.getByRole('link', { name: /Paiement en ligne/ }).click();
       await expect(page).toHaveURL(/\/precollecteur\/paiement-en-ligne/);
       await page.getByRole('button', { name: 'Activer le paiement en ligne' }).click();
       await expect(page.getByText('Paiement en ligne actif')).toBeVisible();
-      await expect(page.getByText(/Commission MyKlinTown de 10 %/)).toBeVisible();
+      await expect(page.getByText(/moins sa commission de 10 %/)).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Désactiver le paiement en ligne' })).toBeVisible();
     });
   });
 

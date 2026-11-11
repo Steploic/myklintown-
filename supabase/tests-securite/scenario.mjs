@@ -64,6 +64,18 @@ const avec0020 = (db) => valeur(db, `select to_regclass('public.factures_une_emi
 const avec0021 = (db) => valeur(db, `select to_regclass('public.rattachements_essais') is not null`);
 /** Migration 0022 (liste d'attente réservée, colonnes système gardées à la création) présente dans la base ? */
 const avec0022 = (db) => valeur(db, `select to_regprocedure('public.precollecteur_verifie(uuid)') is not null`);
+/** Migration 0023 (paiement en ligne : une demande en cours par facture, trop-perçu à rembourser) présente dans la base ? */
+const avec0023 = (db) => valeur(db, `select to_regclass('public.paiements_en_ligne_un_en_cours') is not null`);
+/** Migration 0008 (paiement en ligne) présente dans la base ? */
+const avecPaiementEnLigne = (db) => valeur(db, `select to_regclass('public.paiements_en_ligne') is not null`);
+
+/** Comme le serveur (clé service) : une demande de paiement en ligne sur une facture, en attente de validation. */
+async function demandeEnLigne(tx, { reference, entreprise, client, facture, montant = 3500, origine = 'menage' }) {
+  await tx.query(
+    `insert into public.paiements_en_ligne (entreprise_id, client_id, facture_id, reference, fournisseur, canal, telephone, montant_fcfa, origine, statut)
+     values ($1, $2, $3, $4, 'simulation', 'cm.mtn', '+237677000555', $5, $6, 'en_attente')`,
+    [entreprise, client, facture, reference, montant, origine]);
+}
 
 /** La demande en attente du banc (déposée par `preparer`). */
 async function demandeEnAttente(db) {
@@ -1334,6 +1346,51 @@ export const ATTAQUES = [
       }
     },
   },
+  // ---------------------------------------------------------------------------
+  // Paiement en ligne (PR #37, revue du 10/11/2026, migration 0023)
+  // ---------------------------------------------------------------------------
+  {
+    id: 'paiement-en-ligne-deux-demandes',
+    titre: 'Deux demandes de paiement en ligne en cours sur la même facture (l’abonné peut payer deux fois)',
+    async jouer(db, s) {
+      if (!(await avecPaiementEnLigne(db))) return false;
+      return essaiAnnule(db, 'service', async (tx) => {
+        await demandeEnLigne(tx, { reference: 'DOUBLE-1', entreprise: s.entD, client: s.clientD, facture: s.factureD });
+        await demandeEnLigne(tx, { reference: 'DOUBLE-2', entreprise: s.entD, client: s.clientD, facture: s.factureD, origine: 'lien' });
+        return true;
+      });
+    },
+  },
+  {
+    id: 'paiement-en-ligne-facture-reglee',
+    titre: 'Un paiement en ligne confirmé est compté sur une facture déjà réglée en espèces (payée deux fois)',
+    async jouer(db, s) {
+      if (!(await avecPaiementEnLigne(db))) return false;
+      return essaiAnnule(db, 'service', async (tx) => {
+        await tx.query(
+          `insert into public.paiements_clients (facture_id, entreprise_id, client_id, montant_fcfa, methode, statut)
+           values ($1, $2, $3, 3500, 'especes', 'valide')`, [s.factureD, s.entD, s.clientD]);
+        await demandeEnLigne(tx, { reference: 'REGLEE-1', entreprise: s.entD, client: s.clientD, facture: s.factureD });
+        await tx.query(`select public.enregistrer_paiement_en_ligne('REGLEE-1')`);
+        const total = await valeur(tx,
+          `select coalesce(sum(montant_fcfa), 0)::int from public.paiements_clients where facture_id = $1 and statut = 'valide'`, [s.factureD]);
+        return total > 3500;
+      });
+    },
+  },
+  {
+    id: 'paiement-en-ligne-facture-annulee',
+    titre: 'Un paiement en ligne confirmé est compté sur une facture annulée',
+    async jouer(db, s) {
+      if (!(await avecPaiementEnLigne(db))) return false;
+      return essaiAnnule(db, 'service', async (tx) => {
+        await demandeEnLigne(tx, { reference: 'ANNULEE-1', entreprise: s.entD, client: s.clientD, facture: s.factureD });
+        await tx.query(`update public.factures set statut = 'annulee' where id = $1`, [s.factureD]);
+        await tx.query(`select public.enregistrer_paiement_en_ligne('ANNULEE-1')`);
+        return (await valeur(tx, `select count(*)::int from public.paiements_clients where facture_id = $1`, [s.factureD])) > 0;
+      });
+    },
+  },
 ];
 
 /** Migration 0014 (facture inaltérable, charte) présente dans la base ? */
@@ -1533,6 +1590,47 @@ export const PARCOURS = [
       });
       const st = await valeur(db, `select statut from public.factures where id = $1`, [s.factureA]);
       if (st !== 'payee') throw new Error(`facture ${st}`);
+    },
+  },
+  {
+    titre: 'Paiement en ligne après des espèces : le reste dû est imputé, le trop-perçu noté « à rembourser » ; notification rejouée sans effet',
+    async jouer(db, s) {
+      if (!(await avec0023(db))) return;
+      const { client, facture } = await comme(db, s.gerantA, (tx) => factureNeuveA(tx, s, 'Foyer trop-perçu'));
+      // 1 000 FCFA encaissés en espèces par le gérant pendant que l'abonné valide 3 500 en ligne.
+      await comme(db, s.gerantA, (tx) => tx.query(`select public.encaisser_especes($1, 1000)`, [client]));
+      await comme(db, 'service', async (tx) => {
+        await demandeEnLigne(tx, { reference: 'TROP-PERCU-1', entreprise: s.entA, client, facture, origine: 'lien' });
+        await tx.query(`select public.enregistrer_paiement_en_ligne('TROP-PERCU-1')`);
+        await tx.query(`select public.enregistrer_paiement_en_ligne('TROP-PERCU-1')`);
+      });
+      const t = (await db.query(
+        `select statut, a_rembourser_fcfa, message, paiement_id is not null as impute from public.paiements_en_ligne where reference = 'TROP-PERCU-1'`)).rows[0];
+      if (t.statut !== 'reussi' || t.a_rembourser_fcfa !== 1000 || !t.impute || !/1000 FCFA à rembourser/.test(t.message ?? '')) {
+        throw new Error(`transaction : ${JSON.stringify(t)}`);
+      }
+      const p = (await db.query(
+        `select count(*)::int n, coalesce(sum(montant_fcfa), 0)::int total from public.paiements_clients where facture_id = $1 and statut = 'valide'`,
+        [facture])).rows[0];
+      if (p.n !== 2 || p.total !== 3500) throw new Error(`encaissements : ${JSON.stringify(p)}`);
+      const st = await valeur(db, `select statut from public.factures where id = $1`, [facture]);
+      if (st !== 'payee') throw new Error(`facture ${st}`);
+    },
+  },
+  {
+    titre: 'Paiement en ligne : une demande terminée (expirée, échouée) laisse partir la suivante sur la même facture',
+    async jouer(db, s) {
+      if (!(await avec0023(db))) return;
+      const { client, facture } = await comme(db, s.gerantA, (tx) => factureNeuveA(tx, s, 'Foyer deuxième essai'));
+      await comme(db, 'service', async (tx) => {
+        await demandeEnLigne(tx, { reference: 'ESSAI-1', entreprise: s.entA, client, facture });
+        await tx.query(`update public.paiements_en_ligne set statut = 'expire', termine_at = now() where reference = 'ESSAI-1'`);
+        await demandeEnLigne(tx, { reference: 'ESSAI-2', entreprise: s.entA, client, facture });
+        await tx.query(`update public.paiements_en_ligne set statut = 'echoue', termine_at = now() where reference = 'ESSAI-2'`);
+        await demandeEnLigne(tx, { reference: 'ESSAI-3', entreprise: s.entA, client, facture, origine: 'lien' });
+      });
+      const n = await valeur(db, `select count(*)::int from public.paiements_en_ligne where facture_id = $1`, [facture]);
+      if (n !== 3) throw new Error(`${n} demandes`);
     },
   },
   {

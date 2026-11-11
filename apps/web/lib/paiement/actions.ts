@@ -2,12 +2,11 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { getSupabase, origineDemande, row, rpc, utilisateurCourant } from '@/lib/server';
+import { getSupabase, row, rpc, utilisateurCourant } from '@/lib/server';
 import { clientService } from '@/lib/supabase-service';
 import { estErreurReseau, MESSAGE_RESEAU } from '@/lib/format';
-import { fournisseurActif } from './fournisseur';
-import { actualiserPaiement, demarrerPaiement, PAIEMENT_INDISPONIBLE } from './service';
-import type { Canal, StatutPaiementEnLigne } from './regles';
+import { actualiserPaiement, demarrerPaiement, PAIEMENT_INDISPONIBLE, paiementEnLigneDisponible } from './service';
+import { DOSSIER_A_VALIDER, precollecteurVerifie, type Canal, type StatutPaiementEnLigne } from './regles';
 
 export interface ResultatDemande {
   reference?: string;
@@ -72,8 +71,9 @@ export async function demanderPaiementTourneeAction(clientId: string, canal: Can
  * jour passe par `rafraichirApresPaiementAction`, une fois la confirmation lue.
  */
 export async function statutPaiementAction(reference: string): Promise<{ statut: StatutPaiementEnLigne; message: string | null }> {
-  const r = await actualiserPaiement(reference);
-  return r ?? { statut: 'echoue', message: 'Paiement introuvable.' };
+  // Action publique : le fournisseur n'est interrogé que toutes les 2 s au plus pour un même paiement.
+  const r = await actualiserPaiement(reference, { limiter: true });
+  return r ? { statut: r.statut, message: r.message } : { statut: 'echoue', message: 'Paiement introuvable.' };
 }
 
 /** Après un paiement réussi : espaces du ménage, du précollecteur et de l'employé à jour (page courante comprise). */
@@ -94,47 +94,50 @@ export async function creerLienPaiementAction(fd: FormData) {
 }
 
 // -----------------------------------------------------------------------------
-// Ouverture du paiement en ligne pour une entreprise (compte connecté Notch Pay)
+// Ouverture du paiement en ligne pour une entreprise : MyKlinTown encaisse sur
+// son compte Notch Pay, puis reverse au précollecteur.
 // -----------------------------------------------------------------------------
+
+const PAGE_PAIEMENT = '/precollecteur/paiement-en-ligne';
 
 async function gerantConnecte() {
   const supabase = await getSupabase();
   const user = await utilisateurCourant(supabase);
-  if (!user) redirect('/login?next=/precollecteur/paiement-en-ligne');
+  if (!user) redirect(`/login?next=${PAGE_PAIEMENT}`);
   const { data } = await supabase
     .from('entreprise_membres')
-    .select('entreprise_id, role_membre, entreprises(id, nom, email, telephone, paiement_compte_id, paiement_statut)')
+    .select('entreprise_id, role_membre, entreprises(id, dossier_statut, statut)')
     .eq('user_id', user.id)
     .limit(1)
     .maybeSingle();
-  const m = row<{
-    role_membre: string;
-    entreprises: { id: string; nom: string; email: string | null; telephone: string | null; paiement_compte_id: string | null; paiement_statut: string } | null;
-  }>(data);
+  const m = row<{ role_membre: string; entreprises: { id: string; dossier_statut: string; statut: string } | null }>(data);
   if (!m?.entreprises || m.role_membre !== 'gerant') redirect('/precollecteur');
   return m.entreprises;
 }
 
-/** Ouvre le compte connecté chez Notch Pay puis envoie le gérant faire sa vérification d'identité. */
-export async function activerPaiementEnLigneAction() {
+/** Statut modifiable par le serveur seulement (déclencheur de la migration 0008) : passe par le client service. */
+async function changerStatutPaiement(statut: 'actif' | 'inactif') {
   const ent = await gerantConnecte();
+  // Fermer reste toujours possible ; ouvrir exige un dossier validé par MyKlinTown
+  // et une entreprise non suspendue (revue du 10/11/2026 : un clic suffisait).
+  if (statut === 'actif' && !precollecteurVerifie(ent)) redirect(`${PAGE_PAIEMENT}?erreur=${encodeURIComponent(DOSSIER_A_VALIDER)}`);
   const admin = clientService();
-  const fournisseur = fournisseurActif();
-  const page = '/precollecteur/paiement-en-ligne';
-  if (!admin || !fournisseur) redirect(`${page}?erreur=${encodeURIComponent(PAIEMENT_INDISPONIBLE)}`);
-  let url: string;
-  try {
-    let compte = ent.paiement_compte_id;
-    if (!compte) {
-      compte = await fournisseur.creerCompte({ nom: ent.nom, email: ent.email, telephone: ent.telephone, entrepriseId: ent.id });
-      await admin
-        .from('entreprises')
-        .update({ paiement_compte_id: compte, paiement_statut: 'en_verification', paiement_maj_at: new Date().toISOString() })
-        .eq('id', ent.id);
-    }
-    url = await fournisseur.lienVerification(compte, `${await origineDemande()}${page}?retour=1`);
-  } catch (e) {
-    redirect(`${page}?erreur=${encodeURIComponent(e instanceof Error ? e.message : 'Notch Pay indisponible.')}`);
-  }
-  redirect(url);
+  if (!admin || !paiementEnLigneDisponible()) redirect(`${PAGE_PAIEMENT}?erreur=${encodeURIComponent(PAIEMENT_INDISPONIBLE)}`);
+  const { error } = await admin
+    .from('entreprises')
+    .update({ paiement_statut: statut, paiement_maj_at: new Date().toISOString() })
+    .eq('id', ent.id);
+  if (error) redirect(`${PAGE_PAIEMENT}?erreur=${encodeURIComponent('Le changement n’a pas pu être enregistré. Réessayez.')}`);
+  revalidatePath('/precollecteur', 'layout');
+  redirect(PAGE_PAIEMENT);
+}
+
+/** Le gérant ouvre le paiement Mobile Money à ses clients. */
+export async function activerPaiementEnLigneAction() {
+  await changerStatutPaiement('actif');
+}
+
+/** Le gérant le referme (les paiements déjà lancés suivent leur cours). */
+export async function desactiverPaiementEnLigneAction() {
+  await changerStatutPaiement('inactif');
 }
