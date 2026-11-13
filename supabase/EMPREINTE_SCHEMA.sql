@@ -17,9 +17,9 @@
 --     des écarts : elles servent à l'analyse.
 --
 -- Fichier GÉNÉRÉ par supabase/tests-securite/empreinte.mjs à partir des
--- migrations du dépôt (dernière : 20261116000024_zones_depots_dossier). Ne pas le modifier à la main :
+-- migrations du dépôt (dernière : 20261117000025_notes_internes_clients). Ne pas le modifier à la main :
 -- après toute nouvelle migration, `npm run empreinte` dans supabase/tests-securite.
--- Empreinte attendue : 130 fonctions, 55 tables, 106 politiques, 59 déclencheurs, 134 index, 282 contraintes, 23 types, 3 stockages.
+-- Empreinte attendue : 131 fonctions, 56 tables, 108 politiques, 61 déclencheurs, 136 index, 286 contraintes, 23 types, 3 stockages.
 -- =============================================================================
 with attendu (categorie, objet, valeur, migration) as (
   values
@@ -51,6 +51,10 @@ with attendu (categorie, objet, valeur, migration) as (
     ('contrainte', 'clients · clients_tarif_valide', 'c|157eab58e68b', '20261110000018_devis_tarif_abonne'),
     ('contrainte', 'clients · clients_user_id_fkey', 'f|c5765a5c33e0', '20260928000004_pivot_precollecteurs'),
     ('contrainte', 'clients · clients_zone_id_fkey', 'f|990216422c2b', '20260928000004_pivot_precollecteurs'),
+    ('contrainte', 'clients_notes · clients_notes_client_id_fkey', 'f|1f8ba1ce50d0', '20261117000025_notes_internes_clients'),
+    ('contrainte', 'clients_notes · clients_notes_entreprise_id_fkey', 'f|c633954251b9', '20261117000025_notes_internes_clients'),
+    ('contrainte', 'clients_notes · clients_notes_notes_check', 'c|0a8644217120', '20261117000025_notes_internes_clients'),
+    ('contrainte', 'clients_notes · clients_notes_pkey', 'p|8f7686cd7f00', '20261117000025_notes_internes_clients'),
     ('contrainte', 'codes_agrement · codes_agrement_code_key', 'u|856fb44e90f8', '20261013000012_codes_agrement'),
     ('contrainte', 'codes_agrement · codes_agrement_commune_id_fkey', 'f|9db604bd2591', '20261013000012_codes_agrement'),
     ('contrainte', 'codes_agrement · codes_agrement_cree_par_fkey', 'f|a32513d98ff8', '20261013000012_codes_agrement'),
@@ -312,8 +316,10 @@ with attendu (categorie, objet, valeur, migration) as (
     ('déclencheur', 'public.camions · camions_updated_at', 'set_updated_at|type=19|etat=O|colonnes=-|args=d41d8cd9', '20260526000001_init'),
     ('déclencheur', 'public.clients · clients_colonnes_systeme', 'garde_colonnes_systeme|type=19|etat=O|colonnes=-|args=350e9e32', '20261019000014_charte_facture_conforme'),
     ('déclencheur', 'public.clients · clients_insertion_systeme', 'garde_insertion_systeme|type=7|etat=O|colonnes=-|args=07027028', '20261114000022_liste_attente_gardes_creation'),
+    ('déclencheur', 'public.clients · clients_notes_deplacer', 'clients_notes_deplacer|type=21|etat=O|colonnes=notes|args=d41d8cd9', '20261117000025_notes_internes_clients'),
     ('déclencheur', 'public.clients · clients_suppression', 'clients_suppression|type=11|etat=O|colonnes=-|args=d41d8cd9', '20261019000014_charte_facture_conforme'),
     ('déclencheur', 'public.clients · clients_updated_at', 'set_updated_at|type=19|etat=O|colonnes=-|args=d41d8cd9', '20260928000004_pivot_precollecteurs'),
+    ('déclencheur', 'public.clients_notes · clients_notes_updated_at', 'set_updated_at|type=19|etat=O|colonnes=-|args=d41d8cd9', '20261117000025_notes_internes_clients'),
     ('déclencheur', 'public.collectes · collectes_coherence_entreprise', 'verifier_coherence_entreprise|type=23|etat=O|colonnes=-|args=d41d8cd9', '20261011000009_audit_securite'),
     ('déclencheur', 'public.collectes · collectes_colonnes_systeme', 'garde_colonnes_systeme|type=19|etat=O|colonnes=-|args=2d1811c6', '20261011000009_audit_securite'),
     ('déclencheur', 'public.collectes · collectes_insertion_systeme', 'garde_insertion_systeme|type=7|etat=O|colonnes=-|args=222953c0', '20261114000022_liste_attente_gardes_creation'),
@@ -375,6 +381,7 @@ with attendu (categorie, objet, valeur, migration) as (
     ('fonction', 'changer_statut_tournee(p_tournee uuid, p_statut text)', '387fc2e83da6|definer|search_path=public|anon=non|connecte=oui', '20261019000013_delai_grace_blocage'),
     ('fonction', 'charte_du_client(p_client uuid)', '8b1a5b294145|definer|search_path=public|anon=non|connecte=oui', '20261109000017_dossier_precollecteur_annuaire'),
     ('fonction', 'cle_quartier(p text)', '113570d23f5b|invoker|search_path=public|anon=non|connecte=oui', '20261109000017_dossier_precollecteur_annuaire'),
+    ('fonction', 'clients_notes_deplacer()', 'b233eed1c4b3|definer|search_path=public|anon=non|connecte=non', '20261117000025_notes_internes_clients'),
     ('fonction', 'clients_suppression()', 'bb267a3fc700|definer|search_path=public|anon=non|connecte=non', '20261019000014_charte_facture_conforme'),
     ('fonction', 'comptes_mairie()', 'c00cc971e378|definer|search_path=public|anon=non|connecte=oui', '20261019000016_mairie_par_commune'),
     ('fonction', 'confirmer_passage(p_collecte uuid, p_confirme boolean)', '2282330461b5|definer|search_path=public|anon=non|connecte=oui', '20260928000004_pivot_precollecteurs'),
@@ -512,6 +519,8 @@ with attendu (categorie, objet, valeur, migration) as (
     ('index', 'capteurs_iot_pkey', '48f9798c63b4', '20260526000001_init'),
     ('index', 'clients_code_key', '51009f885dab', '20260928000004_pivot_precollecteurs'),
     ('index', 'clients_entreprise_idx', '00aeba5ecb32', '20260928000004_pivot_precollecteurs'),
+    ('index', 'clients_notes_entreprise_idx', 'cf9a9932e688', '20261117000025_notes_internes_clients'),
+    ('index', 'clients_notes_pkey', '787cd1c51f5e', '20261117000025_notes_internes_clients'),
     ('index', 'clients_pkey', 'a3323bf3f51d', '20260928000004_pivot_precollecteurs'),
     ('index', 'clients_user_idx', '90da4016d870', '20260928000004_pivot_precollecteurs'),
     ('index', 'clients_zone_idx', '4a41211de846', '20260928000004_pivot_precollecteurs'),
@@ -642,6 +651,8 @@ with attendu (categorie, objet, valeur, migration) as (
     ('politique', 'public.clients · clients_agent', 'select|permissive|authenticated|using=686aa0b3|check=d41d8cd9', '20261005000007_espace_employe'),
     ('politique', 'public.clients · clients_membres', 'all|permissive|authenticated|using=628660a3|check=628660a3', '20261005000007_espace_employe'),
     ('politique', 'public.clients · clients_soi', 'select|permissive|authenticated|using=474c1641|check=d41d8cd9', '20260928000004_pivot_precollecteurs'),
+    ('politique', 'public.clients_notes · clients_notes_ecriture', 'all|permissive|authenticated|using=628660a3|check=73ae97b3', '20261117000025_notes_internes_clients'),
+    ('politique', 'public.clients_notes · clients_notes_lecture', 'select|permissive|authenticated|using=e151e9dd|check=d41d8cd9', '20261117000025_notes_internes_clients'),
     ('politique', 'public.codes_agrement · codes_agrement_lecture', 'select|permissive|authenticated|using=c884f832|check=d41d8cd9', '20261019000016_mairie_par_commune'),
     ('politique', 'public.collectes · collectes_agent', 'select|permissive|authenticated|using=bbee54cb|check=d41d8cd9', '20261005000007_espace_employe'),
     ('politique', 'public.collectes · collectes_client', 'select|permissive|authenticated|using=c2231992|check=d41d8cd9', '20260928000004_pivot_precollecteurs'),
@@ -744,6 +755,7 @@ with attendu (categorie, objet, valeur, migration) as (
     ('table', 'camions', 'table|rls=oui|colonnes=3fb2f155768d|anon=-', '20261114000022_liste_attente_gardes_creation'),
     ('table', 'capteurs_iot', 'table|rls=oui|colonnes=92adacff97ce|anon=-', '20261114000022_liste_attente_gardes_creation'),
     ('table', 'clients', 'table|rls=oui|colonnes=f48317e09ff7|anon=siud', '20261110000018_devis_tarif_abonne'),
+    ('table', 'clients_notes', 'table|rls=oui|colonnes=2bc15cee97ef|anon=-', '20261117000025_notes_internes_clients'),
     ('table', 'codes_agrement', 'table|rls=oui|colonnes=415409bc67a2|anon=-', '20261013000012_codes_agrement'),
     ('table', 'collectes', 'table|rls=oui|colonnes=d2a7d2b9f536|anon=siud', '20261019000013_delai_grace_blocage'),
     ('table', 'communes', 'table|rls=oui|colonnes=12690f884e65|anon=siud', '20261019000015_nettoyage_demo_douala'),
@@ -943,7 +955,7 @@ infos (categorie, objet, detail) as (
 select etat, categorie, objet, migration, detail
 from (
   select 0 as rang, 'OK' as etat, 'synthèse' as categorie, 'aucun écart' as objet,
-         '20261116000024_zones_depots_dossier' as migration,
+         '20261117000025_notes_internes_clients' as migration,
          (select count(*) from attendu)::text || ' objets conformes aux migrations' as detail
    where not exists (select 1 from ecarts)
   union all

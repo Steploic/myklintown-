@@ -531,6 +531,10 @@ export async function majClientAction(_p: ActionState, fd: FormData): Promise<Ac
     .eq('id', id)
     .eq('entreprise_id', entreprise.id);
   if (error) return { error: erreurLisible(error.message) };
+  // Notes internes (migration 20261117000025) : une note saisie sur la fiche
+  // est déplacée par la base dans `clients_notes` ; une note vidée s'y retire
+  // ici. Sans effet tant que la migration n'est pas jouée.
+  if (!txt(fd, 'notes')) await supabase.from('clients_notes').delete().eq('client_id', id).eq('entreprise_id', entreprise.id);
   rafraichir();
   return { ok: 'Fiche client mise à jour.' };
 }

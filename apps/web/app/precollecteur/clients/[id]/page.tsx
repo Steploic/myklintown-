@@ -64,6 +64,10 @@ export default async function FicheClientPage({
     .maybeSingle();
   const client = row<ClientStatut>(c);
   if (!client) notFound();
+  // Notes internes : dans une table réservée à l'équipe, hors de la fiche que
+  // lit l'abonné (migration 20261117000025). Avant elle, la note est encore sur la fiche.
+  const { data: note, error: erreurNote } = await supabase.from('clients_notes').select('notes').eq('client_id', client.id).maybeSingle();
+  if (!erreurNote) client.notes = row<{ notes: string }>(note)?.notes ?? client.notes ?? null;
   // Lien de paiement Mobile Money : plateforme configurée, paiement ouvert, précollecteur vérifié par MyKlinTown.
   const enLigne = paiementEnLigneDisponible() && encaissementEnLigneOuvert(entreprise);
   const urlLien = lien ? `${await origineDemande()}/payer/${lien}` : null;
