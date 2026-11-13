@@ -66,6 +66,10 @@ const avec0021 = (db) => valeur(db, `select to_regclass('public.rattachements_es
 const avec0022 = (db) => valeur(db, `select to_regprocedure('public.precollecteur_verifie(uuid)') is not null`);
 /** Migration 0023 (paiement en ligne : une demande en cours par facture, trop-perçu à rembourser) présente dans la base ? */
 const avec0023 = (db) => valeur(db, `select to_regclass('public.paiements_en_ligne_un_en_cours') is not null`);
+/** Migration 0024 (contour de zone contrôlé, dépôts de preuves plafonnés, dossier revérifié) présente dans la base ? */
+const avec0024 = (db) => valeur(db, `select to_regprocedure('public.contour_zone_valide(jsonb)') is not null`);
+/** Migration 0025 (notes internes hors de la fiche lue par l'abonné) présente dans la base ? */
+const avec0025 = (db) => valeur(db, `select to_regclass('public.clients_notes') is not null`);
 /** Migration 0008 (paiement en ligne) présente dans la base ? */
 const avecPaiementEnLigne = (db) => valeur(db, `select to_regclass('public.paiements_en_ligne') is not null`);
 
@@ -1391,6 +1395,102 @@ export const ATTAQUES = [
       });
     },
   },
+  // ---- Revue du 10/11/2026, suite (migration 20261116000024) ----
+  {
+    id: 'zone-contour-invalide',
+    titre: 'Une Mairie enregistre une zone au contour illisible ou démesuré',
+    async jouer(db, s) {
+      if (!(await avec0024(db))) return false;
+      const contours = [
+        { type: 'Polygon', coordinates: 'x' },
+        { type: 'Point', coordinates: [11.5, 3.85] },
+        { type: 'Polygon', coordinates: [[[0, -30], [40, -30], [40, 30], [0, 30], [0, -30]]] },
+      ];
+      for (const contour of contours) {
+        const acceptee = await essaiAnnule(db, s.mairie, async (tx) =>
+          !!(await valeur(tx, `insert into public.zones (nom, commune_id, contour) values ('Zone invalide', $1, $2) returning id`, [s.yde3, JSON.stringify(contour)])));
+        if (acceptee) return true;
+      }
+      return false;
+    },
+  },
+  {
+    id: 'dossier-identite-changee',
+    titre: 'Une entreprise au dossier validé change de nom sans nouvelle vérification',
+    async jouer(db, s) {
+      if (!(await avec0024(db))) return false;
+      const avant = (await db.query(`select nom, dossier_statut from public.entreprises where id = $1`, [s.entA])).rows[0];
+      await db.query(`update public.entreprises set dossier_statut = 'valide' where id = $1`, [s.entA]);
+      try {
+        await comme(db, s.gerantA, (tx) => tx.query(`update public.entreprises set nom = 'Entreprise A bis' where id = $1`, [s.entA]));
+        return (await valeur(db, `select dossier_statut from public.entreprises where id = $1`, [s.entA])) === 'valide';
+      } finally {
+        await db.query(`update public.entreprises set nom = $2, dossier_statut = $3 where id = $1`, [s.entA, avant.nom, avant.dossier_statut]);
+      }
+    },
+  },
+  {
+    id: 'preuves-sans-plafond',
+    titre: 'Des preuves se déposent sans limite de nombre, ou un fichier de plus de 15 Mo est admis',
+    async jouer(db, s) {
+      if (!(await avec0024(db))) return false;
+      if (Number(await valeur(db, `select file_size_limit from storage.buckets where id = 'preuves'`)) > 15 * 1024 * 1024) return true;
+      const deposer = (qui, combien) => essaiAnnule(db, qui, async (tx) => {
+        for (let i = 0; i < combien; i += 1) {
+          await tx.query(`insert into storage.objects (bucket_id, name) values ('preuves', $1)`, [`${s.entA}/${qui}/plafond-${i}.jpg`]);
+        }
+        return true;
+      });
+      // 10 par jour pour un abonné, 60 pour un membre de l'équipe.
+      return (await deposer(s.menage, 11)) || (await deposer(s.gerantA, 61));
+    },
+  },
+  {
+    id: 'demande-abonnement-reecrite',
+    titre: 'Un ménage réécrit sa demande en attente (date, quartier) au lieu de seulement l’annuler',
+    async jouer(db, s) {
+      if (!(await avec0024(db))) return false;
+      return essaiAnnule(db, s.demandeur, async (tx) => {
+        const r = await tx.query(
+          `update public.demandes_abonnement set created_at = now() - interval '30 days', quartier = 'Ailleurs'
+            where user_id = $1 and statut = 'en_attente' returning id`,
+          [s.demandeur]);
+        return r.rows.length > 0;
+      });
+    },
+  },
+  // ---- Revue du 10/11/2026, suite (migration 20261117000025) ----
+  {
+    id: 'notes-internes-lues',
+    titre: 'L’abonné, ou un précollecteur concurrent, lit les notes internes écrites sur une fiche client',
+    async jouer(db, s) {
+      if (!(await avec0025(db))) return false;
+      await comme(db, s.gerantA, (tx) => tx.query(`update public.clients set notes = 'Relancer : deux mois de retard' where id = $1`, [s.clientA]));
+      try {
+        const surLaFiche = await comme(db, s.menage, (tx) => valeur(tx, `select notes from public.clients where id = $1`, [s.clientA]));
+        const compter = (qui) => comme(db, qui, (tx) => valeur(tx, `select count(*)::int from public.clients_notes where client_id = $1`, [s.clientA]));
+        return surLaFiche != null || (await compter(s.menage)) > 0 || (await compter(s.gerantB)) > 0;
+      } finally {
+        await db.query(`delete from public.clients_notes where client_id = $1`, [s.clientA]);
+        await db.query(`update public.clients set notes = null where id = $1`, [s.clientA]);
+      }
+    },
+  },
+  {
+    id: 'notes-internes-ecrites',
+    titre: 'Un tiers écrit une note interne sur la fiche d’un client qui n’est pas le sien',
+    async jouer(db, s) {
+      if (!(await avec0025(db))) return false;
+      for (const [qui, entreprise] of [[s.gerantB, s.entB], [s.gerantB, s.entA], [s.menage, s.entA]]) {
+        const ecrite = await essaiAnnule(db, qui, async (tx) =>
+          !!(await valeur(tx,
+            `insert into public.clients_notes (client_id, entreprise_id, notes) values ($1, $2, 'Note d’un tiers') returning client_id`,
+            [s.clientA, entreprise])));
+        if (ecrite) return true;
+      }
+      return false;
+    },
+  },
 ];
 
 /** Migration 0014 (facture inaltérable, charte) présente dans la base ? */
@@ -2562,6 +2662,90 @@ export const PARCOURS = [
       if (vus !== 1) throw new Error(`le gérant voit ${vus} essai(s) refusé(s) au lieu de 1`);
       if ((await rattacher(db, abonne, fiche.code.toLowerCase(), '+237 677 000 999')) !== fiche.id) throw new Error('bon téléphone refusé');
       if ((await valeur(db, `select user_id from public.clients where id = $1`, [fiche.id])) !== abonne) throw new Error('fiche non rattachée');
+    },
+  },
+  {
+    titre: 'Migration 0022 rejouée : contrôle « OK » sur les lignes 1 à 6, deux fois',
+    async jouer(db) {
+      const sql = migration('20261114000022');
+      if (!sql) return;
+      for (let passage = 0; passage < 2; passage++) {
+        const controle = (await db.exec(sql)).at(-1).rows;
+        const ko = controle.filter((r, i) => i < 6 && r.resultat !== 'OK');
+        if (ko.length) throw new Error(JSON.stringify(ko));
+      }
+    },
+  },
+  {
+    // Après les migrations rejouées plus haut (0017 remet l'ancienne revérification du dossier).
+    titre: 'Migration 0024 rejouée : contrôle « OK » sur les lignes 1 à 4, deux fois',
+    async jouer(db) {
+      const sql = migration('20261116000024');
+      if (!sql) return;
+      for (let passage = 0; passage < 2; passage++) {
+        const controle = (await db.exec(sql)).at(-1).rows;
+        const ko = controle.filter((r, i) => i < 4 && r.resultat !== 'OK');
+        if (ko.length) throw new Error(JSON.stringify(ko));
+      }
+    },
+  },
+  {
+    titre: 'Liste d’attente : le ménage annule lui-même sa demande en attente',
+    async jouer(db, s) {
+      const u = await creerCompte(db, `annule.${Date.now()}@test.cm`);
+      await comme(db, u, (tx) =>
+        tx.query(`select public.deposer_demande_abonnement($1, 'Famille Annule', '699000111', 'Rue 2', 'Nsam', 3.9, 11.6)`, [s.plan]));
+      const r = await comme(db, u, (tx) =>
+        tx.query(`update public.demandes_abonnement set statut = 'annulee' where user_id = $1 and statut = 'en_attente' returning id`, [u]));
+      if (r.rows.length !== 1) throw new Error('annulation refusée');
+    },
+  },
+  {
+    titre: 'Dossier validé : changer le téléphone le laisse validé ; changer le nom le renvoie en vérification',
+    async jouer(db, s) {
+      if (!(await avec0024(db))) return;
+      const avant = (await db.query(`select nom, telephone, dossier_statut from public.entreprises where id = $1`, [s.entA])).rows[0];
+      const statut = () => valeur(db, `select dossier_statut from public.entreprises where id = $1`, [s.entA]);
+      await db.query(`update public.entreprises set dossier_statut = 'valide' where id = $1`, [s.entA]);
+      try {
+        await comme(db, s.gerantA, (tx) => tx.query(`update public.entreprises set telephone = '677445566' where id = $1`, [s.entA]));
+        if ((await statut()) !== 'valide') throw new Error('le téléphone a renvoyé le dossier en vérification');
+        await comme(db, s.gerantA, (tx) => tx.query(`update public.entreprises set nom = 'Entreprise A renommée' where id = $1`, [s.entA]));
+        if ((await statut()) !== 'soumis') throw new Error('le nom a changé sans nouvelle vérification');
+      } finally {
+        await db.query(`update public.entreprises set nom = $2, telephone = $3, dossier_statut = $4 where id = $1`,
+          [s.entA, avant.nom, avant.telephone, avant.dossier_statut]);
+      }
+    },
+  },
+  {
+    titre: 'Migration 0025 rejouée : contrôle « OK » sur les lignes 1 à 3, deux fois',
+    async jouer(db) {
+      const sql = migration('20261117000025');
+      if (!sql) return;
+      for (let passage = 0; passage < 2; passage++) {
+        const controle = (await db.exec(sql)).at(-1).rows;
+        const ko = controle.filter((r, i) => i < 3 && r.resultat !== 'OK');
+        if (ko.length) throw new Error(JSON.stringify(ko));
+      }
+    },
+  },
+  {
+    titre: 'Notes internes : écrite sur la fiche, la note part dans la table réservée ; le gérant la relit, la modifie, la retire',
+    async jouer(db, s) {
+      if (!(await avec0025(db))) return;
+      const id = await clientNeufA(db, s, 'Foyer aux notes');
+      const note = () => comme(db, s.gerantA, (tx) => valeur(tx, `select notes from public.clients_notes where client_id = $1`, [id]));
+      await comme(db, s.gerantA, (tx) => tx.query(`update public.clients set notes = '  Sonner deux fois  ' where id = $1`, [id]));
+      if ((await valeur(db, `select notes from public.clients where id = $1`, [id])) !== null) throw new Error('la note est restée sur la fiche');
+      if ((await note()) !== 'Sonner deux fois') throw new Error(`note relue : ${await note()}`);
+      // Une fiche enregistrée sans note ne retire pas la note existante.
+      await comme(db, s.gerantA, (tx) => tx.query(`update public.clients set notes = null, adresse = 'Rue des Notes' where id = $1`, [id]));
+      if ((await note()) !== 'Sonner deux fois') throw new Error('la note a disparu à l’enregistrement de la fiche');
+      await comme(db, s.gerantA, (tx) => tx.query(`update public.clients_notes set notes = 'Portail vert' where client_id = $1`, [id]));
+      if ((await note()) !== 'Portail vert') throw new Error('modification directe refusée');
+      const retiree = await comme(db, s.gerantA, (tx) => tx.query(`delete from public.clients_notes where client_id = $1 returning client_id`, [id]));
+      if (retiree.rows.length !== 1) throw new Error('retrait de la note refusé');
     },
   },
 ];
