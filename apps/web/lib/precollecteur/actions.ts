@@ -75,15 +75,29 @@ export async function creerEntrepriseAction(_p: ActionState, fd: FormData): Prom
 // Dossier et vitrine (migration 20261109000017)
 // =============================================================================
 
+/**
+ * Sur un dossier vérifié, changer le nom, le siège, le NIU, le RCCM ou
+ * l'adresse fiscale le renvoie en vérification (migrations 0017 et 0024) :
+ * le précollecteur est prévenu.
+ */
+function messageIdentite(avant: string | undefined, apres: string | undefined, ok: string): string {
+  return avant === 'valide' && apres === 'soumis' ? `${ok} Votre dossier repasse en vérification par MyKlinTown.` : ok;
+}
+
 /** NIU et siège social depuis le dossier. Sur un dossier vérifié, la base le renvoie en vérification. */
 export async function majIdentiteAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   const { supabase, entreprise } = await requireEntreprise();
   const niu = txt(fd, 'niu')?.replace(/[\s.-]+/g, '').toUpperCase() ?? null;
   if (niu && !/^[A-Z0-9]{6,30}$/.test(niu)) return { error: 'NIU illisible : lettres et chiffres seulement (ex. M012345678901A).' };
-  const { error } = await supabase.from('entreprises').update({ niu, siege: txt(fd, 'siege') }).eq('id', entreprise.id);
+  const { data, error } = await supabase
+    .from('entreprises')
+    .update({ niu, siege: txt(fd, 'siege') })
+    .eq('id', entreprise.id)
+    .select('dossier_statut')
+    .maybeSingle();
   if (error) return { error: erreurLisible(error.message) };
   rafraichir();
-  return { ok: 'Identité enregistrée.' };
+  return { ok: messageIdentite(entreprise.dossier_statut, row<{ dossier_statut: string }>(data)?.dossier_statut, 'Identité enregistrée.') };
 }
 
 export async function majVitrineAction(_p: ActionState, fd: FormData): Promise<ActionState> {
@@ -139,13 +153,15 @@ export async function majEntrepriseAction(_p: ActionState, fd: FormData): Promis
   if (niu && niu.length > 30) return { error: 'NIU trop long (30 caractères au plus).' };
   if (rccm && rccm.length > 60) return { error: 'Numéro RCCM trop long (60 caractères au plus).' };
   if (adresseFiscale && adresseFiscale.length > 300) return { error: 'Adresse fiscale trop longue (300 caractères au plus).' };
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('entreprises')
     .update({ nom, telephone: txt(fd, 'telephone'), siege: txt(fd, 'siege'), niu, rccm, adresse_fiscale: adresseFiscale })
-    .eq('id', entreprise.id);
+    .eq('id', entreprise.id)
+    .select('dossier_statut')
+    .maybeSingle();
   if (error) return { error: erreurLisible(error.message) };
   rafraichir();
-  return { ok: 'Informations enregistrées.' };
+  return { ok: messageIdentite(entreprise.dossier_statut, row<{ dossier_statut: string }>(data)?.dossier_statut, 'Informations enregistrées.') };
 }
 
 /** Tarif saisi (fiche client ou devis) : montant par facture, période, passages, sacs. */

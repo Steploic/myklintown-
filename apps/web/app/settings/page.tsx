@@ -81,6 +81,12 @@ export default async function SettingsPage() {
                 <label className="field-label" htmlFor="e-siege">Adresse du siège social</label>
                 <input id="e-siege" name="siege" defaultValue={entreprise.siege ?? ''} className="field" />
               </div>
+              {entreprise.dossier_statut === 'valide' && (
+                <p className="field-hint sm:col-span-2">
+                  Votre dossier est validé : changer le nom, le siège, le NIU, le RCCM ou l’adresse fiscale le renvoie en
+                  vérification par MyKlinTown.
+                </p>
+              )}
               <fieldset className="grid gap-4 rounded-lg border border-border p-4 sm:col-span-2 sm:grid-cols-2">
                 <legend className="px-1 text-body-sm font-semibold text-brand-ink">Mentions fiscales des factures</legend>
                 <div>
