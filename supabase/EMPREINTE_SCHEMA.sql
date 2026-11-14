@@ -17,9 +17,9 @@
 --     des écarts : elles servent à l'analyse.
 --
 -- Fichier GÉNÉRÉ par supabase/tests-securite/empreinte.mjs à partir des
--- migrations du dépôt (dernière : 20261117000025_notes_internes_clients). Ne pas le modifier à la main :
+-- migrations du dépôt (dernière : 20261118000026_quartiers_signalements_demo). Ne pas le modifier à la main :
 -- après toute nouvelle migration, `npm run empreinte` dans supabase/tests-securite.
--- Empreinte attendue : 131 fonctions, 56 tables, 108 politiques, 61 déclencheurs, 136 index, 286 contraintes, 23 types, 3 stockages.
+-- Empreinte attendue : 133 fonctions, 56 tables, 108 politiques, 62 déclencheurs, 136 index, 286 contraintes, 23 types, 3 stockages.
 -- =============================================================================
 with attendu (categorie, objet, valeur, migration) as (
   values
@@ -315,6 +315,7 @@ with attendu (categorie, objet, valeur, migration) as (
     ('déclencheur', 'public.bacs · bacs_updated_at', 'set_updated_at|type=19|etat=O|colonnes=-|args=d41d8cd9', '20260526000001_init'),
     ('déclencheur', 'public.camions · camions_updated_at', 'set_updated_at|type=19|etat=O|colonnes=-|args=d41d8cd9', '20260526000001_init'),
     ('déclencheur', 'public.clients · clients_colonnes_systeme', 'garde_colonnes_systeme|type=19|etat=O|colonnes=-|args=350e9e32', '20261019000014_charte_facture_conforme'),
+    ('déclencheur', 'public.clients · clients_demo_avant_validation', 'clients_demo_avant_validation|type=7|etat=O|colonnes=-|args=d41d8cd9', '20261118000026_quartiers_signalements_demo'),
     ('déclencheur', 'public.clients · clients_insertion_systeme', 'garde_insertion_systeme|type=7|etat=O|colonnes=-|args=07027028', '20261114000022_liste_attente_gardes_creation'),
     ('déclencheur', 'public.clients · clients_notes_deplacer', 'clients_notes_deplacer|type=21|etat=O|colonnes=notes|args=d41d8cd9', '20261117000025_notes_internes_clients'),
     ('déclencheur', 'public.clients · clients_suppression', 'clients_suppression|type=11|etat=O|colonnes=-|args=d41d8cd9', '20261019000014_charte_facture_conforme'),
@@ -381,6 +382,7 @@ with attendu (categorie, objet, valeur, migration) as (
     ('fonction', 'changer_statut_tournee(p_tournee uuid, p_statut text)', '387fc2e83da6|definer|search_path=public|anon=non|connecte=oui', '20261019000013_delai_grace_blocage'),
     ('fonction', 'charte_du_client(p_client uuid)', '8b1a5b294145|definer|search_path=public|anon=non|connecte=oui', '20261109000017_dossier_precollecteur_annuaire'),
     ('fonction', 'cle_quartier(p text)', '113570d23f5b|invoker|search_path=public|anon=non|connecte=oui', '20261109000017_dossier_precollecteur_annuaire'),
+    ('fonction', 'clients_demo_avant_validation()', 'b122cfdc1c95|invoker|search_path=public|anon=non|connecte=oui', '20261118000026_quartiers_signalements_demo'),
     ('fonction', 'clients_notes_deplacer()', 'b233eed1c4b3|definer|search_path=public|anon=non|connecte=non', '20261117000025_notes_internes_clients'),
     ('fonction', 'clients_suppression()', 'bb267a3fc700|definer|search_path=public|anon=non|connecte=non', '20261019000014_charte_facture_conforme'),
     ('fonction', 'comptes_mairie()', 'c00cc971e378|definer|search_path=public|anon=non|connecte=oui', '20261019000016_mairie_par_commune'),
@@ -412,6 +414,7 @@ with attendu (categorie, objet, valeur, migration) as (
     ('fonction', 'enregistrer_paiement_en_ligne(p_reference text)', 'c330bcadc6fb|definer|search_path=public|anon=non|connecte=non', '20261115000023_paiement_en_ligne_garde_fous'),
     ('fonction', 'enregistrer_piece_dossier(p_piece text, p_chemin text, p_commune uuid)', '740ab46ed4db|definer|search_path=public|anon=non|connecte=oui', '20261109000017_dossier_precollecteur_annuaire'),
     ('fonction', 'envoyer_position(p_tournee uuid, p_lat double precision, p_lng double precision, p_precision real)', '77f8b8b68597|definer|search_path=public|anon=non|connecte=oui', '20261005000007_espace_employe'),
+    ('fonction', 'est_abonne_de(p_entreprise uuid)', '450fbd0f0f5d|definer|search_path=public|anon=non|connecte=oui', '20261118000026_quartiers_signalements_demo'),
     ('fonction', 'est_admin()', '6c1d534a0312|definer|search_path=public|anon=oui|connecte=oui', '20260928000004_pivot_precollecteurs'),
     ('fonction', 'est_agent(p_entreprise uuid)', '4cf8154fa026|definer|search_path=public|anon=non|connecte=oui', '20261005000007_espace_employe'),
     ('fonction', 'est_client_de(p_entreprise uuid)', '22b2eb5fe702|definer|search_path=public|anon=non|connecte=oui', '20261011000009_audit_securite'),
@@ -469,7 +472,7 @@ with attendu (categorie, objet, valeur, migration) as (
     ('fonction', 'promouvoir_utilisateur(p_email text, p_role user_role)', 'bfad83078a1c|definer|search_path=public|anon=non|connecte=non', '20260831000003_securite_rls_et_roles'),
     ('fonction', 'proposer_devis(p_demande uuid, p_tarif integer, p_facturation_mois integer, p_passages integer, p_sacs boolean, p_volume integer, p_note text)', 'da9ea595debd|definer|search_path=public|anon=non|connecte=oui', '20261110000018_devis_tarif_abonne'),
     ('fonction', 'purger_donnees_de_test(p_entreprise uuid, p_clients uuid[])', '9a09c0fd96f1|definer|search_path=public|anon=non|connecte=non', '20261019000014_charte_facture_conforme'),
-    ('fonction', 'quartier_correspond(p_a text, p_b text)', '322a154c0061|invoker|search_path=public|anon=non|connecte=non', '20261111000019_devis_routage'),
+    ('fonction', 'quartier_correspond(p_a text, p_b text)', 'aeaebaa0a1e4|invoker|search_path=public|anon=non|connecte=non', '20261118000026_quartiers_signalements_demo'),
     ('fonction', 'quartiers_normalises(p text[])', 'da5b91e307ea|invoker|search_path=public|anon=non|connecte=oui', '20261109000017_dossier_precollecteur_annuaire'),
     ('fonction', 'rattacher_mon_compte(p_code text, p_telephone text)', 'e0255702b4ed|definer|search_path=public|anon=non|connecte=oui', '20261113000021_rattachement_essais'),
     ('fonction', 'refuser_devis(p_devis uuid)', '8b624081aba6|definer|search_path=public|anon=non|connecte=oui', '20261110000018_devis_tarif_abonne'),
@@ -683,7 +686,7 @@ with attendu (categorie, objet, valeur, migration) as (
     ('politique', 'public.factures · factures_gerant_emission', 'insert|permissive|authenticated|using=d41d8cd9|check=628660a3', '20261019000014_charte_facture_conforme'),
     ('politique', 'public.factures · factures_gerant_lecture', 'select|permissive|authenticated|using=628660a3|check=d41d8cd9', '20261019000014_charte_facture_conforme'),
     ('politique', 'public.factures · factures_gerant_maj', 'update|permissive|authenticated|using=628660a3|check=628660a3', '20261019000014_charte_facture_conforme'),
-    ('politique', 'public.incidents_precollecte · incidents_pc_insert', 'insert|permissive|authenticated|using=d41d8cd9|check=8183d34a', '20260928000004_pivot_precollecteurs'),
+    ('politique', 'public.incidents_precollecte · incidents_pc_insert', 'insert|permissive|authenticated|using=d41d8cd9|check=274a8030', '20261118000026_quartiers_signalements_demo'),
     ('politique', 'public.incidents_precollecte · incidents_pc_lecture', 'select|permissive|authenticated|using=f9707c06|check=d41d8cd9', '20261019000016_mairie_par_commune'),
     ('politique', 'public.incidents_precollecte · incidents_pc_maj', 'update|permissive|authenticated|using=2efd5ef2|check=2efd5ef2', '20261019000016_mairie_par_commune'),
     ('politique', 'public.incidents_terrain · incidents_terrain_owner_insert', 'insert|permissive|authenticated|using=d41d8cd9|check=db68872d', '20261011000009_audit_securite'),
@@ -743,7 +746,7 @@ with attendu (categorie, objet, valeur, migration) as (
     ('politique', 'storage.objects · dossiers_depot', 'insert|permissive|authenticated|using=d41d8cd9|check=c8c0a976', '20261109000017_dossier_precollecteur_annuaire'),
     ('politique', 'storage.objects · dossiers_lecture', 'select|permissive|authenticated|using=97efaf7e|check=d41d8cd9', '20261109000017_dossier_precollecteur_annuaire'),
     ('politique', 'storage.objects · logos_depot', 'insert|permissive|authenticated|using=d41d8cd9|check=4fb800e4', '20261109000017_dossier_precollecteur_annuaire'),
-    ('politique', 'storage.objects · preuves_depot', 'insert|permissive|authenticated|using=d41d8cd9|check=6b45bc8b', '20261116000024_zones_depots_dossier'),
+    ('politique', 'storage.objects · preuves_depot', 'insert|permissive|authenticated|using=d41d8cd9|check=c7e98356', '20261118000026_quartiers_signalements_demo'),
     ('politique', 'storage.objects · preuves_lecture', 'select|permissive|authenticated|using=86ad5fff|check=d41d8cd9', '20261019000016_mairie_par_commune'),
     ('stockage', 'dossiers', 'privé|taille=5242880|types=application/pdf,image/jpeg,image/png,image/webp', '20261109000017_dossier_precollecteur_annuaire'),
     ('stockage', 'logos', 'public|taille=1048576|types=image/jpeg,image/png,image/webp', '20261109000017_dossier_precollecteur_annuaire'),
@@ -955,7 +958,7 @@ infos (categorie, objet, detail) as (
 select etat, categorie, objet, migration, detail
 from (
   select 0 as rang, 'OK' as etat, 'synthèse' as categorie, 'aucun écart' as objet,
-         '20261117000025_notes_internes_clients' as migration,
+         '20261118000026_quartiers_signalements_demo' as migration,
          (select count(*) from attendu)::text || ' objets conformes aux migrations' as detail
    where not exists (select 1 from ecarts)
   union all

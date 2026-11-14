@@ -217,19 +217,23 @@ export default async function PrecollecteurDashboard({
               <h2>Commencez par vos clients</h2>
               <p className="mt-1 max-w-xl text-body-sm text-muted-foreground">
                 Enregistrez les abonnés que vous servez déjà, au tarif que vous avez convenu avec
-                chacun : la première facture est émise automatiquement. Vous voulez
-                d’abord voir l’outil en action ? Chargez un jeu de démonstration, supprimable en un clic.
+                chacun : la première facture est émise automatiquement.
+                {/* La démonstration sert à découvrir l'outil : plus proposée une fois le dossier validé (migration 0026). */}
+                {entreprise.dossier_statut !== 'valide' &&
+                  ' Vous voulez d’abord voir l’outil en action ? Chargez un jeu de démonstration, supprimable en un clic.'}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Link href="/precollecteur/clients/nouveau" className="btn-primary">
                 <UserPlus size={16} /> Ajouter un client
               </Link>
-              <ActionForm action={chargerDemoAction}>
-                <SubmitButton variant="outline" pendingLabel="Chargement…">
-                  <FlaskConical size={16} /> Charger la démo
-                </SubmitButton>
-              </ActionForm>
+              {entreprise.dossier_statut !== 'valide' && (
+                <ActionForm action={chargerDemoAction}>
+                  <SubmitButton variant="outline" pendingLabel="Chargement…">
+                    <FlaskConical size={16} /> Charger la démo
+                  </SubmitButton>
+                </ActionForm>
+              )}
             </div>
           </div>
         </section>
