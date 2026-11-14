@@ -33,6 +33,22 @@ export default async function SignalerPage({ searchParams }: { searchParams: Pro
     );
   }
 
+  // Une demande pas encore acceptée n'ouvre pas les signalements (migration 20261118000026).
+  if (client.statut === 'demande') {
+    return (
+      <PortalShell portalKey="citoyen" currentPath="/citoyen/signaler" titre={client.nom}>
+        <PageHeader titre="Signaler un problème" retour={{ href: '/citoyen', label: 'Mon espace' }} />
+        <div className="card-soft">
+          <EmptyState
+            icon={Sparkles}
+            titre="Votre demande est en attente"
+            texte="Les signalements s’ouvrent dès que votre précollecteur a accepté votre abonnement."
+          />
+        </div>
+      </PortalShell>
+    );
+  }
+
   let dateCollecte: string | null = null;
   if (collecte) {
     const { data } = await supabase.from('collectes').select('date_prevue').eq('id', collecte).maybeSingle();

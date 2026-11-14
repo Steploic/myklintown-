@@ -70,6 +70,18 @@ const avec0023 = (db) => valeur(db, `select to_regclass('public.paiements_en_lig
 const avec0024 = (db) => valeur(db, `select to_regprocedure('public.contour_zone_valide(jsonb)') is not null`);
 /** Migration 0025 (notes internes hors de la fiche lue par l'abonné) présente dans la base ? */
 const avec0025 = (db) => valeur(db, `select to_regclass('public.clients_notes') is not null`);
+/** Migration 0026 (quartiers courts, signalements des abonnés servis, démo avant validation) présente dans la base ? */
+const avec0026 = (db) => valeur(db, `select to_regprocedure('public.est_abonne_de(uuid)') is not null`);
+
+/** Dans la transaction d'un abonné : une preuve déposée puis un signalement auprès de A. */
+async function signalerAvecPreuve(tx, s, compte, fiche) {
+  const chemin = `${s.entA}/${compte}/signalement-${Date.now()}.jpg`;
+  await tx.query(`insert into storage.objects (bucket_id, name) values ('preuves', $1)`, [chemin]);
+  return valeur(tx,
+    `insert into public.incidents_precollecte (entreprise_id, source, categorie, description, client_id, media_path, lat, lng)
+     values ($1, 'client', 'depot_sauvage', 'Signalement du banc', $2, $3, 3.85, 11.5) returning id`,
+    [s.entA, fiche, chemin]);
+}
 /** Migration 0008 (paiement en ligne) présente dans la base ? */
 const avecPaiementEnLigne = (db) => valeur(db, `select to_regclass('public.paiements_en_ligne') is not null`);
 
@@ -1491,6 +1503,53 @@ export const ATTAQUES = [
       return false;
     },
   },
+  // ---- Revue du 10/11/2026, fin (migration 20261118000026) ----
+  {
+    id: 'quartier-trop-court',
+    titre: 'Un quartier de deux ou trois lettres capte les demandes de tout un secteur',
+    async jouer(db) {
+      if (!(await avec0026(db))) return false;
+      return valeur(db,
+        `select public.quartier_correspond('Bonamoussadi', 'Bo') or public.quartier_correspond('Ma', 'Makepe')
+             or public.quartier_correspond('Bonapriso', 'Bon')`);
+    },
+  },
+  {
+    id: 'signalement-sans-abonnement',
+    titre: 'Un compte dont la demande n’est pas acceptée, ou l’abonnement résilié, dépose une preuve et un signalement',
+    async jouer(db, s) {
+      if (!(await avec0026(db))) return false;
+      for (const statut of ['demande', 'resilie']) {
+        const compte = await creerCompte(db, `sans.service.${statut}.${Date.now()}@test.cm`);
+        const fiche = await valeur(db,
+          `insert into public.clients (entreprise_id, user_id, nom, telephone, plan_id, statut) values ($1, $2, 'Foyer sans service', '677000997', $3, $4) returning id`,
+          [s.entA, compte, s.plan, statut]);
+        try {
+          if (await essaiAnnule(db, compte, async (tx) => !!(await signalerAvecPreuve(tx, s, compte, fiche)))) return true;
+        } finally {
+          await db.query(`delete from public.clients where id = $1`, [fiche]);
+        }
+      }
+      return false;
+    },
+  },
+  {
+    id: 'demo-apres-validation',
+    titre: 'Une entreprise au dossier validé crée encore des fiches de démonstration, hors numérotation et hors indicateurs',
+    async jouer(db, s) {
+      if (!(await avec0026(db))) return false;
+      const avant = await valeur(db, `select dossier_statut from public.entreprises where id = $1`, [s.entA]);
+      await db.query(`update public.entreprises set dossier_statut = 'valide' where id = $1`, [s.entA]);
+      try {
+        return await essaiAnnule(db, s.gerantA, async (tx) =>
+          !!(await valeur(tx,
+            `insert into public.clients (entreprise_id, nom, plan_id, telephone, est_demo) values ($1, 'Vente hors compteur (démo)', $2, '677000996', true) returning id`,
+            [s.entA, s.plan])));
+      } finally {
+        await db.query(`update public.entreprises set dossier_statut = $2 where id = $1`, [s.entA, avant]);
+      }
+    },
+  },
 ];
 
 /** Migration 0014 (facture inaltérable, charte) présente dans la base ? */
@@ -2746,6 +2805,47 @@ export const PARCOURS = [
       if ((await note()) !== 'Portail vert') throw new Error('modification directe refusée');
       const retiree = await comme(db, s.gerantA, (tx) => tx.query(`delete from public.clients_notes where client_id = $1 returning client_id`, [id]));
       if (retiree.rows.length !== 1) throw new Error('retrait de la note refusé');
+    },
+  },
+  {
+    titre: 'Migration 0026 rejouée : contrôle « OK » sur les lignes 1 à 3, deux fois',
+    async jouer(db) {
+      const sql = migration('20261118000026');
+      if (!sql) return;
+      for (let passage = 0; passage < 2; passage++) {
+        const controle = (await db.exec(sql)).at(-1).rows;
+        const ko = controle.filter((r, i) => i < 3 && r.resultat !== 'OK');
+        if (ko.length) throw new Error(JSON.stringify(ko));
+      }
+    },
+  },
+  {
+    titre: 'Quartiers : les correspondances utiles tiennent ; l’abonné servi signale avec sa preuve ; la démo se charge avant la validation du dossier',
+    async jouer(db, s) {
+      if (!(await avec0026(db))) return;
+      for (const [a, b] of [['Nsam', 'Nsam Efoulan'], ['Biyem-Assi', 'Biyem'], ['Nkolbisson', 'Nkol'], ['Mvog-Ada', 'Ada'], ['Bo', 'Bo'], ['PK8', 'pk8']]) {
+        if (!(await valeur(db, `select public.quartier_correspond($1, $2)`, [a, b]))) throw new Error(`« ${a} » et « ${b} » ne correspondent plus`);
+      }
+      // Un abonné servi (fiche active, compte rattaché) signale toujours.
+      const compte = await creerCompte(db, `abonne.servi.${Date.now()}@test.cm`);
+      const fiche = await valeur(db,
+        `insert into public.clients (entreprise_id, user_id, nom, telephone, plan_id, statut) values ($1, $2, 'Foyer servi', '677000994', $3, 'actif') returning id`,
+        [s.entA, compte, s.plan]);
+      if (!(await essaiAnnule(db, compte, async (tx) => !!(await signalerAvecPreuve(tx, s, compte, fiche))))) {
+        throw new Error('l’abonné servi ne peut plus signaler');
+      }
+      // Avant la validation du dossier, la démonstration se charge.
+      const avant = await valeur(db, `select dossier_statut from public.entreprises where id = $1`, [s.entA]);
+      await db.query(`update public.entreprises set dossier_statut = 'incomplet' where id = $1`, [s.entA]);
+      try {
+        const demo = await essaiAnnule(db, s.gerantA, async (tx) =>
+          !!(await valeur(tx,
+            `insert into public.clients (entreprise_id, nom, plan_id, telephone, est_demo) values ($1, 'Foyer (démo)', $2, '677000993', true) returning id`,
+            [s.entA, s.plan])));
+        if (!demo) throw new Error('la démonstration ne se charge plus avant la validation');
+      } finally {
+        await db.query(`update public.entreprises set dossier_statut = $2 where id = $1`, [s.entA, avant]);
+      }
     },
   },
 ];
