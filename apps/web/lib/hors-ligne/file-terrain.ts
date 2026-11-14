@@ -11,6 +11,10 @@
  * (tournée close, code inconnu…) n'est pas perdu en silence : il reste dans
  * la file avec le motif du refus, jusqu'à ce que l'agent l'ait lu.
  *
+ * Un téléphone sert parfois à plusieurs agents. Chaque geste porte le COMPTE
+ * qui l'a fait : il n'est montré et envoyé que lorsque ce compte est connecté,
+ * jamais sous le nom d'un autre (revue du 10/11/2026).
+ *
  * Ce module ne dépend ni de React ni des actions serveur : les « exécuteurs »
  * sont fournis par l'appelant (testable seul, voir tests/unit).
  */
@@ -24,6 +28,8 @@ interface Base {
   horodatage: string;
   /** Motif du refus par le serveur, une fois rejoué. */
   refus?: string;
+  /** Compte qui a fait le geste (absent : geste d'avant cette règle, ou compte pas encore connu). */
+  compte?: string;
 }
 export type OperationTerrain =
   | (Base & { type: 'pointage'; collecteId: string; statut: StatutPassage; motif: string | null })
@@ -58,12 +64,48 @@ let memoire: OperationTerrain[] = [];
 const abonnes = new Set<() => void>();
 let instantane: readonly OperationTerrain[] | null = null;
 const VIDE: readonly OperationTerrain[] = [];
+/** Compte connecté sur ce téléphone (null : pas encore connu). */
+let compteCourant: string | null = null;
+/** Au-delà, le geste d'un AUTRE compte est oublié (sa tournée est close depuis longtemps). */
+const DUREE_GARDE_AUTRES_MS = 30 * 24 * 3600 * 1000;
 
 /** Pour les tests : un stockage en mémoire à la place de localStorage. */
 export function utiliserStockage(s: Stockage | null) {
   stockage = s;
   memoire = [];
-  instantane = lireBrut();
+  compteCourant = null;
+  instantane = miennes(lireBrut());
+}
+
+/** Le geste appartient-il au compte connecté ? Sans compte connu, seuls les gestes sans compte. */
+function aMoi(o: OperationTerrain): boolean {
+  return compteCourant == null ? !o.compte : !o.compte || o.compte === compteCourant;
+}
+const miennes = (liste: OperationTerrain[]): OperationTerrain[] => liste.filter(aMoi);
+
+/**
+ * Déclare le compte connecté sur ce téléphone. Les gestes d'avant cette règle
+ * (sans compte) lui sont attribués ; ceux des autres comptes restent sur le
+ * téléphone, invisibles, jusqu'au retour de leur auteur (30 jours au plus).
+ */
+export function definirCompte(compte: string | null) {
+  const change = compte !== compteCourant;
+  compteCourant = compte;
+  const liste = lireBrut();
+  if (compte) {
+    const limite = Date.now() - DUREE_GARDE_AUTRES_MS;
+    const suite = liste
+      .filter((o) => !o.compte || o.compte === compte || !(new Date(o.horodatage).getTime() < limite))
+      .map((o) => (o.compte ? o : { ...o, compte }));
+    if (suite.length !== liste.length || suite.some((o, i) => o !== liste[i])) {
+      ecrire(suite);
+      return;
+    }
+  }
+  if (change) {
+    instantane = miennes(liste);
+    abonnes.forEach((f) => f());
+  }
 }
 
 function lireBrut(): OperationTerrain[] {
@@ -88,13 +130,13 @@ function ecrire(liste: OperationTerrain[]) {
       // stockage plein ou refusé : la file reste en mémoire pour cette page
     }
   }
-  instantane = liste;
+  instantane = miennes(liste);
   abonnes.forEach((f) => f());
 }
 
-/** Toutes les opérations en attente (le même tableau tant que rien ne change). */
+/** Les opérations en attente du compte connecté (le même tableau tant que rien ne change). */
 export function operations(): readonly OperationTerrain[] {
-  if (instantane == null) instantane = lireBrut();
+  if (instantane == null) instantane = miennes(lireBrut());
   return instantane;
 }
 
@@ -104,12 +146,12 @@ export function operationsServeur(): readonly OperationTerrain[] {
 }
 
 export function abonner(f: () => void): () => void {
-  if (abonnes.size === 0) instantane = lireBrut();
+  if (abonnes.size === 0) instantane = miennes(lireBrut());
   abonnes.add(f);
   // Un autre onglet a modifié la file.
   const surStockage = (e: StorageEvent) => {
     if (e.key === CLE_STOCKAGE) {
-      instantane = lireBrut();
+      instantane = miennes(lireBrut());
       f();
     }
   };
@@ -126,19 +168,24 @@ function nouvelId(): string {
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-type SansId<T> = T extends unknown ? Omit<T, 'id' | 'horodatage' | 'refus'> & { horodatage?: string } : never;
+type SansId<T> = T extends unknown ? Omit<T, 'id' | 'horodatage' | 'refus' | 'compte'> & { horodatage?: string } : never;
 
 export function ajouter(op: SansId<OperationTerrain>): OperationTerrain {
-  const complete = { ...op, id: nouvelId(), horodatage: op.horodatage ?? new Date().toISOString() } as OperationTerrain;
+  const complete = {
+    ...op,
+    id: nouvelId(),
+    horodatage: op.horodatage ?? new Date().toISOString(),
+    ...(compteCourant ? { compte: compteCourant } : {}),
+  } as OperationTerrain;
   let liste = lireBrut();
   // Le même QR scanné deux fois avant le retour du réseau : un seul passage.
   if (complete.type === 'scan') {
-    const deja = liste.find((o) => o.type === 'scan' && !o.refus && o.tourneeId === complete.tourneeId && o.code === complete.code);
+    const deja = liste.find((o) => aMoi(o) && o.type === 'scan' && !o.refus && o.tourneeId === complete.tourneeId && o.code === complete.code);
     if (deja) return deja;
   }
   // Un nouveau pointage du même passage remplace le précédent encore en attente.
   if (complete.type === 'pointage') {
-    liste = liste.filter((o) => !(o.type === 'pointage' && !o.refus && o.collecteId === complete.collecteId));
+    liste = liste.filter((o) => !(aMoi(o) && o.type === 'pointage' && !o.refus && o.collecteId === complete.collecteId));
   }
   ecrire([...liste, complete]);
   return complete;
@@ -148,9 +195,9 @@ export function retirer(id: string) {
   ecrire(lireBrut().filter((o) => o.id !== id));
 }
 
-/** Efface les refus déjà lus par l'agent (pour une tournée, ou partout). */
+/** Efface les refus déjà lus par l'agent (pour une tournée, ou partout) ; ceux des autres comptes restent. */
 export function oublierRefus(tourneeId?: string) {
-  ecrire(lireBrut().filter((o) => !o.refus || (tourneeId != null && o.tourneeId !== tourneeId)));
+  ecrire(lireBrut().filter((o) => !aMoi(o) || !o.refus || (tourneeId != null && o.tourneeId !== tourneeId)));
 }
 
 let envoiEnCours: Promise<BilanEnvoi> | null = null;
@@ -172,7 +219,7 @@ export function envoyer(executeurs: Executeurs): Promise<BilanEnvoi> {
   if (envoiEnCours) return envoiEnCours;
   envoiEnCours = (async () => {
     const bilan: BilanEnvoi = { envoyees: 0, refusees: 0, restantes: 0, coupure: false };
-    for (const op of lireBrut()) {
+    for (const op of miennes(lireBrut())) {
       if (op.refus) continue;
       let r: ResultatEnvoi;
       try {
@@ -192,7 +239,7 @@ export function envoyer(executeurs: Executeurs): Promise<BilanEnvoi> {
         bilan.envoyees++;
       }
     }
-    bilan.restantes = lireBrut().filter((o) => !o.refus).length;
+    bilan.restantes = miennes(lireBrut()).filter((o) => !o.refus).length;
     return bilan;
   })().finally(() => {
     envoiEnCours = null;
