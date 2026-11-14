@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   ajouter,
+  definirCompte,
   envoyer,
   oublierRefus,
   operations,
@@ -119,5 +120,66 @@ describe('file des gestes faits hors ligne', () => {
     const { ex, envoyes } = executeurs();
     await Promise.all([envoyer(ex), envoyer(ex)]);
     expect(envoyes).toEqual(['scan:MKT-AAAA1111']);
+  });
+});
+
+// Revue du 10/11/2026 : un téléphone partagé ne rejoue pas les gestes d'un
+// agent sous le nom d'un autre.
+describe('téléphone partagé : chaque geste reste à son auteur', () => {
+  it('les gestes d’un compte ne sont ni montrés ni envoyés sous un autre compte', async () => {
+    definirCompte('agent-a');
+    ajouter({ type: 'scan', tourneeId: 't1', code: 'MKT-AAAA1111' });
+    ajouter({ type: 'pointage', tourneeId: 't1', collecteId: 'c1', statut: 'realisee', motif: null });
+
+    definirCompte('agent-b');
+    expect(operations()).toHaveLength(0);
+    const b = executeurs();
+    expect(await envoyer(b.ex)).toMatchObject({ envoyees: 0, restantes: 0 });
+    expect(b.envoyes).toEqual([]);
+    // Ils sont toujours sur le téléphone.
+    expect(JSON.parse(stock.m.get(CLE_STOCKAGE)!)).toHaveLength(2);
+
+    definirCompte('agent-a');
+    expect(operations()).toHaveLength(2);
+    const a = executeurs();
+    expect(await envoyer(a.ex)).toMatchObject({ envoyees: 2, restantes: 0 });
+    expect(a.envoyes).toEqual(['scan:MKT-AAAA1111', 'pointage:c1:realisee']);
+  });
+
+  it('chaque compte ne voit et n’efface que ses propres refus ; les doublons se comptent par compte', async () => {
+    definirCompte('agent-a');
+    ajouter({ type: 'scan', tourneeId: 't1', code: 'MKT-AAAA1111' });
+    await envoyer(executeurs(() => ({ error: 'Tournée close' })).ex);
+    expect(operations().filter((o) => o.refus)).toHaveLength(1);
+
+    definirCompte('agent-b');
+    // Le même QR, scanné par un autre agent, n'est pas confondu avec celui de A.
+    ajouter({ type: 'scan', tourneeId: 't1', code: 'MKT-AAAA1111' });
+    expect(operations()).toHaveLength(1);
+    oublierRefus();
+    expect(operations()).toHaveLength(1);
+
+    definirCompte('agent-a');
+    expect(operations().filter((o) => o.refus)).toHaveLength(1);
+  });
+
+  it('un geste d’avant cette règle (sans compte) revient au compte qui ouvre l’application', () => {
+    ajouter({ type: 'scan', tourneeId: 't1', code: 'MKT-AAAA1111' });
+    expect(operations()[0]!.compte).toBeUndefined();
+    definirCompte('agent-a');
+    expect(operations()).toHaveLength(1);
+    expect(operations()[0]!.compte).toBe('agent-a');
+    definirCompte('agent-b');
+    expect(operations()).toHaveLength(0);
+  });
+
+  it('après 30 jours, le geste d’un autre compte est oublié ; les siens restent', () => {
+    const vieux = new Date(Date.now() - 31 * 24 * 3600 * 1000).toISOString();
+    definirCompte('agent-a');
+    ajouter({ type: 'scan', tourneeId: 't1', code: 'MKT-AAAA1111', horodatage: vieux });
+    definirCompte('agent-a');
+    expect(operations()).toHaveLength(1);
+    definirCompte('agent-b');
+    expect(JSON.parse(stock.m.get(CLE_STOCKAGE)!)).toHaveLength(0);
   });
 });

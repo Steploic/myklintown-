@@ -1,10 +1,47 @@
 'use client';
 
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { createClient } from '@myklintown/db/client';
 import { marquerCollecteAction, scannerClientAction } from '@/lib/terrain-actions';
-import { abonner, envoyer, operations, operationsServeur, type Executeurs, type OperationTerrain } from '@/lib/hors-ligne/file-terrain';
+import { abonner, definirCompte, envoyer, operations, operationsServeur, type Executeurs, type OperationTerrain } from '@/lib/hors-ligne/file-terrain';
 
 const RELANCE_MS = 20_000;
+
+/**
+ * Compte connecté sur ce téléphone, lu sur l'appareil. La file ne montre et
+ * n'envoie que les gestes de ce compte : un téléphone partagé ne rejoue pas
+ * les gestes d'un agent sous le nom d'un autre.
+ */
+const CLE_COMPTE = 'mkt:file-terrain:compte';
+
+/** Dernier compte reconnu sur ce téléphone (on ne se connecte ni ne se déconnecte sans réseau). */
+function dernierCompte(): string | null {
+  try {
+    return window.localStorage.getItem(CLE_COMPTE);
+  } catch {
+    return null;
+  }
+}
+
+async function compteConnecte(): Promise<string | null> {
+  // Hors ligne, la session ne peut pas être rafraîchie : le dernier compte reconnu fait foi.
+  if (!navigator.onLine) return dernierCompte();
+  try {
+    const { data, error } = await createClient().auth.getSession();
+    // Réseau instable (session non rafraîchie) : on garde le dernier compte reconnu.
+    if (error) return dernierCompte();
+    const compte = data.session?.user.id ?? null;
+    try {
+      if (compte) window.localStorage.setItem(CLE_COMPTE, compte);
+      else window.localStorage.removeItem(CLE_COMPTE);
+    } catch {
+      // stockage bloqué : le compte reste connu pour cette page
+    }
+    return compte;
+  } catch {
+    return dernierCompte();
+  }
+}
 
 /** Les gestes en attente sont rejoués par les mêmes actions, avec l'heure du terrain. */
 const EXECUTEURS: Executeurs = {
@@ -42,13 +79,19 @@ export function useFileTerrain(tourneeId?: string): EtatFileTerrain {
   const [envoiEnCours, setEnvoiEnCours] = useState(false);
 
   const relancer = useCallback(() => {
-    if (!navigator.onLine || !operations().some((o) => !o.refus)) return;
-    setEnvoiEnCours(true);
-    void envoyer(EXECUTEURS).finally(() => setEnvoiEnCours(false));
+    void compteConnecte().then((compte) => {
+      definirCompte(compte);
+      // Sans compte connu, rien ne part : le geste attend son auteur.
+      if (!compte || !navigator.onLine || !operations().some((o) => !o.refus)) return;
+      setEnvoiEnCours(true);
+      void envoyer(EXECUTEURS).finally(() => setEnvoiEnCours(false));
+    });
   }, []);
 
   useEffect(() => {
     setEnLigne(navigator.onLine);
+    // Page ouverte sans réseau : les gestes en attente du dernier compte reconnu s'affichent tout de suite.
+    if (!navigator.onLine) definirCompte(dernierCompte());
     const enLigneMaintenant = () => {
       setEnLigne(true);
       relancer();
