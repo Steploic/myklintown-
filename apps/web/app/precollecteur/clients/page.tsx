@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Download, Search, UserPlus, Users } from 'lucide-react';
+import { Download, QrCode, Search, UserPlus, Users } from 'lucide-react';
 import { cn } from '@myklintown/ui';
 import { PrecoShell } from '@/components/precollecteur/shell';
 import { EmptyState, PageHeader } from '@/components/ui/blocks';
@@ -69,6 +69,9 @@ export default async function ClientsPage({
             <a href="/precollecteur/clients/export" className="btn-outline">
               <Download size={16} /> Exporter
             </a>
+            <Link href="/precollecteur/clients/planche" className="btn-outline">
+              <QrCode size={16} /> Planche QR (imprimeur)
+            </Link>
             <Link href="/precollecteur/clients/nouveau" className="btn-primary">
               <UserPlus size={16} /> Nouveau client
             </Link>
