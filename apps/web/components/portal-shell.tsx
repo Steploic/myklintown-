@@ -3,13 +3,15 @@ import { LogOut, Settings } from 'lucide-react';
 import { Logo, cn } from '@myklintown/ui';
 import { MobileNavDrawer } from './mobile-nav-drawer';
 import { aPlusieursEspaces, SelecteurEspace } from './selecteur-espace';
-import { navPourRole, PORTALS, type PortalKey, type PortalNavItem } from '@/lib/portal-config';
+import { libelleEspace, navPourRole, PORTALS, type PortalKey, type PortalNavItem } from '@/lib/portal-config';
 import { signOutAction } from '@/lib/auth-actions';
 import { getCurrentProfile } from '@/lib/get-profile';
 import { mairieSansCommune } from '@/lib/mairie/communes';
+import { mairiesOuvertes } from '@/lib/mairies';
 import { getSupabase } from '@/lib/server';
 import { EnvoiTerrainGlobal } from './precollecteur/envoi-terrain-global';
 import { AvisSansCommune } from './mairie/avis-sans-commune';
+import { EspaceMairieFerme } from './mairie/espace-ferme';
 
 export type { PortalKey, PortalNavItem };
 
@@ -37,12 +39,16 @@ export async function PortalShell({ portalKey, user, titre, currentPath, childre
   const portal = PORTALS[portalKey];
   const profile = await getCurrentProfile();
   const display = profile ?? user ?? { nom: 'Utilisateur', email: '' };
-  const nav = navPourRole(portal.nav, profile?.role);
+  // Accès Mairie fermés (MyKlinTown fonctionne sans les Mairies) : un compte
+  // Mairie n'a plus de menu, chaque page lui dit que l'espace est fermé.
+  const mairieFermee = portalKey === 'mairie' && profile?.role === 'mairie' && !(await mairiesOuvertes());
+  const nav = mairieFermee ? [] : navPourRole(portal.nav, profile?.role);
+  const libelle = libelleEspace(portalKey, profile?.role);
   const racine = nav[0]?.href ?? '/';
   const sousTitre = titre ?? display.nom;
   // Barre d'onglets mobile : les 4 destinations les plus fréquentes, au pouce.
   const onglets = nav.slice(0, 4);
-  const avisCommune = portalKey === 'mairie' && profile?.role === 'mairie' && (await mairieSansCommune(await getSupabase()));
+  const avisCommune = !mairieFermee && portalKey === 'mairie' && profile?.role === 'mairie' && (await mairieSansCommune(await getSupabase()));
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -55,7 +61,7 @@ export async function PortalShell({ portalKey, user, titre, currentPath, childre
           </Link>
         </div>
         <div className="mx-3 mb-2 rounded-lg bg-white/[0.06] px-3 py-3">
-          <p className="text-small font-semibold uppercase tracking-wider text-brand-leaf">{portal.role}</p>
+          <p className="text-small font-semibold uppercase tracking-wider text-brand-leaf">{libelle}</p>
           <p className="truncate text-body-sm font-semibold">{sousTitre}</p>
         </div>
         {aPlusieursEspaces(profile?.role) && <SelecteurEspace courant={portalKey} role={profile?.role} />}
@@ -113,12 +119,12 @@ export async function PortalShell({ portalKey, user, titre, currentPath, childre
       {/* Colonne principale */}
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-surface/90 px-3 backdrop-blur lg:hidden">
-          <MobileNavDrawer portalKey={portalKey} currentPath={currentPath} userName={display.nom} titre={sousTitre} role={profile?.role} />
+          <MobileNavDrawer portalKey={portalKey} currentPath={currentPath} userName={display.nom} titre={sousTitre} role={profile?.role} fermee={mairieFermee} />
           <Link href="/" className="flex items-center" aria-label="Accueil">
             <Logo size={26} showWordmark={false} />
           </Link>
           <div className="min-w-0 leading-tight">
-            <p className="truncate text-small font-semibold uppercase tracking-wider text-brand-green">{portal.role}</p>
+            <p className="truncate text-small font-semibold uppercase tracking-wider text-brand-green">{libelle}</p>
             <p className="truncate text-body-sm font-semibold text-brand-ink">{sousTitre}</p>
           </div>
         </header>
@@ -127,7 +133,7 @@ export async function PortalShell({ portalKey, user, titre, currentPath, childre
           <div className="mx-auto max-w-6xl">
             {(portalKey === 'precollecteur' || portalKey === 'employe') && !/\/tournees\/[^/]+/.test(currentPath) && <EnvoiTerrainGlobal />}
             {avisCommune && <AvisSansCommune />}
-            {children}
+            {mairieFermee ? <EspaceMairieFerme /> : children}
           </div>
         </main>
 

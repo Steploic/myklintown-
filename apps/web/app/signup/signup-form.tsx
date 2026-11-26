@@ -10,7 +10,8 @@ import { ChampMotDePasse } from '@/components/ui/champ-mot-de-passe';
 
 // Profils obtenables en ligne (voir SELF_SERVICE_ROLES) : le précollecteur ne voit
 // que les données de SA propre entreprise ; le ménage, les siennes. Les accès
-// Mairie sont ouverts par MyKlinTown, jamais demandés à l'inscription.
+// Mairie sont ouverts par MyKlinTown, jamais demandés à l'inscription ; fermés
+// depuis le 26/11/2026 (le lien n'apparaît que si on les rouvre).
 const PROFILS = [
   { value: 'precollecteur', label: 'Précollecteur', icon: Truck, desc: 'Je gère une activité de précollecte. Inscription gratuite ; dossier à compléter pour être visible.' },
   { value: 'citoyen', label: 'Abonné', icon: Home, desc: 'Je veux faire ramasser les déchets de mon domicile, de mon commerce ou de mon institution.' },
@@ -18,7 +19,7 @@ const PROFILS = [
 
 const INITIAL: AuthState = {};
 
-export function SignupForm({ defaut }: { defaut: 'precollecteur' | 'citoyen' }) {
+export function SignupForm({ defaut, accesMairie = false }: { defaut: 'precollecteur' | 'citoyen'; accesMairie?: boolean }) {
   const [state, formAction, pending] = useSoumission(signUpAction, INITIAL);
   // Profil ménage : charte et contrat à accepter dès l'inscription.
   const [role, setRole] = useState<string>(defaut);
@@ -91,11 +92,16 @@ export function SignupForm({ defaut }: { defaut: 'precollecteur' | 'citoyen' }) 
         </Link>
       </p>
       <p className="text-center text-small text-muted-foreground">
-        Vous représentez une Mairie ?{' '}
-        <Link href="/acces-mairie" className="font-semibold text-brand-blue hover:underline">
-          Demandez votre accès
-        </Link>
-        . Employé d’un précollecteur ?{' '}
+        {accesMairie && (
+          <>
+            Vous représentez une Mairie ?{' '}
+            <Link href="/acces-mairie" className="font-semibold text-brand-blue hover:underline">
+              Demandez votre accès
+            </Link>
+            .{' '}
+          </>
+        )}
+        Employé d’un précollecteur ?{' '}
         <Link href="/rejoindre" className="font-semibold text-brand-blue hover:underline">
           Rejoignez votre équipe
         </Link>

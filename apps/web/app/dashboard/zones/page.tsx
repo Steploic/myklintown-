@@ -22,8 +22,10 @@ export default async function ZonesPage() {
   const miennes = new Set(acces.communes.map((c) => c.id));
   const nomCommune = new Map(acces.toutes.map((c) => [c.id, c.nom]));
   // Une zone d'une autre commune reste affichée (chevauchements), en lecture seule.
-  const modifiable = (z: Zone) => acces.estAdmin || !acces.cloisonne || (z.commune_id != null && miennes.has(z.commune_id));
-  const toutes = rows<Zone>(zo.data);
+  // La zone tracée par un précollecteur (migration 20261126000027) n'est modifiable que par lui et l'administrateur.
+  const modifiable = (z: Zone & { entreprise_id?: string | null }) =>
+    acces.estAdmin || (!z.entreprise_id && (!acces.cloisonne || (z.commune_id != null && miennes.has(z.commune_id))));
+  const toutes = rows<Zone & { entreprise_id?: string | null }>(zo.data);
   const zones: ZoneEdit[] = toutes.filter(modifiable).map((z) => ({
     id: z.id,
     nom: z.nom,

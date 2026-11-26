@@ -58,7 +58,7 @@ export async function signUpAction(_prev: AuthState, formData: FormData): Promis
   if (!isSelfServiceRole(role)) {
     return {
       error:
-        'Ce profil ne s’obtient pas en ligne. Les accès Collecteur et Mairie sont ouverts par MyKlinTown : contactez-nous.',
+        'Ce profil ne s’obtient pas en ligne : contactez l’équipe MyKlinTown.',
     };
   }
   if (!nomComplet || !email || !password) {

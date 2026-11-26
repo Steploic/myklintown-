@@ -63,7 +63,7 @@ export default function LegalPage() {
           <p className="text-body-sm">
             Les données des abonnés (nom, téléphone, adresse, position, abonnement, paiements, passages) sont
             collectées pour l’exécution du service de précollecte. Chaque précollecteur ne voit que ses propres
-            clients. Les mairies n’accèdent qu’à des statistiques agrégées par zone, sans liste nominative.
+            clients. Aucune mairie n’accède à une liste nominative d’abonnés.
             Les photos et vidéos de preuve sont stockées dans un espace privé et ne sont jamais publiques.
           </p>
           <p className="text-body-sm">

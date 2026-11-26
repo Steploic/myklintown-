@@ -13,6 +13,7 @@ import {
   verifierConflitsAction,
   type Conflit,
 } from '@/lib/mairie/actions';
+import { enregistrerMaZoneAction, supprimerMaZoneAction } from '@/lib/precollecteur/zones-actions';
 import type { ZoneCarte } from './zone-map';
 import type { GeoPolygon } from '@/lib/types';
 
@@ -33,12 +34,14 @@ export interface ZoneEdit {
   nb_clients: number;
 }
 
-/** Zone d'une autre commune : affichée pour éviter les chevauchements, non modifiable. */
+/** Zone d'une autre commune (ou d'un autre précollecteur) : affichée pour voir les chevauchements, non modifiable. */
 export interface ZoneVoisine {
   id: string;
   nom: string;
   contour: GeoPolygon;
   commune: string | null;
+  /** Remplace « commune · consultation seule » dans l'infobulle. */
+  etiquette?: string;
 }
 
 export function ZoneEditor({
@@ -46,13 +49,21 @@ export function ZoneEditor({
   voisines = [],
   entreprises,
   communes,
+  espace = 'administration',
 }: {
   zones: ZoneEdit[];
   voisines?: ZoneVoisine[];
   entreprises: { id: string; nom: string }[];
-  /** Communes où ce compte peut tracer (les siennes ; toutes pour l'administrateur). */
+  /** Communes où ce compte peut tracer (les siennes ; toutes pour l'administrateur ; ses communes d'activité pour un précollecteur). */
   communes: { id: string; nom: string }[];
+  /**
+   * `precollecteur` : le gérant trace SES zones (migration 20261126000027).
+   * Elles lui sont affectées d'office ; les chevauchements sont signalés sans
+   * être bloqués ; pas d'affectation à d'autres.
+   */
+  espace?: 'administration' | 'precollecteur';
 }) {
+  const estPreco = espace === 'precollecteur';
   const router = useRouter();
   const [selection, setSelection] = useState<string | null>(null);
   const [dessin, setDessin] = useState<null | { id: string | null }>(null);
@@ -75,13 +86,15 @@ export function ZoneEditor({
           nom: z.nom,
           couleur: z.couleur,
           contour: z.contour,
-          attribuee: z.entreprises.length > 0,
-          etiquette: z.entreprises.length ? z.entreprises.map((e) => e.nom).join(', ') : 'Non attribuée',
+          attribuee: estPreco || z.entreprises.length > 0,
+          etiquette: estPreco
+            ? `${z.nb_clients} abonné${z.nb_clients > 1 ? 's' : ''}`
+            : z.entreprises.length ? z.entreprises.map((e) => e.nom).join(', ') : 'Non attribuée',
         })),
-    [zones, dessin],
+    [zones, dessin, estPreco],
   );
   const autres = useMemo(
-    () => voisines.map((z) => ({ id: z.id, nom: z.nom, contour: z.contour, etiquette: `${z.commune ?? 'Sans commune'} · consultation seule` })),
+    () => voisines.map((z) => ({ id: z.id, nom: z.nom, contour: z.contour, etiquette: z.etiquette ?? `${z.commune ?? 'Sans commune'} · consultation seule` })),
     [voisines],
   );
   const nonAttribuees = zones.filter((z) => z.entreprises.length === 0).length;
@@ -124,14 +137,16 @@ export function ZoneEditor({
 
   const enregistrer = () =>
     start(async () => {
-      const r = await enregistrerZoneAction({
-        id: dessin?.id,
-        nom,
-        couleur,
-        communeId: commune || null,
-        points,
-        chevauchementAutorise: autorise,
-      });
+      const r = estPreco
+        ? await enregistrerMaZoneAction({ id: dessin?.id, nom, couleur, communeId: commune || null, points })
+        : await enregistrerZoneAction({
+            id: dessin?.id,
+            nom,
+            couleur,
+            communeId: commune || null,
+            points,
+            chevauchementAutorise: autorise,
+          });
       setMessage(r);
       if (!r.error) {
         setDessin(null);
@@ -152,14 +167,23 @@ export function ZoneEditor({
     <div className="grid gap-5 xl:grid-cols-[1fr_22rem]">
       <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-body-sm text-muted-foreground">
-            <span className="mr-3 inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm bg-brand-teal" /> attribuée</span>
-            <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm border-2 border-dashed border-[#8A96A3]" /> non attribuée ({nonAttribuees})</span>
-            {voisines.length > 0 && (
-              <span className="ml-3 inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm border border-dotted border-[#5B6670]" /> autre commune (consultation)</span>
-            )}
-          </p>
-          {!dessin && communes.length > 0 && (
+          {estPreco ? (
+            <p className="text-body-sm text-muted-foreground">
+              <span className="mr-3 inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm bg-brand-teal" /> mes zones</span>
+              {voisines.length > 0 && (
+                <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm border border-dotted border-[#5B6670]" /> autres zones (consultation)</span>
+              )}
+            </p>
+          ) : (
+            <p className="text-body-sm text-muted-foreground">
+              <span className="mr-3 inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm bg-brand-teal" /> attribuée</span>
+              <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm border-2 border-dashed border-[#8A96A3]" /> non attribuée ({nonAttribuees})</span>
+              {voisines.length > 0 && (
+                <span className="ml-3 inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm border border-dotted border-[#5B6670]" /> autre commune (consultation)</span>
+              )}
+            </p>
+          )}
+          {!dessin && (estPreco || communes.length > 0) && (
             <button type="button" className="btn-primary" onClick={() => commencer()}>
               <Plus size={16} /> Dessiner une zone
             </button>
@@ -203,14 +227,16 @@ export function ZoneEditor({
               <label className="field-label" htmlFor="z-nom">Nom</label>
               <input id="z-nom" value={nom} onChange={(e) => setNom(e.target.value)} className="field" placeholder="ex. Nsam — Bloc Est" />
             </div>
-            <div>
-              <label className="field-label" htmlFor="z-com">Commune</label>
-              <select id="z-com" value={commune} onChange={(e) => setCommune(e.target.value)} className="field">
-                {communes.map((c) => (
-                  <option key={c.id} value={c.id}>{c.nom}</option>
-                ))}
-              </select>
-            </div>
+            {communes.length > 0 && (
+              <div>
+                <label className="field-label" htmlFor="z-com">Commune</label>
+                <select id="z-com" value={commune} onChange={(e) => setCommune(e.target.value)} className="field">
+                  {communes.map((c) => (
+                    <option key={c.id} value={c.id}>{c.nom}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div>
               <p className="field-label">Couleur</p>
               <div className="flex gap-2">
@@ -231,13 +257,19 @@ export function ZoneEditor({
                   <p className="font-semibold">Chevauche :</p>
                   <ul className="list-inside list-disc">
                     {conflits.map((c) => (
-                      <li key={c.id}>{c.nom} — {Math.round(c.recouvrement_m2).toLocaleString('fr-FR')} m²</li>
+                      <li key={c.id}>
+                        {estPreco && !zones.some((z) => z.id === c.id) ? 'une zone d’un autre précollecteur' : c.nom} — {Math.round(c.recouvrement_m2).toLocaleString('fr-FR')} m²
+                      </li>
                     ))}
                   </ul>
-                  <label className="mt-2 flex items-center gap-2">
-                    <input type="checkbox" checked={autorise} onChange={(e) => setAutorise(e.target.checked)} className="h-4 w-4" />
-                    Chevauchement autorisé
-                  </label>
+                  {estPreco ? (
+                    <p className="mt-2 text-muted-foreground">Ce n’est pas bloquant : plusieurs précollecteurs peuvent servir le même quartier.</p>
+                  ) : (
+                    <label className="mt-2 flex items-center gap-2">
+                      <input type="checkbox" checked={autorise} onChange={(e) => setAutorise(e.target.checked)} className="h-4 w-4" />
+                      Chevauchement autorisé
+                    </label>
+                  )}
                 </div>
               )
             )}
@@ -260,6 +292,7 @@ export function ZoneEditor({
               </div>
               <button type="button" onClick={() => setSelection(null)} className="text-muted-foreground" aria-label="Fermer"><X size={18} /></button>
             </div>
+            {!estPreco && (
             <div>
               <p className="field-label">Précollecteurs affectés</p>
               {zoneSel.entreprises.length === 0 ? (
@@ -292,13 +325,14 @@ export function ZoneEditor({
                 </select>
               )}
             </div>
+            )}
             <div className="flex gap-2 border-t border-border pt-4">
               <button type="button" onClick={() => commencer(zoneSel)} className="btn-outline flex-1"><PenLine size={16} /> Modifier</button>
               <button
                 type="button"
                 onClick={() => {
                   if (confirm(`Supprimer la zone « ${zoneSel.nom} » ? Les abonnés qui y sont rattachés perdront leur zone.`)) {
-                    agir(() => supprimerZoneAction(zoneSel.id));
+                    agir(() => (estPreco ? supprimerMaZoneAction(zoneSel.id) : supprimerZoneAction(zoneSel.id)));
                     setSelection(null);
                   }
                 }}
@@ -314,7 +348,9 @@ export function ZoneEditor({
             <p className="mb-3 text-small text-muted-foreground">Touchez une zone sur la carte ou dans la liste.</p>
             {zones.length === 0 ? (
               <p className="text-body-sm text-muted-foreground">
-                {communes.length ? 'Aucune zone : commencez par « Dessiner une zone ».' : 'Aucune commune n’est rattachée à votre compte : vous ne pouvez pas encore tracer de zone.'}
+                {estPreco
+                  ? 'Aucune zone : tracez votre secteur avec « Dessiner une zone ». Vos abonnés y seront rangés d’office.'
+                  : communes.length ? 'Aucune zone : commencez par « Dessiner une zone ».' : 'Aucune commune n’est rattachée à votre compte : vous ne pouvez pas encore tracer de zone.'}
               </p>
             ) : (
               <ul className="space-y-1">
@@ -322,9 +358,13 @@ export function ZoneEditor({
                   <li key={z.id}>
                     <button type="button" onClick={() => setSelection(z.id)} className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-2 text-left text-body-sm hover:bg-muted">
                       <span className="flex items-center gap-2 font-medium">
-                        <span className="h-3 w-3 rounded-sm" style={{ background: z.entreprises.length ? z.couleur : '#8A96A3' }} /> {z.nom}
+                        <span className="h-3 w-3 rounded-sm" style={{ background: estPreco || z.entreprises.length ? z.couleur : '#8A96A3' }} /> {z.nom}
                       </span>
-                      <span className={z.entreprises.length ? 'chip-ok' : 'chip-relance'}>{z.entreprises.length ? `${z.entreprises.length} préco.` : 'libre'}</span>
+                      {estPreco ? (
+                        <span className="chip-neutre">{z.nb_clients} abonné{z.nb_clients > 1 ? 's' : ''}</span>
+                      ) : (
+                        <span className={z.entreprises.length ? 'chip-ok' : 'chip-relance'}>{z.entreprises.length ? `${z.entreprises.length} préco.` : 'libre'}</span>
+                      )}
                     </button>
                   </li>
                 ))}

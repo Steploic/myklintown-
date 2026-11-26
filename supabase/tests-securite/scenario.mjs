@@ -72,6 +72,23 @@ const avec0024 = (db) => valeur(db, `select to_regprocedure('public.contour_zone
 const avec0025 = (db) => valeur(db, `select to_regclass('public.clients_notes') is not null`);
 /** Migration 0026 (quartiers courts, signalements des abonnés servis, démo avant validation) présente dans la base ? */
 const avec0026 = (db) => valeur(db, `select to_regprocedure('public.est_abonne_de(uuid)') is not null`);
+/** Migration 0027 (sans les Mairies : interrupteur, zones du précollecteur) présente dans la base ? */
+const avec0027 = (db) => valeur(db, `select to_regprocedure('public.mairies_actives()') is not null`);
+
+/**
+ * Joue `fn` accès Mairie FERMÉS (réglage de la production depuis 0027), puis
+ * remet l'interrupteur comme il était : le reste du banc rejoue le monde où
+ * chaque Mairie supervise sa commune.
+ */
+async function mairiesFermees(db, fn) {
+  const avant = await valeur(db, `select valeur::text from public.parametres_plateforme where cle = 'mairies_actives'`);
+  await db.query(`update public.parametres_plateforme set valeur = '0' where cle = 'mairies_actives'`);
+  try {
+    return await fn();
+  } finally {
+    await db.query(`update public.parametres_plateforme set valeur = $1::jsonb where cle = 'mairies_actives'`, [avant ?? '1']);
+  }
+}
 
 /** Dans la transaction d'un abonné : une preuve déposée puis un signalement auprès de A. */
 async function signalerAvecPreuve(tx, s, compte, fiche) {
@@ -191,6 +208,10 @@ function migration(numero) {
 
 export async function preparer(db) {
   const s = {};
+  // Accès Mairie OUVERTS pour ce jeu de données (depuis 0027, la production les
+  // ferme) : les attaques et parcours « sans Mairie » les ferment eux-mêmes.
+  await db.query(`insert into public.parametres_plateforme (cle, valeur) values ('mairies_actives', '1')
+                  on conflict (cle) do update set valeur = excluded.valeur`);
   // Comptes
   s.admin = await creerCompte(db, 'admin@test.cm');
   await promouvoir(db, 'admin@test.cm', 'admin');
@@ -1550,6 +1571,102 @@ export const ATTAQUES = [
       }
     },
   },
+  // --- Sans les Mairies (migration 0027)
+  {
+    id: 'mairies-fermees-supervision',
+    titre: 'Accès Mairie fermés : la Mairie de Yaoundé III lit encore son précollecteur, se dit superviseur, renomme sa zone ou y affecte un précollecteur',
+    async jouer(db, s) {
+      if (!(await avec0027(db))) return false;
+      return mairiesFermees(db, async () => {
+        const lit = await comme(db, s.mairie, (tx) => valeur(tx, `select count(*)::int from public.entreprises where id = $1`, [s.entA]));
+        const superviseur = await comme(db, s.mairie, (tx) => valeur(tx, `select public.est_superviseur()`));
+        const photo = () => valeur(db, `select nom from public.zones where id = $1`, [s.zone]);
+        const avant = await photo();
+        await accepte(db, s.mairie, `update public.zones set nom = 'Z fermée' where id = $1`, [s.zone]);
+        const renommee = (await photo()) !== avant;
+        if (renommee) await db.query(`update public.zones set nom = $2 where id = $1`, [s.zone, avant]);
+        const affecte = await essaiAnnule(db, s.mairie, async (tx) => {
+          await tx.query(`insert into public.zone_affectations (zone_id, entreprise_id) values ($1, $2)`, [s.zone, s.entB]);
+          return true;
+        });
+        return lit > 0 || superviseur || renommee || affecte;
+      });
+    },
+  },
+  {
+    id: 'mairies-fermees-acces',
+    titre: 'Accès Mairie fermés : un compte demande un accès Mairie, l’administrateur en accepte un ou accorde une commune',
+    async jouer(db, s) {
+      if (!(await avec0027(db))) return false;
+      // Une demande déposée quand les accès étaient ouverts.
+      const ancien = await creerCompte(db, `candidat.ancien.${Date.now()}@test.cm`);
+      await comme(db, ancien, (tx) => tx.query(`select public.demander_acces_mairie($1, 'Agent d''hygiène', null, null, null)`, [s.yde3]));
+      const demande = await valeur(db, `select id from public.demandes_acces where user_id = $1`, [ancien]);
+      const nouveau = await creerCompte(db, `candidat.nouveau.${Date.now()}@test.cm`);
+      try {
+        return await mairiesFermees(db, async () => {
+          const demandee = await accepte(db, nouveau, `select public.demander_acces_mairie($1, 'Agent d''hygiène', null, null, null)`, [s.yde3]);
+          const acceptee = await essaiAnnule(db, s.admin, async (tx) => {
+            await tx.query(`select public.traiter_demande_acces($1, true)`, [demande]);
+            return true;
+          });
+          const accordee = await essaiAnnule(db, s.admin, async (tx) => {
+            await tx.query(`select public.accorder_commune_mairie($1, $2)`, [s.mairieDouala, s.yde3]);
+            return true;
+          });
+          return demandee || acceptee || accordee;
+        });
+      } finally {
+        await db.query(`delete from public.demandes_acces where user_id = any($1::uuid[])`, [[ancien, nouveau]]);
+      }
+    },
+  },
+  {
+    id: 'zone-precollecteur-concurrent',
+    titre: 'Un concurrent renomme, supprime ou s’affecte la zone tracée par A, en trace une au nom de A ; A donne sa zone à B ; la Mairie de la commune la modifie ou y affecte B',
+    async jouer(db, s) {
+      if (!(await avec0027(db))) return false;
+      await db.query(`insert into public.entreprise_communes (entreprise_id, commune_id) values ($1, $2) on conflict do nothing`, [s.entA, s.yde3]);
+      const zoneA = await comme(db, s.gerantA, (tx) =>
+        valeur(tx, `insert into public.zones (nom, commune_id, contour, entreprise_id) values ('ZA privée', $1, $2, $3) returning id`,
+          [s.yde3, JSON.stringify(CONTOUR_Z2), s.entA]));
+      try {
+        const photo = () => valeur(db, `select nom || '|' || coalesce(entreprise_id::text, '-') from public.zones where id = $1`, [zoneA]);
+        const avant = await photo();
+        await accepte(db, s.gerantB, `update public.zones set nom = 'Zone volée' where id = $1`, [zoneA]);
+        await accepte(db, s.gerantA, `update public.zones set entreprise_id = $2 where id = $1`, [zoneA, s.entB]);
+        await accepte(db, s.mairie, `update public.zones set nom = 'Zone de la Mairie' where id = $1`, [zoneA]);
+        const modifiee = (await photo()) !== avant;
+        const supprimee = await essaiAnnule(db, s.gerantB, async (tx) => {
+          await tx.query(`delete from public.zones where id = $1`, [zoneA]);
+          return (await tx.query(`select 1 from public.zones where id = $1`, [zoneA])).rows.length === 0;
+        });
+        const auNomDeA = await accepte(db, s.gerantB,
+          `insert into public.zones (nom, contour, entreprise_id) values ('Zone piège', $1, $2)`, [JSON.stringify(CONTOUR_Z2), s.entA]);
+        if (auNomDeA) await db.query(`delete from public.zones where nom = 'Zone piège'`);
+        const affecteB = async (qui) => essaiAnnule(db, qui, async (tx) => {
+          await tx.query(`insert into public.zone_affectations (zone_id, entreprise_id) values ($1, $2)`, [zoneA, s.entB]);
+          return true;
+        });
+        return modifiee || supprimee || auNomDeA || (await affecteB(s.gerantB)) || (await affecteB(s.mairie));
+      } finally {
+        await db.query(`delete from public.zones where id = $1`, [zoneA]);
+      }
+    },
+  },
+  {
+    id: 'client-zone-concurrent',
+    titre: 'B range son abonné dans une zone de A (les chiffres de la zone de A s’en trouvent faussés)',
+    async jouer(db, s) {
+      if (!(await avec0027(db))) return false;
+      const zone = await essaiAnnule(db, s.gerantB, async (tx) =>
+        valeur(tx,
+          `insert into public.clients (entreprise_id, nom, telephone, plan_id, zone_id, lat, lng)
+           values ($1, 'Foyer chez A', '677000881', $2, $3, 3.85, 11.5) returning zone_id`,
+          [s.entB, s.plan, s.zone]));
+      return zone === s.zone;
+    },
+  },
 ];
 
 /** Migration 0014 (facture inaltérable, charte) présente dans la base ? */
@@ -2034,7 +2151,11 @@ export const PARCOURS = [
       if (await visible()) throw new Error('visible avant vérification');
       let message = '';
       await comme(db, g, (tx) => tx.query(`select public.soumettre_mon_dossier()`)).catch((er) => { message = er.message; });
-      if (!/siège social/.test(message) || !/autorisation/.test(message) || !/permis/.test(message)) throw new Error(`pièces manquantes : ${message}`);
+      // Depuis 0027, l'autorisation de la commune est facultative (MyKlinTown sans les Mairies).
+      const autorisationExigee = !(await avec0027(db));
+      if (!/siège social/.test(message) || /autorisation/.test(message) !== autorisationExigee || !/permis/.test(message)) {
+        throw new Error(`pièces manquantes : ${message}`);
+      }
 
       // Comme l'application : le fichier dans le stockage, puis son enregistrement.
       await comme(db, g, async (tx) => {
@@ -2846,6 +2967,56 @@ export const PARCOURS = [
       } finally {
         await db.query(`update public.entreprises set dossier_statut = $2 where id = $1`, [s.entA, avant]);
       }
+    },
+  },
+  {
+    titre: 'Migration 0027 rejouée : contrôle « OK » sur les lignes 1 à 5, deux fois, sans rouvrir les Mairies',
+    async jouer(db) {
+      const sql = migration('20261126000027');
+      if (!sql) return;
+      const avant = await valeur(db, `select valeur::text from public.parametres_plateforme where cle = 'mairies_actives'`);
+      for (let passage = 0; passage < 2; passage++) {
+        const controle = (await db.exec(sql)).at(-1).rows;
+        const ko = controle.filter((r, i) => i < 5 && r.resultat !== 'OK');
+        if (ko.length) throw new Error(JSON.stringify(ko));
+      }
+      const apres = await valeur(db, `select valeur::text from public.parametres_plateforme where cle = 'mairies_actives'`);
+      if (apres !== avant) throw new Error(`rejouer la migration a changé l’interrupteur (${avant} → ${apres})`);
+    },
+  },
+  {
+    titre: 'Sans les Mairies : le gérant trace, renomme et supprime sa zone ; elle lui est affectée ; ses abonnés y sont rangés d’office ; son dossier se complète sans autorisation de commune',
+    async jouer(db, s) {
+      if (!(await avec0027(db))) return;
+      await mairiesFermees(db, async () => {
+        await db.query(`insert into public.entreprise_communes (entreprise_id, commune_id) values ($1, $2) on conflict do nothing`, [s.entA, s.yde3]);
+        const z = await comme(db, s.gerantA, (tx) =>
+          valeur(tx, `insert into public.zones (nom, commune_id, contour, entreprise_id) values ('Ma zone', $1, $2, $3) returning id`,
+            [s.yde3, JSON.stringify(CONTOUR_Z2), s.entA]));
+        try {
+          if (!(await valeur(db, `select exists (select 1 from public.zone_affectations where zone_id = $1 and entreprise_id = $2)`, [z, s.entA]))) {
+            throw new Error('la zone tracée n’est pas affectée à son précollecteur');
+          }
+          await comme(db, s.gerantA, (tx) => tx.query(`update public.zones set nom = 'Ma zone (Est)' where id = $1`, [z]));
+          if ((await valeur(db, `select nom from public.zones where id = $1`, [z])) !== 'Ma zone (Est)') throw new Error('le gérant ne renomme pas sa zone');
+          // Une fiche avec sa seule position : rangée dans la zone de son précollecteur.
+          const zoneFiche = await essaiAnnule(db, s.gerantA, async (tx) =>
+            valeur(tx,
+              `insert into public.clients (entreprise_id, nom, telephone, plan_id, lat, lng) values ($1, 'Foyer Est', '677000882', $2, 3.85, 11.54) returning zone_id`,
+              [s.entA, s.plan]));
+          if (zoneFiche !== z) throw new Error(`fiche rangée dans ${zoneFiche}, attendu ${z}`);
+          // Une commune où il n'exerce pas : refusée.
+          if (await accepte(db, s.gerantA, `update public.zones set commune_id = $2 where id = $1`, [z, s.dla1])) {
+            throw new Error('zone acceptée dans une commune hors de ses communes d’activité');
+          }
+          const manque = await comme(db, s.gerantA, (tx) => valeur(tx, `select public.pieces_manquantes($1)`, [s.entA]));
+          if ((manque ?? []).some((m) => m.includes('autorisation'))) throw new Error(`pièces exigées : ${manque.join(', ')}`);
+          await comme(db, s.gerantA, (tx) => tx.query(`delete from public.zones where id = $1`, [z]));
+          if (await valeur(db, `select exists (select 1 from public.zones where id = $1)`, [z])) throw new Error('le gérant ne supprime pas sa zone');
+        } finally {
+          await db.query(`delete from public.zones where id = $1`, [z]);
+        }
+      });
     },
   },
 ];

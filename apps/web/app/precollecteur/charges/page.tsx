@@ -174,7 +174,7 @@ export default async function ChargesPage({ searchParams }: { searchParams: Prom
 
           <p className="flex items-start gap-2 rounded-lg bg-brand-blue/5 p-4 text-body-sm text-brand-blue">
             <Info size={18} className="mt-0.5 shrink-0" />
-            Seuls vous et l’équipe MyKlinTown voyez ces montants. La Mairie ne voit que des totaux par ville, dans les indicateurs du pilote.
+            Seuls vous et l’équipe MyKlinTown voyez ces montants. Ils n’entrent que dans des totaux par ville, dans les indicateurs du pilote.
           </p>
         </div>
       </div>

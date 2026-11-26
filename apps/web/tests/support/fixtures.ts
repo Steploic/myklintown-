@@ -165,6 +165,23 @@ export async function communeId(code: string = COMMUNE_TEST): Promise<string | n
   return (data as { id: string } | null)?.id ?? null;
 }
 
+/**
+ * Accès Mairie ouverts ou fermés (interrupteur `mairies_actives`, migration
+ * 20261126000027 : fermés en production). Les tests Mairie les ouvrent ; ceux
+ * de « sans Mairie » les ferment puis les rouvrent. Base de TEST seulement.
+ * `false` si la base n'a pas l'interrupteur (migration non jouée).
+ */
+export async function interrupteurMairies(ouverts: boolean): Promise<boolean> {
+  if (BASE !== 'test' || !ENV_TESTS.SUPABASE_SECRET_KEY) return false;
+  const { data, error } = await serviceBaseDeTest()
+    .from('parametres_plateforme')
+    .update({ valeur: ouverts ? 1 : 0 })
+    .eq('cle', 'mairies_actives')
+    .select('cle');
+  if (error) throw new Error(`Interrupteur des Mairies : ${error.message}`);
+  return (data ?? []).length > 0;
+}
+
 /** La base cloisonne-t-elle la Mairie par commune (migration 20261019000016) ? */
 export async function avecCommunesMairie(sb: SupabaseClient): Promise<boolean> {
   return !(await sb.from('mairie_communes').select('commune_id').limit(1)).error;
@@ -317,6 +334,8 @@ export async function supprimerClientsDeTest(sb: SupabaseClient, entrepriseId: s
  * `communeId` : la commune à donner aux zones qu'il trace.
  */
 export async function mairie(cle = 'mairie', code: string = COMMUNE_TEST): Promise<Compte & { promue: boolean; communeId: string | null }> {
+  // Les tests Mairie rejouent le monde où chaque Mairie supervise sa commune.
+  await interrupteurMairies(true);
   const c = await compte(cle, 'citoyen');
   const promue = c.role === 'mairie' || c.role === 'admin';
   const commune = await communeId(code);

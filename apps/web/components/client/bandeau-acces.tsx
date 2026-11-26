@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Clock } from 'lucide-react';
 import { getSupabase, utilisateurCourant } from '@/lib/server';
+import { mairiesOuvertes } from '@/lib/mairies';
 
 /** Rappel affiché au compte qui attend la validation de son accès Mairie. */
 export async function BandeauAccesMairie() {
@@ -8,7 +9,8 @@ export async function BandeauAccesMairie() {
   const user = await utilisateurCourant(supabase);
   if (!user) return null;
   const { data } = await supabase.from('demandes_acces').select('id').eq('user_id', user.id).eq('statut', 'en_attente').limit(1);
-  if (!data?.length) return null;
+  // Accès Mairie fermés (MyKlinTown fonctionne sans les Mairies) : plus de rappel.
+  if (!data?.length || !(await mairiesOuvertes())) return null;
   return (
     <Link
       href="/acces-mairie"

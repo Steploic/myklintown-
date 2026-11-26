@@ -42,6 +42,7 @@ export const PRECOLLECTEUR_NAV: PortalNavItem[] = [
   { href: '/precollecteur/facturation', label: 'Factures & relances', icon: Receipt, court: 'Factures' },
   { href: '/precollecteur/tournees', label: 'Tournées', icon: Route },
   { href: '/precollecteur/carte', label: 'Carte', icon: MapIcon },
+  { href: '/precollecteur/zones', label: 'Mes zones', icon: Shapes, court: 'Zones' },
   { href: '/precollecteur/demandes', label: 'Demandes de devis', icon: Inbox, court: 'Devis' },
   { href: '/precollecteur/flotte', label: 'Flotte & équipe', icon: Bike },
   { href: '/precollecteur/incidents', label: 'Incidents', icon: Camera },
@@ -99,6 +100,14 @@ export const PORTALS = {
     nav: DASHBOARD_NAV,
   },
 } as const;
+
+/**
+ * Libellé de l'espace. Le tableau de bord sert à l'équipe MyKlinTown
+ * (« Administration ») et, si on rouvre leurs accès, aux Mairies.
+ */
+export function libelleEspace(portalKey: PortalKey, role: string | null | undefined): string {
+  return portalKey === 'mairie' && role === 'admin' ? 'Administration' : PORTALS[portalKey].role;
+}
 
 /** Entrées de navigation visibles pour ce rôle. */
 export function navPourRole(nav: PortalNavItem[], role: string | null | undefined): PortalNavItem[] {

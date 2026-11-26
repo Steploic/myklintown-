@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowLeftRight, ChevronDown, Home, Landmark, Sun, Truck } from 'lucide-react';
+import { ArrowLeftRight, ChevronDown, Home, ShieldCheck, Sun, Truck } from 'lucide-react';
 import type { PortalKey } from '@/lib/portal-config';
 
 /**
@@ -7,7 +7,8 @@ import type { PortalKey } from '@/lib/portal-config';
  * Collecteur et Partenaire B2B ont été retirés le 19/10/2026.)
  */
 const ESPACES_ADMIN = [
-  { cle: 'mairie', href: '/dashboard', label: 'Espace Mairie', icon: Landmark },
+  // Le tableau de bord de l'équipe MyKlinTown (et des Mairies, si on rouvre leurs accès).
+  { cle: 'mairie', href: '/dashboard', label: 'Administration', icon: ShieldCheck },
   { cle: 'precollecteur', href: '/precollecteur', label: 'Espace Précollecteur', icon: Truck },
   { cle: 'citoyen', href: '/citoyen', label: 'Espace Client', icon: Home },
 ] as const;
