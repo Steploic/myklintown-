@@ -24,7 +24,8 @@ interface Client {
  * Planche pour l'imprimeur : toutes les étiquettes QR des clients, en
  * 10 × 15 cm espacées de 0,5 cm, une page = 1 m² (vinyle facturé au m²).
  * « Imprimer → Enregistrer en PDF » donne le fichier à envoyer, au bon format.
- * `?ids=a,b,c` : seulement ces clients ; `?largeur=&hauteur=&ecart=&page=` (mm)
+ * `?ids=a,b,c` : seulement ces clients ; `?depuis=<date>` : ceux créés depuis
+ * (après un import) ; `?largeur=&hauteur=&ecart=&page=` (mm)
  * si l'imprimeur change de format.
  */
 export default async function PlancheQrPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
@@ -40,6 +41,9 @@ export default async function PlancheQrPage({ searchParams }: { searchParams: Pr
     .order('nom');
   const ids = (params.ids ?? '').split(',').filter((x) => /^[0-9a-f-]{36}$/i.test(x));
   if (ids.length) requete = requete.in('id', ids);
+  // Après un import : seulement les clients créés depuis (la date commune de l'import).
+  const depuis = params.depuis && !Number.isNaN(Date.parse(params.depuis)) ? new Date(params.depuis).toISOString() : null;
+  if (depuis) requete = requete.gte('created_at', depuis);
   const { data } = await requete;
   const clients = rows<Client>(data);
 

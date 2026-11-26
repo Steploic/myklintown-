@@ -10,6 +10,7 @@ import { CATEGORIES_CHARGES, MONTANT_MAX, lireMontant, moisValide } from '@/lib/
 import { enregistrerAcceptation } from '@/lib/acceptations';
 import { estTypeDocument } from '@/lib/documents';
 import { lireQuartiers, type Piece } from '@/lib/dossier';
+import { analyserImport, assainirLigne, clesExistants, MAX_LIGNES_IMPORT, type EtatLigne, type LigneBrute, type ZoneImport } from '@/lib/import-clients';
 import type { ActionState, ClientStatut, Plan } from '@/lib/types';
 
 const txt = (fd: FormData, k: string) => {
@@ -493,6 +494,80 @@ export async function creerClientAction(_p: ActionState, fd: FormData): Promise<
   }
   rafraichir();
   redirect(`/precollecteur/clients/${id}?cree=1`);
+}
+
+async function parLots<T>(elements: T[], taille: number, f: (x: T) => Promise<void>) {
+  for (let i = 0; i < elements.length; i += taille) await Promise.all(elements.slice(i, i + taille).map(f));
+}
+
+export interface ResultatImport {
+  error?: string;
+  crees?: number;
+  /** Date de création commune des fiches créées : la planche de leurs étiquettes s'en sert. */
+  depuis?: string;
+  ecartees?: { numero: number; raison: string }[];
+  factures?: number;
+  facturesEnEchec?: number;
+}
+
+/**
+ * Import d'un tableur de clients (recensement terrain → plateforme). Le
+ * navigateur lit le fichier et montre l'aperçu ; ici, tout est revalidé avec
+ * les mêmes règles et contre les clients déjà enregistrés, puis inséré en un
+ * seul ordre (tout ou rien).
+ */
+export async function importerClientsAction(input: { lignes: unknown; facturer?: unknown }): Promise<ResultatImport> {
+  const { supabase, entreprise } = await requireEntreprise();
+  const brutes = Array.isArray(input?.lignes) ? input.lignes : [];
+  if (!brutes.length) return { error: 'Aucune ligne à importer.' };
+  if (brutes.length > MAX_LIGNES_IMPORT) return { error: `${MAX_LIGNES_IMPORT} clients au plus par import : découpez le fichier.` };
+  const lignes = brutes.map(assainirLigne).filter((l): l is LigneBrute => !!l);
+
+  const za = await supabase.from('zone_affectations').select('zones(id, nom)').eq('entreprise_id', entreprise.id);
+  if (za.error) return { error: erreurLisible(za.error.message) };
+  const zones = rows<{ zones: ZoneImport | null }>(za.data)
+    .map((a) => a.zones)
+    .filter((z): z is ZoneImport => !!z);
+  const deja = await toutesLesLignes<{ nom: string | null; quartier: string | null; telephone: string | null }>((de, a) =>
+    supabase.from('clients').select('nom, quartier, telephone').eq('entreprise_id', entreprise.id).order('id').range(de, a),
+  );
+  if (deja.error) return { error: erreurLisible(deja.error.message) };
+
+  const analyse = analyserImport(lignes, zones, clesExistants(deja.data));
+  const prets = analyse.filter((l): l is Extract<EtatLigne, { etat: 'pret' }> => l.etat === 'pret');
+  const ecartees = analyse
+    .filter((l) => l.etat !== 'pret')
+    .map((l) => ({ numero: l.numero, raison: l.etat === 'erreur' ? l.erreurs.join(' ') : l.etat === 'doublon' ? l.raison : '' }));
+  if (!prets.length) return { error: 'Aucune ligne n’est prête à être importée.', ecartees };
+
+  // Zone déduite de la position, comme pour une fiche saisie à la main.
+  await parLots(prets, 8, async (l) => {
+    if (!l.client.zone_id) l.client.zone_id = await zoneDuPoint(supabase, l.client.lat, l.client.lng);
+  });
+
+  const { data, error } = await supabase
+    .from('clients')
+    .insert(prets.map((l) => ({ entreprise_id: entreprise.id, ...l.client, statut: 'actif' })))
+    .select('id, created_at');
+  if (error) return { error: erreurLisible(error.message), ecartees };
+  const crees = rows<{ id: string; created_at: string }>(data);
+
+  let factures = 0;
+  let facturesEnEchec = 0;
+  if (input.facturer === true) {
+    await parLots(crees, 8, async (c) => {
+      const r = await emettreFacturePour(supabase, entreprise.id, c.id);
+      if (r.error) facturesEnEchec++;
+      else factures++;
+    });
+  }
+  rafraichir();
+  return {
+    crees: crees.length,
+    depuis: crees.map((c) => c.created_at).sort()[0],
+    ecartees,
+    ...(input.facturer === true ? { factures, facturesEnEchec } : {}),
+  };
 }
 
 /** Fiche client : la charte et le contrat ont été remis sur papier et acceptés. */

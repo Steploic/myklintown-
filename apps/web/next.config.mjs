@@ -32,6 +32,8 @@ const nextConfig = {
   transpilePackages: ['@myklintown/ui', '@myklintown/db', '@myklintown/types'],
   experimental: {
     optimizePackageImports: ['lucide-react'],
+    // Import de clients : jusqu'à 1 000 lignes envoyées en une fois (1 Mo par défaut).
+    serverActions: { bodySizeLimit: '2mb' },
   },
   // Pas d'images distantes : l'application n'utilise pas next/image. L'ancienne
   // liste autorisait « **.supabase.co » — n'importe quel projet Supabase, donc
