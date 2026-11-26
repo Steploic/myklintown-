@@ -10,6 +10,7 @@ const PRECOLLECTEUR = [
   '/precollecteur',
   '/precollecteur/clients',
   '/precollecteur/clients/nouveau',
+  '/precollecteur/clients/import',
   '/precollecteur/facturation',
   '/precollecteur/facturation?onglet=factures',
   '/precollecteur/facturation?onglet=paiements',
