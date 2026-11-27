@@ -17,9 +17,9 @@
 --     des écarts : elles servent à l'analyse.
 --
 -- Fichier GÉNÉRÉ par supabase/tests-securite/empreinte.mjs à partir des
--- migrations du dépôt (dernière : 20261127000028_autorisation_obligatoire). Ne pas le modifier à la main :
+-- migrations du dépôt (dernière : 20261127000029_accompagnement_conformite). Ne pas le modifier à la main :
 -- après toute nouvelle migration, `npm run empreinte` dans supabase/tests-securite.
--- Empreinte attendue : 139 fonctions, 56 tables, 108 politiques, 67 déclencheurs, 137 index, 287 contraintes, 23 types, 3 stockages.
+-- Empreinte attendue : 143 fonctions, 57 tables, 109 politiques, 70 déclencheurs, 140 index, 297 contraintes, 23 types, 3 stockages.
 -- =============================================================================
 with attendu (categorie, objet, valeur, migration) as (
   values
@@ -32,6 +32,16 @@ with attendu (categorie, objet, valeur, migration) as (
     ('contrainte', 'acceptations_documents · acceptations_documents_mode_check', 'c|514f3bb0cb01', '20261019000014_charte_facture_conforme'),
     ('contrainte', 'acceptations_documents · acceptations_documents_pkey', 'p|90276e02fff4', '20261019000014_charte_facture_conforme'),
     ('contrainte', 'acceptations_documents · acceptations_documents_user_id_fkey', 'f|c5765a5c33e0', '20261019000014_charte_facture_conforme'),
+    ('contrainte', 'accompagnements · accompagnements_commune', 'c|259db6e2dfab', '20261127000029_accompagnement_conformite'),
+    ('contrainte', 'accompagnements · accompagnements_commune_id_fkey', 'f|89c446e1e781', '20261127000029_accompagnement_conformite'),
+    ('contrainte', 'accompagnements · accompagnements_demande_par_fkey', 'f|ccbf88cbd373', '20261127000029_accompagnement_conformite'),
+    ('contrainte', 'accompagnements · accompagnements_entreprise_id_fkey', 'f|c633954251b9', '20261127000029_accompagnement_conformite'),
+    ('contrainte', 'accompagnements · accompagnements_etape_check', 'c|da37208b513c', '20261127000029_accompagnement_conformite'),
+    ('contrainte', 'accompagnements · accompagnements_message_check', 'c|633521f5d0d0', '20261127000029_accompagnement_conformite'),
+    ('contrainte', 'accompagnements · accompagnements_message_equipe_check', 'c|a461c9bd80d8', '20261127000029_accompagnement_conformite'),
+    ('contrainte', 'accompagnements · accompagnements_pkey', 'p|90276e02fff4', '20261127000029_accompagnement_conformite'),
+    ('contrainte', 'accompagnements · accompagnements_statut_check', 'c|570f0b5f1c76', '20261127000029_accompagnement_conformite'),
+    ('contrainte', 'accompagnements · accompagnements_suivi_par_fkey', 'f|f5cba45f46fb', '20261127000029_accompagnement_conformite'),
     ('contrainte', 'articles_marketplace · articles_marketplace_pkey', 'p|90276e02fff4', '20260526000001_init'),
     ('contrainte', 'articles_marketplace · articles_marketplace_recycleur_id_fkey', 'f|f1b9f9a64fd3', '20260526000001_init'),
     ('contrainte', 'bacs · bacs_menage_id_fkey', 'f|1701b3566aa6', '20260526000001_init'),
@@ -312,6 +322,7 @@ with attendu (categorie, objet, valeur, migration) as (
     ('contrainte', 'zones · zones_pkey', 'p|90276e02fff4', '20260928000004_pivot_precollecteurs'),
     ('déclencheur', 'auth.users · on_auth_user_created', 'handle_new_user|type=5|etat=O|colonnes=-|args=d41d8cd9', '20260526000001_init'),
     ('déclencheur', 'public.abonnements · abonnements_updated_at', 'set_updated_at|type=19|etat=O|colonnes=-|args=d41d8cd9', '20260526000001_init'),
+    ('déclencheur', 'public.accompagnements · accompagnements_updated_at', 'set_updated_at|type=19|etat=O|colonnes=-|args=d41d8cd9', '20261127000029_accompagnement_conformite'),
     ('déclencheur', 'public.articles_marketplace · articles_marketplace_updated_at', 'set_updated_at|type=19|etat=O|colonnes=-|args=d41d8cd9', '20260526000001_init'),
     ('déclencheur', 'public.bacs · bacs_updated_at', 'set_updated_at|type=19|etat=O|colonnes=-|args=d41d8cd9', '20260526000001_init'),
     ('déclencheur', 'public.camions · camions_updated_at', 'set_updated_at|type=19|etat=O|colonnes=-|args=d41d8cd9', '20260526000001_init'),
@@ -338,6 +349,8 @@ with attendu (categorie, objet, valeur, migration) as (
     ('déclencheur', 'public.employes · employes_colonnes_systeme', 'garde_colonnes_systeme|type=19|etat=O|colonnes=-|args=07027028', '20261011000009_audit_securite'),
     ('déclencheur', 'public.employes · employes_insertion_systeme', 'garde_insertion_systeme|type=7|etat=O|colonnes=-|args=07027028', '20261114000022_liste_attente_gardes_creation'),
     ('déclencheur', 'public.employes · employes_liberer_compte', 'employe_avant_suppression|type=11|etat=O|colonnes=-|args=d41d8cd9', '20261005000007_espace_employe'),
+    ('déclencheur', 'public.entreprise_communes · entreprise_communes_accompagnement', 'accompagnement_piece_deposee|type=17|etat=O|colonnes=autorisation_path|args=d41d8cd9', '20261127000029_accompagnement_conformite'),
+    ('déclencheur', 'public.entreprises · entreprises_accompagnement', 'accompagnement_piece_deposee|type=17|etat=O|colonnes=niu,permis_env_path|args=d41d8cd9', '20261127000029_accompagnement_conformite'),
     ('déclencheur', 'public.entreprises · entreprises_colonnes_systeme', 'garde_colonnes_systeme|type=19|etat=O|colonnes=-|args=e2c125ba', '20261109000017_dossier_precollecteur_annuaire'),
     ('déclencheur', 'public.entreprises · entreprises_dossier_revalidation', 'dossier_revalidation|type=19|etat=O|colonnes=adresse_fiscale,niu,nom,rccm,siege|args=d41d8cd9', '20261116000024_zones_depots_dossier'),
     ('déclencheur', 'public.entreprises · entreprises_garde_paiement', 'garde_paiement_entreprise|type=19|etat=O|colonnes=paiement_compte_id,paiement_statut|args=d41d8cd9', '20261006000008_paiement_en_ligne'),
@@ -380,6 +393,7 @@ with attendu (categorie, objet, valeur, migration) as (
     ('fonction', 'accepter_devis(p_devis uuid)', 'e2aefe75a163|definer|search_path=public, extensions|anon=non|connecte=oui', '20261110000018_devis_tarif_abonne'),
     ('fonction', 'accepter_documents(p_types text[], p_client uuid)', 'c88ec0148d4a|definer|search_path=public|anon=non|connecte=oui', '20261109000017_dossier_precollecteur_annuaire'),
     ('fonction', 'acces_mairie_ferme()', '53c537ccee4d|invoker|search_path=public|anon=non|connecte=oui', '20261126000027_sans_mairie'),
+    ('fonction', 'accompagnement_piece_deposee()', 'e5df883c26fb|definer|search_path=public|anon=non|connecte=oui', '20261127000029_accompagnement_conformite'),
     ('fonction', 'accorder_commune_mairie(p_user uuid, p_commune uuid)', '5afb59aa0b48|definer|search_path=public|anon=non|connecte=oui', '20261019000016_mairie_par_commune'),
     ('fonction', 'annuaire_precollecteurs(p_recherche text)', '8903df9723b3|definer|search_path=public|anon=oui|connecte=oui', '20261111000019_devis_routage'),
     ('fonction', 'annuler_demande_acces()', 'bdc8936e5701|definer|search_path=public|anon=non|connecte=oui', '20261004000006_retours_tests_equipe'),
@@ -406,6 +420,7 @@ with attendu (categorie, objet, valeur, migration) as (
     ('fonction', 'current_user_role()', '72c28f22ef4c|definer|search_path=public|anon=non|connecte=oui', '20261126000027_sans_mairie'),
     ('fonction', 'definir_mes_communes(p_communes uuid[])', '31725450e35e|definer|search_path=public|anon=non|connecte=oui', '20261109000017_dossier_precollecteur_annuaire'),
     ('fonction', 'demander_acces_mairie(p_commune uuid, p_fonction text, p_service text, p_telephone text, p_message text)', 'ccfad1ddcf20|definer|search_path=public|anon=non|connecte=oui', '20261004000006_retours_tests_equipe'),
+    ('fonction', 'demander_accompagnement(p_etape text, p_commune uuid, p_message text)', '6be5cb9c8ed0|definer|search_path=public|anon=non|connecte=oui', '20261127000029_accompagnement_conformite'),
     ('fonction', 'demandes_acces_a_traiter()', '74effc6c7b1f|definer|search_path=public|anon=non|connecte=oui', '20261011000009_audit_securite'),
     ('fonction', 'demandes_devis_a_orienter()', 'f1bffa843971|definer|search_path=public|anon=non|connecte=oui', '20261111000019_devis_routage'),
     ('fonction', 'demandes_devis_ouvertes()', 'e05f8ece014a|definer|search_path=public|anon=non|connecte=oui', '20261111000019_devis_routage'),
@@ -487,6 +502,7 @@ with attendu (categorie, objet, valeur, migration) as (
     ('fonction', 'refuser_devis(p_devis uuid)', '8b624081aba6|definer|search_path=public|anon=non|connecte=oui', '20261110000018_devis_tarif_abonne'),
     ('fonction', 'rejoindre_entreprise(p_code text)', 'cc5460680de2|definer|search_path=public|anon=non|connecte=oui', '20261005000007_espace_employe'),
     ('fonction', 'retirer_acces_employe(p_employe uuid)', 'aca8fedb8ede|definer|search_path=public|anon=non|connecte=oui', '20261005000007_espace_employe'),
+    ('fonction', 'retirer_accompagnement(p_id uuid)', '66d2dafea1f2|definer|search_path=public|anon=non|connecte=oui', '20261127000029_accompagnement_conformite'),
     ('fonction', 'retirer_commune_mairie(p_user uuid, p_commune uuid)', '43e474acd17e|definer|search_path=public|anon=non|connecte=oui', '20261019000016_mairie_par_commune'),
     ('fonction', 'retirer_devis(p_devis uuid)', '0235ba467f3b|definer|search_path=public|anon=non|connecte=oui', '20261110000018_devis_tarif_abonne'),
     ('fonction', 'revoquer_code_agrement(p_id uuid)', 'abbe424a8d40|definer|search_path=public|anon=non|connecte=oui', '20261019000016_mairie_par_commune'),
@@ -499,6 +515,7 @@ with attendu (categorie, objet, valeur, migration) as (
     ('fonction', 'spatial_ref_sys_lecture_seule()', 'bbfb244c43b6|invoker|search_path=public|anon=non|connecte=oui', '20261011000009_audit_securite'),
     ('fonction', 'statuer_dossier(p_entreprise uuid, p_decision text, p_motif text)', 'ee72d35e1ac9|definer|search_path=public|anon=non|connecte=oui', '20261109000017_dossier_precollecteur_annuaire'),
     ('fonction', 'statut_abonnement_calcule(p_statut_client text, p_nb_retard bigint, p_couverture_fin date, p_jour date, p_grace integer, p_rappel integer)', '55f562192562|invoker|search_path=public|anon=non|connecte=oui', '20261019000013_delai_grace_blocage'),
+    ('fonction', 'suivre_accompagnement(p_id uuid, p_statut text, p_message text)', '7db7f2a6b47f|definer|search_path=public|anon=non|connecte=oui', '20261127000029_accompagnement_conformite'),
     ('fonction', 'supervise_commune(p_commune uuid)', 'e244b0c2ed18|definer|search_path=public|anon=non|connecte=oui', '20261126000027_sans_mairie'),
     ('fonction', 'supervise_entreprise(p_entreprise uuid)', '24449bd83591|definer|search_path=public|anon=non|connecte=oui', '20261126000027_sans_mairie'),
     ('fonction', 'supervise_zone(p_zone uuid)', '977a1b1ac846|definer|search_path=public|anon=non|connecte=oui', '20261019000016_mairie_par_commune'),
@@ -523,6 +540,9 @@ with attendu (categorie, objet, valeur, migration) as (
     ('index', 'acceptations_documents_document_idx', 'f87731f384f1', '20261019000014_charte_facture_conforme'),
     ('index', 'acceptations_documents_pkey', 'f5d2249dc3fb', '20261019000014_charte_facture_conforme'),
     ('index', 'acceptations_documents_user_idx', 'e04704a27daa', '20261019000014_charte_facture_conforme'),
+    ('index', 'accompagnements_pkey', '18541d39f2e4', '20261127000029_accompagnement_conformite'),
+    ('index', 'accompagnements_suivi_idx', '0e3c9fe43e86', '20261127000029_accompagnement_conformite'),
+    ('index', 'accompagnements_une_ouverte', 'ad0c57e90339', '20261127000029_accompagnement_conformite'),
     ('index', 'articles_marketplace_pkey', 'ed6f285fe3ef', '20260526000001_init'),
     ('index', 'articles_marketplace_statut_idx', '07aa2dc68c07', '20260526000001_init'),
     ('index', 'bacs_localisation_gix', 'eb1c0e38126a', '20260526000001_init'),
@@ -656,6 +676,7 @@ with attendu (categorie, objet, valeur, migration) as (
     ('politique', 'public.abonnements · abonnements_read', 'select|permissive|authenticated|using=931b2cbe|check=d41d8cd9', '20260831000003_securite_rls_et_roles'),
     ('politique', 'public.abonnements · abonnements_write_mairie', 'all|permissive|authenticated|using=91f199a8|check=91f199a8', '20260831000003_securite_rls_et_roles'),
     ('politique', 'public.acceptations_documents · acceptations_documents_lecture', 'select|permissive|authenticated|using=b9da9035|check=d41d8cd9', '20261019000014_charte_facture_conforme'),
+    ('politique', 'public.accompagnements · accompagnements_lecture', 'select|permissive|authenticated|using=e151e9dd|check=d41d8cd9', '20261127000029_accompagnement_conformite'),
     ('politique', 'public.articles_marketplace · articles_marketplace_owner_write', 'all|permissive|authenticated|using=30ed28d6|check=d41d8cd9', '20261011000009_audit_securite'),
     ('politique', 'public.articles_marketplace · articles_marketplace_public_read', 'select|permissive|authenticated|using=b326b506|check=d41d8cd9', '20260831000003_securite_rls_et_roles'),
     ('politique', 'public.bacs · bacs_read', 'select|permissive|authenticated|using=d88f572a|check=d41d8cd9', '20260831000003_securite_rls_et_roles'),
@@ -766,6 +787,7 @@ with attendu (categorie, objet, valeur, migration) as (
     ('stockage', 'preuves', 'privé|taille=15728640|types=image/jpeg,image/png,image/webp,video/mp4,video/webm', '20261116000024_zones_depots_dossier'),
     ('table', 'abonnements', 'table|rls=oui|colonnes=9caaf5e0c57c|anon=-', '20261114000022_liste_attente_gardes_creation'),
     ('table', 'acceptations_documents', 'table|rls=oui|colonnes=5a5a60cc61a4|anon=-', '20261019000014_charte_facture_conforme'),
+    ('table', 'accompagnements', 'table|rls=oui|colonnes=0b23e268e3f7|anon=siud', '20261127000029_accompagnement_conformite'),
     ('table', 'articles_marketplace', 'table|rls=oui|colonnes=e65c2307cfea|anon=-', '20261114000022_liste_attente_gardes_creation'),
     ('table', 'bacs', 'table|rls=oui|colonnes=1a4ec54f0f6c|anon=-', '20261114000022_liste_attente_gardes_creation'),
     ('table', 'camions', 'table|rls=oui|colonnes=3fb2f155768d|anon=-', '20261114000022_liste_attente_gardes_creation'),
@@ -971,7 +993,7 @@ infos (categorie, objet, detail) as (
 select etat, categorie, objet, migration, detail
 from (
   select 0 as rang, 'OK' as etat, 'synthèse' as categorie, 'aucun écart' as objet,
-         '20261127000028_autorisation_obligatoire' as migration,
+         '20261127000029_accompagnement_conformite' as migration,
          (select count(*) from attendu)::text || ' objets conformes aux migrations' as detail
    where not exists (select 1 from ecarts)
   union all

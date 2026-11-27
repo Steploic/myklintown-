@@ -74,6 +74,8 @@ const avec0025 = (db) => valeur(db, `select to_regclass('public.clients_notes') 
 const avec0026 = (db) => valeur(db, `select to_regprocedure('public.est_abonne_de(uuid)') is not null`);
 /** Migration 0027 (sans les Mairies : interrupteur, zones du précollecteur) présente dans la base ? */
 const avec0027 = (db) => valeur(db, `select to_regprocedure('public.mairies_actives()') is not null`);
+/** Migration 0029 (accompagnement vers la conformité) présente dans la base ? */
+const avec0029 = (db) => valeur(db, `select to_regclass('public.accompagnements') is not null`);
 
 /**
  * Joue `fn` accès Mairie FERMÉS (réglage de la production depuis 0027), puis
@@ -1667,6 +1669,30 @@ export const ATTAQUES = [
       return zone === s.zone;
     },
   },
+  // --- Accompagnement vers la conformité (migration 0029)
+  {
+    id: 'accompagnement-autrui',
+    titre: 'Un concurrent lit ou retire la demande d’accompagnement de A ; A se déclare « obtenue », écrit le message de l’équipe ou suit lui-même sa demande ; son employé demande au nom de A ; un visiteur lit les demandes',
+    async jouer(db, s) {
+      if (!(await avec0029(db))) return false;
+      const id = await comme(db, s.gerantA, (tx) => valeur(tx, `select public.demander_accompagnement('structure', null, 'Par où commencer ?')`));
+      try {
+        const luParB = await comme(db, s.gerantB, (tx) => valeur(tx, `select count(*)::int from public.accompagnements where id = $1`, [id]));
+        const luAnonyme = await comme(db, 'anon', (tx) => valeur(tx, `select count(*)::int from public.accompagnements`)).catch(() => 0);
+        const photo = () => valeur(db, `select statut || '|' || coalesce(message_equipe, '-') from public.accompagnements where id = $1`, [id]);
+        const avant = await photo();
+        await accepte(db, s.gerantA, `update public.accompagnements set statut = 'obtenue' where id = $1`, [id]);
+        await accepte(db, s.gerantA, `update public.accompagnements set message_equipe = 'Validé par moi-même' where id = $1`, [id]);
+        await accepte(db, s.gerantA, `select public.suivre_accompagnement($1, 'obtenue', 'Validé par moi-même')`, [id]);
+        await accepte(db, s.gerantB, `select public.retirer_accompagnement($1)`, [id]);
+        const modifiee = (await photo()) !== avant;
+        const parEmploye = await essaiAnnule(db, s.employe, async (tx) => !!(await valeur(tx, `select public.demander_accompagnement('niu', null, null)`)));
+        return luParB > 0 || luAnonyme > 0 || modifiee || parEmploye;
+      } finally {
+        await db.query(`delete from public.accompagnements where id = $1`, [id]);
+      }
+    },
+  },
 ];
 
 /** Migration 0014 (facture inaltérable, charte) présente dans la base ? */
@@ -3070,6 +3096,53 @@ export const PARCOURS = [
           await db.query(`delete from public.zones where id = $1`, [z]);
         }
       });
+    },
+  },
+  {
+    titre: 'Migration 0029 rejouée : contrôle « OK » sur les lignes 1 à 3, deux fois',
+    async jouer(db) {
+      const sql = migration('20261127000029');
+      if (!sql) return;
+      for (let passage = 0; passage < 2; passage++) {
+        const controle = (await db.exec(sql)).at(-1).rows;
+        const ko = controle.filter((r, i) => i < 3 && r.resultat !== 'OK');
+        if (ko.length) throw new Error(JSON.stringify(ko));
+      }
+    },
+  },
+  {
+    titre: 'Accompagnement : le gérant demande de l’aide pour l’autorisation de sa commune ; doublon et commune étrangère refusés ; l’équipe le contacte avec un message qu’il lit ; la pièce déposée clôt la demande ; il retire une autre demande',
+    async jouer(db, s) {
+      if (!(await avec0029(db))) return;
+      await db.query(`insert into public.entreprise_communes (entreprise_id, commune_id) values ($1, $2) on conflict do nothing`, [s.entA, s.yde3]);
+      const avant = (await db.query(
+        `select e.dossier_statut, ec.autorisation_path from public.entreprises e join public.entreprise_communes ec on ec.entreprise_id = e.id
+          where e.id = $1 and ec.commune_id = $2`, [s.entA, s.yde3])).rows[0];
+      await db.query(`update public.entreprise_communes set autorisation_path = null where entreprise_id = $1 and commune_id = $2`, [s.entA, s.yde3]);
+      const ids = [];
+      try {
+        const id = await comme(db, s.gerantA, (tx) => valeur(tx, `select public.demander_accompagnement('autorisation', $1, 'Où la demander ?')`, [s.yde3]));
+        ids.push(id);
+        if (await accepte(db, s.gerantA, `select public.demander_accompagnement('autorisation', $1, null)`, [s.yde3])) throw new Error('doublon accepté');
+        if (await accepte(db, s.gerantA, `select public.demander_accompagnement('autorisation', $1, null)`, [s.dla1])) throw new Error('commune hors de ses communes d’activité acceptée');
+        await comme(db, s.admin, (tx) => tx.query(`select public.suivre_accompagnement($1, 'contacte', 'Rendez-vous mardi à 10 h')`, [id]));
+        const lu = await comme(db, s.gerantA, (tx) => valeur(tx, `select statut || '|' || message_equipe from public.accompagnements where id = $1`, [id]));
+        if (lu !== 'contacte|Rendez-vous mardi à 10 h') throw new Error(`lu par le gérant : ${lu}`);
+        const chemin = `${s.entA}/autorisation-accompagnee.jpg`;
+        await comme(db, s.gerantA, async (tx) => {
+          await tx.query(`insert into storage.objects (bucket_id, name) values ('dossiers', $1) on conflict do nothing`, [chemin]);
+          await tx.query(`select public.enregistrer_piece_dossier('autorisation', $1, $2)`, [chemin, s.yde3]);
+        });
+        if ((await valeur(db, `select statut from public.accompagnements where id = $1`, [id])) !== 'obtenue') throw new Error('la pièce déposée n’a pas clos la demande');
+        const niu = await comme(db, s.gerantA, (tx) => valeur(tx, `select public.demander_accompagnement('niu', null, null)`));
+        ids.push(niu);
+        await comme(db, s.gerantA, (tx) => tx.query(`select public.retirer_accompagnement($1)`, [niu]));
+        if ((await valeur(db, `select statut from public.accompagnements where id = $1`, [niu])) !== 'close') throw new Error('demande non retirée');
+      } finally {
+        await db.query(`delete from public.accompagnements where id = any($1::uuid[])`, [ids]);
+        await db.query(`update public.entreprise_communes set autorisation_path = $3 where entreprise_id = $1 and commune_id = $2`, [s.entA, s.yde3, avant?.autorisation_path ?? null]);
+        if (avant) await db.query(`update public.entreprises set dossier_statut = $2 where id = $1`, [s.entA, avant.dossier_statut]);
+      }
     },
   },
 ];
