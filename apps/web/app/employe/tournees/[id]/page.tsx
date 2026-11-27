@@ -8,6 +8,7 @@ import { EmptyState, PageHeader } from '@/components/ui/blocks';
 import { TourneeRunner, type Passage } from '@/components/precollecteur/tournee-runner';
 import { PositionLive } from '@/components/employe/position-live';
 import { RafraichissementAuto } from '@/components/ui/rafraichissement-auto';
+import { EtatHorsLigne } from '@/components/hors-ligne/etat-hors-ligne';
 import { paiementEnLigneDisponible } from '@/lib/paiement/service';
 import { encaissementEnLigneOuvert, type EntreprisePaiement } from '@/lib/paiement/regles';
 import { requireEmploye } from '@/lib/employe/context';
@@ -112,6 +113,7 @@ export default async function TourneeEmploye({
           </>
         }
       />
+      <EtatHorsLigne version={t.statut} />
 
       <p className="mb-4 flex flex-wrap items-center gap-2 text-body-sm text-muted-foreground">
         <Users size={16} aria-hidden /> Équipe : <strong className="text-brand-ink">{equipe.join(', ') || '—'}</strong>

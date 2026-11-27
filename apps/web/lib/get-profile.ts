@@ -2,6 +2,8 @@ import { cookies } from 'next/headers';
 import { createServerSupabase } from '@myklintown/db/server';
 
 export interface CurrentProfile {
+  /** Identifiant du compte (le service worker « terrain » range les pages par compte). */
+  id: string;
   nom: string;
   email: string;
   avatar_url?: string;
@@ -35,6 +37,7 @@ export async function getCurrentProfile(): Promise<CurrentProfile | null> {
     | null;
 
   return {
+    id: user.id,
     nom: p?.nom_complet || user.email?.split('@')[0] || 'Utilisateur',
     email: p?.email || user.email || '',
     avatar_url: p?.avatar_url,

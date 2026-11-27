@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { oublierCentreCarte } from '@/components/map/use-centre-carte';
+import { oublierPagesHorsLigne } from '@/lib/hors-ligne/client';
 
 /** Renvoie à l'accueil après un court délai ; le lien reste là si JavaScript ne tourne pas. */
 export function RetourAccueil({ delaiMs }: { delaiMs: number }) {
@@ -12,6 +13,8 @@ export function RetourAccueil({ delaiMs }: { delaiMs: number }) {
     // Le centre des cartes suivait le compte (ses zones, son domicile) : le
     // prochain compte ouvert dans cet onglet ne doit pas en hériter.
     oublierCentreCarte();
+    // Les pages du terrain enregistrées pour le hors ligne non plus.
+    void oublierPagesHorsLigne();
     const t = setTimeout(() => router.replace('/'), delaiMs);
     return () => clearTimeout(t);
   }, [router, delaiMs]);

@@ -74,10 +74,16 @@ test.describe('déconnexion sur téléphone', () => {
   test('depuis le menu latéral', async ({ page }) => {
     await seConnecter(page, emailDe('deconnexion'), identifiants().motDePasse);
     await expect(page).toHaveURL(/\/citoyen/);
+    // Une page enregistrée pour le terrain (service worker) : la déconnexion doit l'effacer.
+    await page.evaluate(async () => {
+      const cache = await caches.open('mkt-pages-11111111-1111-4111-8111-111111111111');
+      await cache.put('/employe', new Response('page enregistrée'));
+    });
     await page.getByRole('button', { name: 'Ouvrir la navigation' }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Déconnexion' }).click();
     await expect(page).toHaveURL(/\/logout$/);
     await expect(page.getByRole('heading', { name: /À très bientôt/ })).toBeVisible();
+    await expect.poll(() => page.evaluate(async () => (await caches.keys()).filter((k) => k.startsWith('mkt-pages-')).length)).toBe(0);
     // Retour à l'accueil sans clic.
     await expect(page).toHaveURL(/\/$/, { timeout: 10_000 });
     await page.goto('/citoyen');

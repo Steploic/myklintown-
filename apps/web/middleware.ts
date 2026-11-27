@@ -1,6 +1,7 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { canAccessPath, homeForRole, isProtectedPath } from '@/lib/roles';
+import { pageHorsLigne } from '@/lib/hors-ligne/pages';
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
@@ -90,6 +91,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // Service worker « terrain » (public/sw.js) : le compte qui a ouvert la page
+  // (un autre compte sur le même téléphone efface les pages enregistrées), et
+  // si elle peut s'ouvrir sans réseau (lib/hors-ligne/pages.ts).
+  response.headers.set('x-mkt-compte', user.id);
+  if (pageHorsLigne(pathname)) response.headers.set('x-mkt-hors-ligne', '1');
   return response;
 }
 

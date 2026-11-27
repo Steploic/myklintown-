@@ -7,6 +7,7 @@ import { PrecoShell } from '@/components/precollecteur/shell';
 import { EmptyState, PageHeader } from '@/components/ui/blocks';
 import { TourneeRunner, type Passage } from '@/components/precollecteur/tournee-runner';
 import { RafraichissementAuto } from '@/components/ui/rafraichissement-auto';
+import { EtatHorsLigne } from '@/components/hors-ligne/etat-hors-ligne';
 import { paiementEnLigneDisponible } from '@/lib/paiement/service';
 import { encaissementEnLigneOuvert } from '@/lib/paiement/regles';
 import { requireEntreprise } from '@/lib/precollecteur/context';
@@ -108,6 +109,7 @@ export default async function TourneePage({ params }: { params: Promise<{ id: st
           </>
         }
       />
+      <EtatHorsLigne version={t.statut} />
 
       <p className="mb-4 flex flex-wrap items-center gap-2 text-body-sm text-muted-foreground">
         <Users size={16} aria-hidden /> Équipe : <strong className="text-brand-ink">{equipe.join(', ') || t.employes?.nom || '—'}</strong>
