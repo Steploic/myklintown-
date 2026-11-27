@@ -12,6 +12,7 @@ import { getSupabase } from '@/lib/server';
 import { EnvoiTerrainGlobal } from './precollecteur/envoi-terrain-global';
 import { AvisSansCommune } from './mairie/avis-sans-commune';
 import { EspaceMairieFerme } from './mairie/espace-ferme';
+import { ServiceWorkerTerrain } from './hors-ligne/service-worker';
 
 export type { PortalKey, PortalNavItem };
 
@@ -52,6 +53,7 @@ export async function PortalShell({ portalKey, user, titre, currentPath, childre
 
   return (
     <div className="flex min-h-screen bg-background">
+      <ServiceWorkerTerrain compteId={profile?.id ?? null} />
       {/* Barre latérale (ordinateur) */}
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col bg-brand-gradient-ink text-white lg:flex">
         <div className="flex h-16 items-center px-5">

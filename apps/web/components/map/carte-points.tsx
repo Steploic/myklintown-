@@ -1,7 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useMemo, useState } from 'react';
+import { Component, useMemo, useState, type ReactNode } from 'react';
 import { cn } from '@myklintown/ui';
 import type { PointCarte, Ton, ZoneCarte } from './carte-points-inner';
 
@@ -15,6 +15,29 @@ const Carte = dynamic(() => import('./carte-points-inner'), {
     </div>
   ),
 });
+
+/**
+ * La carte se charge à part (Leaflet). Sans réseau, si ce fichier n'est pas
+ * sur le téléphone, son échec ne doit pas emporter toute la page (la tournée,
+ * ses scans, ses pointages) : la carte seule le dit.
+ */
+class CarteOuRien extends Component<{ hauteur?: number; children: ReactNode }, { echec: boolean }> {
+  override state = { echec: false };
+  static getDerivedStateFromError() {
+    return { echec: true };
+  }
+  override render() {
+    if (!this.state.echec) return this.props.children;
+    return (
+      <div
+        className="grid place-content-center rounded-xl border border-border bg-muted px-4 text-center text-body-sm text-muted-foreground"
+        style={{ height: this.props.hauteur ?? 480 }}
+      >
+        Carte indisponible sans réseau : elle reviendra avec le réseau.
+      </div>
+    );
+  }
+}
 
 const PASTILLE: Record<Ton, string> = {
   ok: 'bg-terrain-ok',
@@ -82,7 +105,9 @@ export function CartePoints({
           </span>
         )}
       </div>
-      <Carte points={visibles} zones={zones} hauteur={hauteur} />
+      <CarteOuRien hauteur={hauteur}>
+        <Carte points={visibles} zones={zones} hauteur={hauteur} />
+      </CarteOuRien>
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { requireEntreprise } from '@/lib/precollecteur/context';
 import { planifierTourneeAction } from '@/lib/precollecteur/actions';
 import { rows, toutesLesLignes } from '@/lib/server';
 import { dateFr, isoJour, pct, STATUT_TOURNEE } from '@/lib/format';
+import { EtatHorsLigne } from '@/components/hors-ligne/etat-hors-ligne';
 import type { Employe, Tournee, Tricycle, Zone } from '@/lib/types';
 
 export const metadata = { title: 'Tournées' };
@@ -39,10 +40,17 @@ export default async function TourneesPage() {
   const nomT = new Map(tricycles.map((t) => [t.id, t.nom]));
   const nomZ = new Map(zones.map((z) => [z.id, z.nom]));
   const auj = isoJour();
+  // Celles qui partent sur le terrain : en cours, ou prévues aujourd'hui.
+  const duJour = tournees.filter((t) => t.statut === 'en_cours' || (t.statut === 'planifiee' && t.date === auj)).slice(0, 8);
 
   return (
     <PrecoShell path="/precollecteur/tournees">
       <PageHeader titre="Tournées" sousTitre="Planifiez, partez, cochez chaque passage : tout est tracé en base." />
+      {/* Les tournées en cours et celles du jour s'ouvriront sans réseau. */}
+      <EtatHorsLigne
+        preparer={duJour.map((t) => `/precollecteur/tournees/${t.id}`)}
+        version={duJour.map((t) => `${t.id}:${t.statut}`).join(',')}
+      />
 
       <div className="grid gap-6 lg:grid-cols-[22rem_1fr]">
         <Section titre="Planifier une tournée">

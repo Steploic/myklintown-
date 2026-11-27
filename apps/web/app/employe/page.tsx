@@ -3,6 +3,7 @@ import { PortalShell } from '@/components/portal-shell';
 import { EmptyState, Kpi, PageHeader, Section } from '@/components/ui/blocks';
 import { CarteTournee } from '@/components/employe/carte-tournee';
 import { RafraichissementAuto } from '@/components/ui/rafraichissement-auto';
+import { EtatHorsLigne } from '@/components/hors-ligne/etat-hors-ligne';
 import { requireEmploye } from '@/lib/employe/context';
 import { tourneesDeLEquipe, type StatsEmploye } from '@/lib/employe/donnees';
 import { row, rpc } from '@/lib/server';
@@ -33,6 +34,11 @@ export default async function EmployeAccueil() {
       <PageHeader
         titre={`Bonjour ${prenom}`}
         sousTitre={`${FONCTIONS[employe.fonction] ?? 'Équipe'} chez ${entreprise.nom}`}
+      />
+      {/* Ses tournées s'ouvriront sans réseau, même jamais ouvertes. */}
+      <EtatHorsLigne
+        preparer={aFaire.slice(0, 8).map((t) => `/employe/tournees/${t.id}`)}
+        version={aFaire.slice(0, 8).map((t) => `${t.id}:${t.statut}`).join(',')}
       />
 
       <Section titre="Mes tournées" sousTitre="Celles où votre gérant vous a mis dans l’équipe." className="mb-6">

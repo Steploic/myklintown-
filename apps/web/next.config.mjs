@@ -39,7 +39,11 @@ const nextConfig = {
   // liste autorisait « **.supabase.co » — n'importe quel projet Supabase, donc
   // des images choisies par un tiers passées dans notre optimiseur.
   async headers() {
-    return [{ source: '/:path*', headers: ENTETES_SECURITE }];
+    return [
+      { source: '/:path*', headers: ENTETES_SECURITE },
+      // Service worker « terrain » : jamais servi depuis un cache, ses mises à jour arrivent tout de suite.
+      { source: '/sw.js', headers: [{ key: 'Cache-Control', value: 'no-cache' }] },
+    ];
   },
   // Portails de démonstration retirés (Collecteur, Partenaire B2B) : un ancien
   // lien ou favori mène à l'accueil plutôt qu'à une page introuvable.
