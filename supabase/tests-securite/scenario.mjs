@@ -2151,8 +2151,9 @@ export const PARCOURS = [
       if (await visible()) throw new Error('visible avant vérification');
       let message = '';
       await comme(db, g, (tx) => tx.query(`select public.soumettre_mon_dossier()`)).catch((er) => { message = er.message; });
-      // Depuis 0027, l'autorisation de la commune est facultative (MyKlinTown sans les Mairies).
-      const autorisationExigee = !(await avec0027(db));
+      // Facultative entre 0027 et 0028 seulement : de nouveau exigée depuis 0028
+      // (précollecteurs habilités seulement, décision du 27/11/2026).
+      const autorisationExigee = !(await avec0027(db)) || !!migration('20261127000028');
       if (!/siège social/.test(message) || /autorisation/.test(message) !== autorisationExigee || !/permis/.test(message)) {
         throw new Error(`pièces manquantes : ${message}`);
       }
@@ -2985,7 +2986,61 @@ export const PARCOURS = [
     },
   },
   {
-    titre: 'Sans les Mairies : le gérant trace, renomme et supprime sa zone ; elle lui est affectée ; ses abonnés y sont rangés d’office ; son dossier se complète sans autorisation de commune',
+    titre: 'Migration 0028 rejouée : un dossier validé sans l’autorisation d’une commune repart « à compléter » avec le motif ; contrôle « OK » sur les lignes 1 à 3, deux fois',
+    async jouer(db, s) {
+      const sql = migration('20261127000028');
+      if (!sql) return;
+      const avant = (await db.query(`select dossier_statut, dossier_motif from public.entreprises where id = $1`, [s.entA])).rows[0];
+      // Validé pendant que l'autorisation était facultative (entre 0027 et 0028).
+      await db.query(`insert into public.entreprise_communes (entreprise_id, commune_id) values ($1, $2) on conflict do nothing`, [s.entA, s.yde3]);
+      await db.query(`update public.entreprise_communes set autorisation_path = null where entreprise_id = $1`, [s.entA]);
+      await db.query(`update public.entreprises set dossier_statut = 'valide', dossier_motif = null where id = $1`, [s.entA]);
+      try {
+        for (let passage = 0; passage < 2; passage++) {
+          const controle = (await db.exec(sql)).at(-1).rows;
+          const ko = controle.filter((r, i) => i < 3 && r.resultat !== 'OK');
+          if (ko.length) throw new Error(JSON.stringify(ko));
+          if (passage === 0 && !/^1 dossier/.test(controle[2].detail)) throw new Error(`bilan : ${controle[2].detail}`);
+        }
+        const apres = (await db.query(`select dossier_statut, dossier_motif from public.entreprises where id = $1`, [s.entA])).rows[0];
+        if (apres.dossier_statut !== 'incomplet' || !/autorisation de la commune/.test(apres.dossier_motif ?? '')) throw new Error(JSON.stringify(apres));
+      } finally {
+        await db.query(`update public.entreprises set dossier_statut = $2, dossier_motif = $3 where id = $1`, [s.entA, avant.dossier_statut, avant.dossier_motif]);
+      }
+    },
+  },
+  {
+    titre: 'Autorisation de la commune obligatoire : sans elle le dossier ne part pas ; la remplacer sur un dossier validé le renvoie en vérification, le logo non',
+    async jouer(db, s) {
+      if (!migration('20261127000028')) return;
+      const g = await creerCompte(db, `habilite.${Date.now()}@test.cm`, 'precollecteur');
+      const ent = await comme(db, g, (tx) => valeur(tx,
+        `select public.inscrire_mon_entreprise('Propreté Habilitée', '690112244', null, 'm 0123-45678902b', null, $1::uuid[], array['Nsam'], true)`, [[s.yde3]]));
+      await comme(db, g, async (tx) => {
+        await tx.query(`insert into storage.objects (bucket_id, name) values ('dossiers', $1), ('dossiers', $2), ('logos', $3)`,
+          [`${ent}/permis.pdf`, `${ent}/autorisation-yde3.jpg`, `${ent}/logo.png`]);
+        await tx.query(`update public.entreprises set siege = 'Nsam, carrefour' where id = $1`, [ent]);
+        await tx.query(`select public.enregistrer_piece_dossier('permis', $1)`, [`${ent}/permis.pdf`]);
+      });
+      // Le permis seul ne suffit plus.
+      let message = '';
+      await comme(db, g, (tx) => tx.query(`select public.soumettre_mon_dossier()`)).catch((er) => { message = er.message; });
+      if (!/autorisation/.test(message)) throw new Error(`soumis sans autorisation de la commune (${message || 'aucun refus'})`);
+      await comme(db, g, async (tx) => {
+        await tx.query(`select public.enregistrer_piece_dossier('autorisation', $1, $2)`, [`${ent}/autorisation-yde3.jpg`, s.yde3]);
+        await tx.query(`select public.soumettre_mon_dossier()`);
+      });
+      await comme(db, s.admin, (tx) => tx.query(`select public.statuer_dossier($1, 'valide')`, [ent]));
+      const statut = () => valeur(db, `select dossier_statut from public.entreprises where id = $1`, [ent]);
+      // Le logo ne relance rien ; une nouvelle autorisation, si.
+      await comme(db, g, (tx) => tx.query(`select public.enregistrer_piece_dossier('logo', $1)`, [`${ent}/logo.png`]));
+      if ((await statut()) !== 'valide') throw new Error('le logo a relancé la vérification');
+      await comme(db, g, (tx) => tx.query(`select public.enregistrer_piece_dossier('autorisation', $1, $2)`, [`${ent}/autorisation-yde3.jpg`, s.yde3]));
+      if ((await statut()) !== 'soumis') throw new Error('autorisation remplacée sans nouvelle vérification');
+    },
+  },
+  {
+    titre: 'Sans les Mairies : le gérant trace, renomme et supprime sa zone ; elle lui est affectée ; ses abonnés y sont rangés d’office',
     async jouer(db, s) {
       if (!(await avec0027(db))) return;
       await mairiesFermees(db, async () => {
@@ -3009,8 +3064,6 @@ export const PARCOURS = [
           if (await accepte(db, s.gerantA, `update public.zones set commune_id = $2 where id = $1`, [z, s.dla1])) {
             throw new Error('zone acceptée dans une commune hors de ses communes d’activité');
           }
-          const manque = await comme(db, s.gerantA, (tx) => valeur(tx, `select public.pieces_manquantes($1)`, [s.entA]));
-          if ((manque ?? []).some((m) => m.includes('autorisation'))) throw new Error(`pièces exigées : ${manque.join(', ')}`);
           await comme(db, s.gerantA, (tx) => tx.query(`delete from public.zones where id = $1`, [z]));
           if (await valeur(db, `select exists (select 1 from public.zones where id = $1)`, [z])) throw new Error('le gérant ne supprime pas sa zone');
         } finally {
