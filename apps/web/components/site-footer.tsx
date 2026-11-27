@@ -18,7 +18,7 @@ export function SiteFooter() {
             <li><Link href="/signup?role=precollecteur" className="hover:text-white">Précollecteur</Link></li>
             <li><Link href="/signup?role=citoyen" className="hover:text-white">Abonné</Link></li>
             <li><Link href="/rejoindre" className="hover:text-white">Employé (avec un code)</Link></li>
-            <li><Link href="/acces-mairie" className="hover:text-white">Mairie (sur demande)</Link></li>
+            {/* Plus de lien « Mairie (sur demande) » : MyKlinTown fonctionne sans les Mairies (26/11/2026). */}
           </ul>
         </div>
         <div className="space-y-3">

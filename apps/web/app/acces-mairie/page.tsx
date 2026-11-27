@@ -8,6 +8,7 @@ import { annulerDemandeAccesAction, demanderAccesMairieAction } from '@/lib/acce
 import { getSupabase, row, rows, utilisateurCourant } from '@/lib/server';
 import { dateFr } from '@/lib/format';
 import { ChampMotDePasse } from '@/components/ui/champ-mot-de-passe';
+import { mairiesOuvertes } from '@/lib/mairies';
 
 export const metadata = { title: 'Accès Mairie' };
 
@@ -17,6 +18,9 @@ export const metadata = { title: 'Accès Mairie' };
  */
 export default async function AccesMairiePage({ searchParams }: { searchParams: Promise<{ envoyee?: string }> }) {
   const { envoyee } = await searchParams;
+  // Accès Mairie fermés (MyKlinTown fonctionne sans les Mairies) : un ancien
+  // lien ou favori mène à l'accueil.
+  if (!(await mairiesOuvertes())) redirect('/');
   const supabase = await getSupabase();
   const user = await utilisateurCourant(supabase);
 

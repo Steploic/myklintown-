@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Inbox } from 'lucide-react';
+import { Inbox, Shapes } from 'lucide-react';
 import { PrecoShell } from '@/components/precollecteur/shell';
 import { PageHeader, Section } from '@/components/ui/blocks';
 import { CartePoints, type PointCarte, type Ton } from '@/components/map/carte-points';
@@ -75,11 +75,16 @@ export default async function CarteClientsPage() {
         titre="Carte des clients"
         sousTitre="Chaque repère est un abonné ; sa couleur dit où en est le paiement. Touchez un repère pour la fiche ou l’itinéraire."
         actions={
-          demandes.length > 0 && (
-            <Link href="/precollecteur/demandes" className="btn-secondary">
-              <Inbox size={16} /> {demandes.length} demande{demandes.length > 1 ? 's' : ''} de devis
+          <>
+            <Link href="/precollecteur/zones" className="btn-outline">
+              <Shapes size={16} /> {zones.length ? 'Mes zones' : 'Tracer mes zones'}
             </Link>
-          )
+            {demandes.length > 0 && (
+              <Link href="/precollecteur/demandes" className="btn-secondary">
+                <Inbox size={16} /> {demandes.length} demande{demandes.length > 1 ? 's' : ''} de devis
+              </Link>
+            )}
+          </>
         }
       />
       <Section>

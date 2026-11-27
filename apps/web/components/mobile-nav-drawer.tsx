@@ -6,7 +6,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { Loader2, LogOut, Menu, Settings, X } from 'lucide-react';
 import { useFormStatus } from 'react-dom';
 import { Logo, cn } from '@myklintown/ui';
-import { navPourRole, PORTALS, type PortalKey } from '@/lib/portal-config';
+import { libelleEspace, navPourRole, PORTALS, type PortalKey } from '@/lib/portal-config';
 import { signOutAction } from '@/lib/auth-actions';
 import { aPlusieursEspaces, SelecteurEspace } from './selecteur-espace';
 
@@ -18,6 +18,8 @@ interface MobileNavDrawerProps {
   /** Nom affiché (entreprise, foyer…). */
   titre?: string;
   role?: string | null;
+  /** Compte Mairie, accès Mairie fermés : pas de menu. */
+  fermee?: boolean;
 }
 
 /**
@@ -26,10 +28,11 @@ interface MobileNavDrawerProps {
  * éviter de passer des icônes Lucide à travers la frontière server → client
  * (les composants ne sont pas sérialisables).
  */
-export function MobileNavDrawer({ portalKey, currentPath, userName, titre, role }: MobileNavDrawerProps) {
+export function MobileNavDrawer({ portalKey, currentPath, userName, titre, role, fermee = false }: MobileNavDrawerProps) {
   const [open, setOpen] = useState(false);
   const portal = PORTALS[portalKey];
-  const nav = navPourRole(portal.nav, role);
+  const nav = fermee ? [] : navPourRole(portal.nav, role);
+  const libelle = libelleEspace(portalKey, role);
 
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
@@ -51,7 +54,7 @@ export function MobileNavDrawer({ portalKey, currentPath, userName, titre, role 
           )}
         >
           <Dialog.Title className="sr-only">Navigation {portal.name}</Dialog.Title>
-          <Dialog.Description className="sr-only">{portal.role}</Dialog.Description>
+          <Dialog.Description className="sr-only">{libelle}</Dialog.Description>
 
           <div className="flex h-16 items-center justify-between border-b border-white/10 px-5">
             <Link href="/" onClick={() => setOpen(false)} className="flex items-center gap-2 text-white">
@@ -70,7 +73,7 @@ export function MobileNavDrawer({ portalKey, currentPath, userName, titre, role 
           </div>
 
           <div className="border-b border-white/10 px-5 py-4">
-            <p className="text-small font-semibold uppercase tracking-wider text-brand-leaf">{portal.role}</p>
+            <p className="text-small font-semibold uppercase tracking-wider text-brand-leaf">{libelle}</p>
             <p className="text-body-sm font-semibold">{titre ?? userName ?? portal.name}</p>
           </div>
           {aPlusieursEspaces(role) && (

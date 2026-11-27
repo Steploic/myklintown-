@@ -60,8 +60,8 @@ export default async function DemarragePage() {
             <div className="max-w-lg rounded-xl border border-white/15 bg-white/5 p-4 text-body-sm text-white/80">
               <p className="font-semibold text-white">Étape 2 : votre dossier</p>
               <p className="mt-1">
-                NIU, adresse du siège social, autorisation territoriale de chaque commune d’activité, permis
-                environnemental. Vous pouvez les déposer plus tard, depuis votre espace.
+                NIU, adresse du siège social, permis environnemental (l’autorisation de la commune est facultative).
+                Vous pouvez les déposer plus tard, depuis votre espace.
               </p>
             </div>
           </div>
@@ -105,7 +105,7 @@ export default async function DemarragePage() {
                     </label>
                   ))}
                 </div>
-                <p className="field-hint">Une autorisation territoriale sera demandée pour chacune.</p>
+                <p className="field-hint">Vous tracerez ensuite vous-même vos zones de collecte, dans ces communes.</p>
               </fieldset>
               <div>
                 <label htmlFor="quartiers" className="field-label">Quartiers desservis</label>

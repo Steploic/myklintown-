@@ -3,8 +3,9 @@
  *
  * L'inscription est libre et se fait sans pièces ; l'entreprise n'apparaît
  * dans l'annuaire public qu'une fois son dossier vérifié par MyKlinTown :
- * NIU, adresse du siège social, une autorisation territoriale par commune
- * d'activité, permis environnemental (retours de l'équipe, 08/11/2026).
+ * NIU, adresse du siège social, au moins une commune d'activité, permis
+ * environnemental (retours de l'équipe, 08/11/2026). L'autorisation de la
+ * commune est facultative depuis le 26/11/2026 (sans les Mairies, 0027).
  */
 import type { DossierStatut } from './types';
 

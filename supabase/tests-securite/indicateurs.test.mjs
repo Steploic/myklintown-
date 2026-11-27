@@ -322,6 +322,9 @@ describe('Relevés historisés', () => {
   });
 
   test('la Mairie lit le tableau DE SA COMMUNE ; un ménage, un précollecteur, un visiteur ne le lisent pas', async () => {
+    // Accès Mairie ouverts le temps du test (fermés depuis 20261126000027 : voir la fin).
+    const interrupteur = await un(`select to_regprocedure('public.mairies_actives()') is not null as present`);
+    if (interrupteur) await db.query(`update public.parametres_plateforme set valeur = '1' where cle = 'mairies_actives'`);
     const mairie = await creerCompte(db, 'mairie.kpi@test.cm');
     await promouvoir(db, 'mairie.kpi@test.cm', 'mairie');
     // Sans commune, la Mairie ne voit rien, et le message le dit.
@@ -360,6 +363,15 @@ describe('Relevés historisés', () => {
     await assert.rejects(comme(db, 'anon', (tx) => tx.query(`select public.indicateurs_pilote()`)), /permission/);
     await assert.rejects(comme(db, mairie, (tx) => tx.query(`select public.kpi_calculer(current_date, current_date)`)), /permission/);
     await assert.rejects(comme(db, mairie, (tx) => tx.query(`select public.kpi_releves_a_jour()`)), /permission/);
+
+    // Accès fermés (réglage de la production) : la même Mairie, rattachée à sa
+    // commune, ne lit plus rien ; l'administrateur, toujours tout.
+    if (interrupteur) {
+      await db.query(`update public.parametres_plateforme set valeur = '0' where cle = 'mairies_actives'`);
+      await assert.rejects(comme(db, mairie, (tx) => tx.query(`select public.indicateurs_pilote('YDE3')`)), /Réservé/);
+      assert.equal(await comme(db, mairie, (tx) => valeur(tx, `select count(*)::int from public.kpi_releves`)), 0);
+      assert.equal((await comme(db, admin, (tx) => valeur(tx, `select public.indicateurs_pilote('YDE3')`))).perimetre, 'YDE3');
+    }
   });
 
   test('un relevé ne se retouche pas par l’API, même par un administrateur', async () => {

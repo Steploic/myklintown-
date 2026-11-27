@@ -117,9 +117,9 @@ test.describe('connexion et déconnexion', () => {
 
 test.describe('R1 — accès Mairie sur demande', () => {
   test('page publique : explication et formulaire complet', async ({ page }) => {
-    // L'encart Mairies a quitté l'accueil (retours de l'équipe, 08/11/2026) : l'accès reste au pied de page.
-    await page.goto('/');
-    await page.locator('footer').getByRole('link', { name: 'Mairie (sur demande)' }).click();
+    // Plus de lien au pied de page depuis le 26/11/2026 (sans les Mairies) : la
+    // page ne s'ouvre que si les accès sont rouverts, ce que fait la mise en place des tests.
+    await page.goto('/acces-mairie');
     await expect(page).toHaveURL(/\/acces-mairie$/);
     await expect(page.getByRole('heading', { name: 'Accès Mairie' })).toBeVisible();
     for (const champ of ['Nom complet *', 'E-mail professionnel *', 'Mot de passe *', 'Commune *', 'Fonction *']) {
@@ -177,7 +177,7 @@ test.describe('Changer d’espace (administrateurs)', () => {
 
   test.describe('administrateur', () => {
     test.use({ storageState: session('admin') });
-    test('passer de la Mairie à l’espace Client puis Précollecteur, et revenir', async ({ page }) => {
+    test('passer de l’administration à l’espace Client puis Précollecteur, et revenir', async ({ page }) => {
       test.skip(!etat().adminPromu, `Compte administrateur de test non promu (${etat().adminEmail})`);
       const barre = page.getByRole('complementary');
       // Sélecteur cherché dans toute la page : un administrateur sans entreprise
@@ -187,15 +187,15 @@ test.describe('Changer d’espace (administrateurs)', () => {
         await page.getByRole('link', { name: espace }).click();
       };
       await page.goto('/dashboard');
-      await expect(barre.getByText('Espace Mairie')).toBeVisible();
+      await expect(barre.getByText('Administration')).toBeVisible();
       await changer('Espace Client');
       await expect(page).toHaveURL(/\/citoyen/);
       await expect(barre.getByText('Espace Client')).toBeVisible();
       await changer('Espace Précollecteur');
       await expect(page).toHaveURL(/\/precollecteur/);
-      await changer('Espace Mairie');
+      await changer('Administration');
       await expect(page).toHaveURL(/\/dashboard/);
-      // La page de validation des accès reste dans le menu de l'espace Mairie.
+      // La page de validation des accès reste dans le menu de l'administration.
       await expect(barre.getByRole('link', { name: 'Demandes d’accès' })).toBeVisible();
     });
 

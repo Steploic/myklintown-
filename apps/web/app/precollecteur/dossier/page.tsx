@@ -104,7 +104,7 @@ export default async function DossierPage() {
           </ActionForm>
         </Section>
 
-        <Section titre="Communes d’activité" sousTitre="Une autorisation territoriale de la commune est exigée pour chacune.">
+        <Section titre="Communes d’activité" sousTitre="Celles où vous exercez. L’autorisation de la commune est facultative : déposez-la si vous l’avez.">
           <div className="space-y-5">
             <ActionForm action={definirCommunesAction} className="space-y-3">
               <div className="grid max-h-48 gap-1.5 overflow-y-auto rounded-md border border-input p-2 sm:grid-cols-2">
@@ -127,7 +127,7 @@ export default async function DossierPage() {
                       {m.autorisation_path ? (
                         <span className="chip-ok">Autorisation déposée</span>
                       ) : (
-                        <span className="chip-relance">Autorisation à déposer</span>
+                        <span className="chip-neutre">Autorisation facultative</span>
                       )}
                       {m.autorisation_path && urls.get(m.autorisation_path) && (
                         <a href={urls.get(m.autorisation_path)} target="_blank" rel="noreferrer" className="ml-2 text-small font-semibold text-brand-blue hover:underline">Voir</a>

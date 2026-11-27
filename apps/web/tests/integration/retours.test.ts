@@ -7,7 +7,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
-  CLE_SERVICE, clientAnonyme, clientServiceTest, compte, plans, POINT_EN_MER, precollecteur, type Compte, type Precollecteur,
+  CLE_SERVICE, clientAnonyme, clientServiceTest, compte, interrupteurMairies, plans, POINT_EN_MER, precollecteur, type Compte, type Precollecteur,
 } from '../support/fixtures';
 
 let A: Precollecteur;
@@ -170,6 +170,10 @@ describe('R3 — liste d’attente des ménages hors zone', () => {
 
 describe('R1 — demandes d’accès Mairie', () => {
   let communeId = '';
+  // Accès Mairie fermés en production depuis 20261126000027 : ouverts le temps de ces tests.
+  beforeAll(async () => {
+    await interrupteurMairies(true);
+  });
 
   it('un compte dépose sa demande, une seule à la fois', async ({ skip }) => {
     if (!migration) skip();

@@ -4,6 +4,7 @@ import { Logo } from '@myklintown/ui';
 import { AuthAside } from '@/components/auth-aside';
 import { getCurrentProfile } from '@/lib/get-profile';
 import { homeForRole } from '@/lib/roles';
+import { mairiesOuvertes } from '@/lib/mairies';
 import { SignupForm } from './signup-form';
 
 export const metadata = { title: 'Créer un compte' };
@@ -38,7 +39,7 @@ export default async function SignupPage({ searchParams }: { searchParams: Promi
               Se connecter
             </Link>
           </p>
-          <SignupForm defaut={defaut} />
+          <SignupForm defaut={defaut} accesMairie={await mairiesOuvertes()} />
         </div>
       </div>
     </div>
