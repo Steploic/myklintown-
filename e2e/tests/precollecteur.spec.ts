@@ -38,6 +38,13 @@ test.describe('précollecteur : inscription et démarrage', () => {
     await expect(page.getByText('Autorisation à déposer')).toBeVisible();
     await expect(page.getByLabel('NIU (numéro d’identifiant unique)')).toHaveValue('M012345678901A');
 
+    // Pas encore l'autorisation : demander à être accompagné par MyKlinTown.
+    const aide = page.getByTestId('accompagnement').locator('li', { hasText: 'Autorisation de la commune : Yaoundé III' });
+    await aide.getByText('Être accompagné').click();
+    await aide.getByLabel('Où en êtes-vous ? (facultatif)').fill('Je ne sais pas où la demander');
+    await aide.getByRole('button', { name: 'Demander l’accompagnement' }).click();
+    await expect(aide.getByText('Demande envoyée')).toBeVisible();
+
     // Pièces : photo envoyée dans le stockage, puis inscrite au dossier. Le
     // permis seul ne suffit pas : pas de bouton d'envoi avant l'autorisation.
     await page.getByLabel('Déposer le permis').setInputFiles({ name: 'permis.jpg', mimeType: 'image/jpeg', buffer: JPEG_1PX });
@@ -46,6 +53,8 @@ test.describe('précollecteur : inscription et démarrage', () => {
     await expect(page.getByRole('button', { name: 'Soumettre mon dossier pour vérification' })).toHaveCount(0);
     await page.getByLabel('Déposer l’autorisation').setInputFiles({ name: 'autorisation.jpg', mimeType: 'image/jpeg', buffer: JPEG_1PX });
     await expect(page.getByText('Autorisation déposée')).toBeVisible({ timeout: 30_000 });
+    // La pièce déposée clôt la demande d'accompagnement.
+    await expect(aide.getByText('Obtenue')).toBeVisible();
 
     await page.getByRole('button', { name: 'Soumettre mon dossier pour vérification' }).click();
     // Le formulaire disparaît avec la page mise à jour : on lit l'état du dossier, pas le message.

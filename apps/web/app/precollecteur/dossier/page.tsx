@@ -5,6 +5,8 @@ import { PageHeader, Section } from '@/components/ui/blocks';
 import { ActionForm, SubmitButton } from '@/components/ui/action-form';
 import { CarteVitrine } from '@/components/annuaire/carte-vitrine';
 import { PieceDossier } from '@/components/precollecteur/piece-dossier';
+import { AccompagnementDossier } from '@/components/precollecteur/accompagnement-dossier';
+import { estOuverte, type Accompagnement } from '@/lib/accompagnement';
 import { requireEntreprise } from '@/lib/precollecteur/context';
 import {
   definirCommunesAction,
@@ -25,11 +27,18 @@ export const metadata = { title: 'Dossier et vitrine' };
  */
 export default async function DossierPage() {
   const { supabase, entreprise } = await requireEntreprise();
-  const [{ data: co }, { data: ec }, manque] = await Promise.all([
+  const [{ data: co }, { data: ec }, manque, { data: acc }] = await Promise.all([
     supabase.from('communes').select('id, nom').order('nom'),
     supabase.from('entreprise_communes').select('commune_id, autorisation_path').eq('entreprise_id', entreprise.id),
     rpc(supabase, 'pieces_manquantes', { p_entreprise: entreprise.id }),
+    // Demandes d'accompagnement (migration 20261127000029) : la plus récente d'abord.
+    supabase
+      .from('accompagnements')
+      .select('id, etape, commune_id, statut, message, message_equipe, created_at, updated_at')
+      .eq('entreprise_id', entreprise.id)
+      .order('created_at', { ascending: false }),
   ]);
+  const demandes = rows<Accompagnement>(acc);
   const communes = rows<{ id: string; nom: string }>(co);
   const miennes = rows<{ commune_id: string; autorisation_path: string | null }>(ec);
   const manquantes = Array.isArray(manque.data) ? (manque.data as string[]) : [];
@@ -62,7 +71,7 @@ export default async function DossierPage() {
             {etat === 'valide' && entreprise.dossier_statue_at && <span className="font-normal text-muted-foreground">vérifié le {dateFr(entreprise.dossier_statue_at)}</span>}
           </p>
           <p className="mt-1">{ETATS_DOSSIER[etat].texte}</p>
-          {etat === 'refuse' && entreprise.dossier_motif && (
+          {(etat === 'refuse' || etat === 'incomplet') && entreprise.dossier_motif && (
             <p className="mt-2 font-semibold text-terrain-stop">Motif : {entreprise.dossier_motif}</p>
           )}
         </div>
@@ -159,6 +168,15 @@ export default async function DossierPage() {
           </div>
         </Section>
       </div>
+
+      {(etat !== 'valide' || demandes.some((d) => estOuverte(d.statut))) && (
+        <AccompagnementDossier
+          demandes={demandes}
+          niuRenseigne={!!entreprise.niu?.trim()}
+          permisDepose={!!entreprise.permis_env_path}
+          communes={miennes.map((m) => ({ id: m.commune_id, nom: nomCommune(m.commune_id), autorisationDeposee: !!m.autorisation_path }))}
+        />
+      )}
 
       <Section className="mt-6" titre="Vérification par MyKlinTown">
         <div className="space-y-4">

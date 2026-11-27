@@ -62,7 +62,8 @@ export default async function DemarragePage() {
               <p className="mt-1">
                 NIU, adresse du siège social, autorisation de chaque commune d’activité, permis environnemental :
                 MyKlinTown ne présente aux abonnés que des précollecteurs habilités. Vous pouvez les déposer plus tard,
-                depuis votre espace.
+                depuis votre espace. Pas encore en règle ? Inscrivez-vous quand même : l’équipe MyKlinTown vous
+                accompagne dans vos démarches.
               </p>
             </div>
           </div>
