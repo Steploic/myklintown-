@@ -17,7 +17,7 @@
 --     des écarts : elles servent à l'analyse.
 --
 -- Fichier GÉNÉRÉ par supabase/tests-securite/empreinte.mjs à partir des
--- migrations du dépôt (dernière : 20261126000027_sans_mairie). Ne pas le modifier à la main :
+-- migrations du dépôt (dernière : 20261127000028_autorisation_obligatoire). Ne pas le modifier à la main :
 -- après toute nouvelle migration, `npm run empreinte` dans supabase/tests-securite.
 -- Empreinte attendue : 139 fonctions, 56 tables, 108 politiques, 67 déclencheurs, 137 index, 287 contraintes, 23 types, 3 stockages.
 -- =============================================================================
@@ -420,7 +420,7 @@ with attendu (categorie, objet, valeur, migration) as (
     ('fonction', 'employe_avant_suppression()', 'adb789296259|definer|search_path=public|anon=non|connecte=oui', '20261011000009_audit_securite'),
     ('fonction', 'encaisser_especes(p_client uuid, p_montant integer)', 'd9d5a73d072a|definer|search_path=public|anon=non|connecte=oui', '20261115000023_paiement_en_ligne_garde_fous'),
     ('fonction', 'enregistrer_paiement_en_ligne(p_reference text)', 'c330bcadc6fb|definer|search_path=public|anon=non|connecte=non', '20261115000023_paiement_en_ligne_garde_fous'),
-    ('fonction', 'enregistrer_piece_dossier(p_piece text, p_chemin text, p_commune uuid)', '7a782b30c843|definer|search_path=public|anon=non|connecte=oui', '20261126000027_sans_mairie'),
+    ('fonction', 'enregistrer_piece_dossier(p_piece text, p_chemin text, p_commune uuid)', '740ab46ed4db|definer|search_path=public|anon=non|connecte=oui', '20261127000028_autorisation_obligatoire'),
     ('fonction', 'envoyer_position(p_tournee uuid, p_lat double precision, p_lng double precision, p_precision real)', '77f8b8b68597|definer|search_path=public|anon=non|connecte=oui', '20261005000007_espace_employe'),
     ('fonction', 'est_abonne_de(p_entreprise uuid)', '450fbd0f0f5d|definer|search_path=public|anon=non|connecte=oui', '20261118000026_quartiers_signalements_demo'),
     ('fonction', 'est_admin()', '6c1d534a0312|definer|search_path=public|anon=oui|connecte=oui', '20260928000004_pivot_precollecteurs'),
@@ -471,7 +471,7 @@ with attendu (categorie, objet, valeur, migration) as (
     ('fonction', 'paiements_clients_suppression()', '05e76534eff9|invoker|search_path=public|anon=non|connecte=oui', '20261114000022_liste_attente_gardes_creation'),
     ('fonction', 'parametre_entier(p_cle text, p_defaut integer)', '97df44e4c98d|invoker|search_path=public|anon=non|connecte=oui', '20261019000013_delai_grace_blocage'),
     ('fonction', 'peut_agir_sur_tournee(p_tournee uuid)', 'ef20f4e1c52f|definer|search_path=public|anon=non|connecte=oui', '20261005000007_espace_employe'),
-    ('fonction', 'pieces_manquantes(p_entreprise uuid)', '1899fc880be7|invoker|search_path=public|anon=non|connecte=oui', '20261126000027_sans_mairie'),
+    ('fonction', 'pieces_manquantes(p_entreprise uuid)', '2dd51ea69041|invoker|search_path=public|anon=non|connecte=oui', '20261127000028_autorisation_obligatoire'),
     ('fonction', 'pointer_passage(p_collecte uuid, p_statut text, p_motif text, p_horodatage timestamp with time zone)', '29f0e2489fb6|definer|search_path=public|anon=non|connecte=oui', '20261019000013_delai_grace_blocage'),
     ('fonction', 'positions_en_direct()', '631a7fbf9cfc|definer|search_path=public|anon=non|connecte=oui', '20261005000007_espace_employe'),
     ('fonction', 'precollecteur_verifie(p_entreprise uuid)', 'a1247091a845|definer|search_path=public|anon=non|connecte=oui', '20261114000022_liste_attente_gardes_creation'),
@@ -971,7 +971,7 @@ infos (categorie, objet, detail) as (
 select etat, categorie, objet, migration, detail
 from (
   select 0 as rang, 'OK' as etat, 'synthèse' as categorie, 'aucun écart' as objet,
-         '20261126000027_sans_mairie' as migration,
+         '20261127000028_autorisation_obligatoire' as migration,
          (select count(*) from attendu)::text || ' objets conformes aux migrations' as detail
    where not exists (select 1 from ecarts)
   union all

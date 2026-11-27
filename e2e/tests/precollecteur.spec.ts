@@ -30,20 +30,20 @@ test.describe('précollecteur : inscription et démarrage', () => {
     await expect(page.getByRole('heading', { name: /Bienvenue, Test Inscrit SARL/ })).toBeVisible();
     await expect(page.getByRole('button', { name: /Charger la démo/ })).toBeVisible();
 
-    // Bandeau du dossier → page du dossier : il manque le permis. L'autorisation
-    // de la commune est facultative depuis le 26/11/2026 (sans les Mairies).
+    // Bandeau du dossier → page du dossier : il manque l'autorisation de la
+    // commune et le permis (précollecteurs habilités seulement, 27/11/2026).
     await page.getByRole('link', { name: /Dossier à compléter/ }).click();
     await expect(page).toHaveURL(/\/precollecteur\/dossier$/);
-    await expect(page.getByText(/Il manque encore : .*permis environnemental/)).toBeVisible();
-    await expect(page.getByText(/Il manque encore : .*autorisation/)).toHaveCount(0);
-    await expect(page.getByText('Autorisation facultative')).toBeVisible();
+    await expect(page.getByText(/Il manque encore : .*autorisation territoriale.*permis environnemental/)).toBeVisible();
+    await expect(page.getByText('Autorisation à déposer')).toBeVisible();
     await expect(page.getByLabel('NIU (numéro d’identifiant unique)')).toHaveValue('M012345678901A');
 
     // Pièces : photo envoyée dans le stockage, puis inscrite au dossier. Le
-    // permis suffit pour pouvoir soumettre ; l'autorisation se dépose quand même.
+    // permis seul ne suffit pas : pas de bouton d'envoi avant l'autorisation.
     await page.getByLabel('Déposer le permis').setInputFiles({ name: 'permis.jpg', mimeType: 'image/jpeg', buffer: JPEG_1PX });
     await expect(page.getByText('Permis déposé')).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByRole('button', { name: 'Soumettre mon dossier pour vérification' })).toBeVisible();
+    await expect(page.getByText(/Il manque encore : .*autorisation territoriale/)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Soumettre mon dossier pour vérification' })).toHaveCount(0);
     await page.getByLabel('Déposer l’autorisation').setInputFiles({ name: 'autorisation.jpg', mimeType: 'image/jpeg', buffer: JPEG_1PX });
     await expect(page.getByText('Autorisation déposée')).toBeVisible({ timeout: 30_000 });
 
